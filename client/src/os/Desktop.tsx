@@ -11,7 +11,6 @@ import { WindowFrame } from './components/WindowFrame'
 import { sounds } from './SoundEffects'
 import { useWindowManager } from './WindowManager'
 import { saveDesktopState } from '../services/saveService'
-import { AdminApp } from '../programs/AdminApp'
 import { ProfileApp } from '../programs/ProfileApp'
 import { UserManagementApp } from '../programs/UserManagementApp'
 import { ChatApp } from '../programs/ChatApp'
@@ -88,7 +87,6 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
             {win.type === 'music' && <MusicPlayerApp />}
             {win.type === 'settings' && <SystemSettingsApp />}
             {win.type === 'store' && <StoreApp />}
-            {win.type === 'admin' && <AdminApp />}
             {win.type === 'profile' && <ProfileApp />}
             {win.type === 'usermgmt' && <UserManagementApp />}
           </WindowFrame>

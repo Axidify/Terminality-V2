@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import './UserManagementApp.css'
 import { apiRequest } from '../services/api'
+import { useUser } from '../os/UserContext'
 
 interface User {
   id: number
@@ -9,12 +10,15 @@ interface User {
 }
 
 export const UserManagementApp: React.FC = () => {
+  const { user: currentUser } = useUser()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedUsers, setSelectedUsers] = useState<Set<number>>(new Set())
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [newPassword, setNewPassword] = useState('')
 
   const loadUsers = async () => {
@@ -71,6 +75,45 @@ export const UserManagementApp: React.FC = () => {
     }
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedUsers.size === 0) return
+    
+    setMsg(null)
+    try {
+      const userIds = Array.from(selectedUsers)
+      for (const id of userIds) {
+        await apiRequest(`/api/admin/users/${id}`, {
+          method: 'DELETE',
+          auth: true
+        })
+      }
+      setMsg({ text: `Deleted ${userIds.length} user(s)`, type: 'success' })
+      setShowBulkDeleteDialog(false)
+      setSelectedUsers(new Set())
+      await loadUsers()
+    } catch (e: any) {
+      setMsg({ text: e?.message || 'Failed to delete users', type: 'error' })
+    }
+  }
+
+  const toggleUserSelection = (userId: number) => {
+    const newSelected = new Set(selectedUsers)
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId)
+    } else {
+      newSelected.add(userId)
+    }
+    setSelectedUsers(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === users.length) {
+      setSelectedUsers(new Set())
+    } else {
+      setSelectedUsers(new Set(users.map(u => u.id)))
+    }
+  }
+
   return (
     <div className="usermgmt-app">
       <div className="usermgmt-header">
@@ -83,12 +126,22 @@ export const UserManagementApp: React.FC = () => {
           <div className="usermgmt-label">ADMIN PANEL</div>
           <div className="usermgmt-title">User Management</div>
         </div>
-        <button className="usermgmt-refresh" onClick={loadUsers} disabled={loading}>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2" />
-          </svg>
-          {loading ? 'LOADING...' : 'REFRESH'}
-        </button>
+        <div className="usermgmt-header-actions">
+          {selectedUsers.size > 0 && (
+            <button 
+              className="usermgmt-btn usermgmt-btn-small usermgmt-btn-danger"
+              onClick={() => setShowBulkDeleteDialog(true)}
+            >
+              DELETE {selectedUsers.size}
+            </button>
+          )}
+          <button className="usermgmt-refresh" onClick={loadUsers} disabled={loading}>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0118.8-4.3M22 12.5a10 10 0 01-18.8 4.2" />
+            </svg>
+            {loading ? 'LOADING...' : 'REFRESH'}
+          </button>
+        </div>
       </div>
 
       {msg && (
@@ -101,6 +154,14 @@ export const UserManagementApp: React.FC = () => {
         <table className="usermgmt-table">
           <thead>
             <tr>
+              <th className="usermgmt-checkbox-col">
+                <input 
+                  type="checkbox" 
+                  className="usermgmt-checkbox"
+                  checked={selectedUsers.size > 0 && selectedUsers.size === users.length}
+                  onChange={toggleSelectAll}
+                />
+              </th>
               <th>ID</th>
               <th>USERNAME</th>
               <th>ROLE</th>
@@ -109,7 +170,15 @@ export const UserManagementApp: React.FC = () => {
           </thead>
           <tbody>
             {users.map(user => (
-              <tr key={user.id}>
+              <tr key={user.id} className={selectedUsers.has(user.id) ? 'usermgmt-row-selected' : ''}>
+                <td className="usermgmt-checkbox-col">
+                  <input 
+                    type="checkbox" 
+                    className="usermgmt-checkbox"
+                    checked={selectedUsers.has(user.id)}
+                    onChange={() => toggleUserSelection(user.id)}
+                  />
+                </td>
                 <td>{user.id}</td>
                 <td className="usermgmt-username">{user.username}</td>
                 <td>
@@ -135,7 +204,8 @@ export const UserManagementApp: React.FC = () => {
                       setShowDeleteDialog(true)
                       setMsg(null)
                     }}
-                    disabled={user.role === 'admin'}
+                    disabled={user.id === currentUser?.id}
+                    title={user.id === currentUser?.id ? 'Cannot delete your own account' : ''}
                   >
                     DELETE
                   </button>
@@ -200,6 +270,30 @@ export const UserManagementApp: React.FC = () => {
               <button 
                 className="usermgmt-btn usermgmt-btn-secondary"
                 onClick={() => setShowDeleteDialog(false)}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBulkDeleteDialog && selectedUsers.size > 0 && (
+        <div className="usermgmt-overlay" onClick={() => setShowBulkDeleteDialog(false)}>
+          <div className="usermgmt-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Delete {selectedUsers.size} User(s)</h3>
+            <p>Are you sure you want to delete <strong>{selectedUsers.size}</strong> user(s)?</p>
+            <p className="usermgmt-warning">This action cannot be undone.</p>
+            <div className="usermgmt-dialog-actions">
+              <button 
+                className="usermgmt-btn usermgmt-btn-danger"
+                onClick={handleBulkDelete}
+              >
+                DELETE {selectedUsers.size} USER(S)
+              </button>
+              <button 
+                className="usermgmt-btn usermgmt-btn-secondary"
+                onClick={() => setShowBulkDeleteDialog(false)}
               >
                 CANCEL
               </button>

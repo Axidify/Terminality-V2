@@ -9,6 +9,33 @@
   overflow: auto;
 }
 
+/* Themed scrollbar for UserManagementApp */
+.usermgmt-app::-webkit-scrollbar {
+  width: 10px;
+}
+
+.usermgmt-app::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.usermgmt-app::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-primary-rgb, 0, 255, 255), 0.4);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+
+.usermgmt-app::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-primary-rgb, 0, 255, 255), 0.7);
+}
+
+/* Firefox scrollbar */
+.usermgmt-app {
+  scrollbar-color: rgba(var(--color-primary-rgb, 0, 255, 255), 0.4) rgba(0, 0, 0, 0.2);
+  scrollbar-width: thin;
+}
+
 .usermgmt-header {
   display: flex;
   align-items: center;
@@ -46,25 +73,40 @@
   color: rgb(var(--color-primary-rgb, 0, 255, 255));
 }
 
+.usermgmt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.usermgmt-header-actions .usermgmt-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .usermgmt-refresh {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  background: rgba(var(--color-primary-rgb, 0, 255, 255), 0.15);
+  border: 1px solid rgb(var(--color-primary-rgb, 0, 255, 255));
+  color: rgb(var(--color-primary-rgb, 0, 255, 255));
   padding: 8px 14px;
   border-radius: 4px;
   cursor: pointer;
   font-family: 'Courier New', Courier, monospace;
   font-size: 12px;
   transition: all 0.2s ease;
+  font-weight: 600;
 }
 
 .usermgmt-refresh:hover:not(:disabled) {
-  background: rgba(var(--color-primary-rgb, 0, 255, 255), 0.2);
+  background: rgba(var(--color-primary-rgb, 0, 255, 255), 0.25);
   border-color: rgb(var(--color-primary-rgb, 0, 255, 255));
-  box-shadow: 0 0 12px rgba(var(--color-primary-rgb, 0, 255, 255), 0.4);
+  box-shadow: 0 0 16px rgba(var(--color-primary-rgb, 0, 255, 255), 0.5);
 }
 
 .usermgmt-refresh:disabled {
@@ -131,6 +173,19 @@
   letter-spacing: 1px;
 }
 
+.usermgmt-checkbox-col {
+  width: 40px;
+  text-align: center;
+  padding: 14px 8px !important;
+}
+
+.usermgmt-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: rgb(var(--color-primary-rgb, 0, 255, 255));
+}
+
 .usermgmt-table tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   transition: background 0.15s ease;
@@ -138,6 +193,10 @@
 
 .usermgmt-table tbody tr:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+.usermgmt-row-selected {
+  background: rgba(var(--color-primary-rgb, 0, 255, 255), 0.1) !important;
 }
 
 .usermgmt-table td {

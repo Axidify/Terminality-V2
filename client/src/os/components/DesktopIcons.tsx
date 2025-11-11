@@ -2,7 +2,7 @@ import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } f
 
 import { ContextMenu, MenuItem } from './ContextMenu'
 import { DesktopDialog } from './DesktopDialog'
-import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, AdminIcon, UserManagementIcon } from './Icons'
+import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, UserManagementIcon } from './Icons'
 import { fs } from '../../programs/FileSystem'
 import Icon from './icons/Icon'
 import { saveDesktopState, getCachedDesktop } from '../../services/saveService'
@@ -149,19 +149,11 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
     const icons: DesktopIconDef[] = [...baseIcons]
     if (isAdmin) {
       icons.push({
-        type: 'admin',
-        name: 'Admin',
-        icon: <AdminIcon size={50} />,
-        x: 130,
-        y: 420,
-        defaultOpts: { title: 'Admin Console', width: 900, height: 600 }
-      })
-      icons.push({
         type: 'usermgmt',
         name: 'Users',
         icon: <UserManagementIcon size={50} />,
         x: 130,
-        y: 520,
+        y: 420,
         defaultOpts: { title: 'User Management', width: 900, height: 650 }
       })
     }
