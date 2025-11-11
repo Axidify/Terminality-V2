@@ -118,8 +118,8 @@ export const HomePage: React.FC = () => {
           </div>
 
           <p className="home-tagline">
-            A cyberpunk-themed, fully interactive operating system simulator.<br />
-            Built with React, TypeScript, and modern web technologies.
+            CLASSIFIED BRIEFING TERMINAL<br />
+            Access Level: INVESTIGATOR
           </p>
 
           <div className="home-auth-form">
@@ -128,7 +128,7 @@ export const HomePage: React.FC = () => {
               disabled={hpBusy}
               value={hpUsername}
               onChange={e => setHpUsername(e.target.value)}
-              placeholder="USERNAME"
+              placeholder="AGENT ID"
               autoComplete="username"
               onKeyDown={e => e.key === 'Enter' && !hpBusy && submitHomeLogin()}
             />
@@ -138,18 +138,18 @@ export const HomePage: React.FC = () => {
               type="password"
               value={hpPassword}
               onChange={e => setHpPassword(e.target.value)}
-              placeholder="PASSWORD"
+              placeholder="SECURITY CODE"
               autoComplete="current-password"
               onKeyDown={e => e.key === 'Enter' && !hpBusy && submitHomeLogin()}
             />
             {hpError && <div className="home-auth-error">{hpError}</div>}
             <div className="home-button-group">
               <button onClick={submitHomeLogin} className="home-btn home-btn-primary" disabled={hpBusy || !hpUsername || !hpPassword}>
-                <span className="home-btn-text">LOGIN</span>
+                <span className="home-btn-text">AUTHENTICATE</span>
                 <span className="home-btn-arrow">→</span>
               </button>
               <a href="/app?onboarding=1" className="home-btn home-btn-secondary">
-                <span className="home-btn-text">CREATE ACCOUNT</span>
+                <span className="home-btn-text">NEW AGENT</span>
                 <span className="home-btn-arrow">★</span>
               </a>
               <a href="/app" className="home-btn home-btn-secondary">
@@ -164,50 +164,74 @@ export const HomePage: React.FC = () => {
       {/* Features Section */}
       <section className="home-features">
         <div className="home-section-header">
-          <h2 className="home-section-title">KEY FEATURES</h2>
+          <h2 className="home-section-title">ACTIVE INVESTIGATIONS</h2>
           <div className="home-section-divider"></div>
         </div>
 
         <div className="home-features-grid">
-          {features.map((feature, index) => (
-            <div key={index} className="home-feature-item">
-              <div className="home-feature-icon">{feature.icon}</div>
-              <div className="home-feature-title">{feature.title}</div>
-            </div>
-          ))}
+          <div className="home-feature-item">
+            <div className="home-feature-icon">🔍</div>
+            <div className="home-feature-title">Solve Mysteries</div>
+            <div className="home-feature-desc">Uncover clues using desktop tools</div>
+          </div>
+          <div className="home-feature-item">
+            <div className="home-feature-icon">💻</div>
+            <div className="home-feature-title">Use Hacking Tools</div>
+            <div className="home-feature-desc">Analyze files, emails, networks</div>
+          </div>
+          <div className="home-feature-item">
+            <div className="home-feature-icon">📊</div>
+            <div className="home-feature-title">Track Progress</div>
+            <div className="home-feature-desc">Monitor case status in real-time</div>
+          </div>
+          <div className="home-feature-item">
+            <div className="home-feature-icon">🎯</div>
+            <div className="home-feature-title">Multiple Cases</div>
+            <div className="home-feature-desc">Tackle diverse investigations</div>
+          </div>
+          <div className="home-feature-item">
+            <div className="home-feature-icon">🏆</div>
+            <div className="home-feature-title">Unlock Achievements</div>
+            <div className="home-feature-desc">Master investigator rank awaits</div>
+          </div>
+          <div className="home-feature-item">
+            <div className="home-feature-icon">⚡</div>
+            <div className="home-feature-title">Real-Time Gameplay</div>
+            <div className="home-feature-desc">Dynamic puzzle environments</div>
+          </div>
         </div>
       </section>
 
       {/* About Section */}
       <section className="home-about">
         <div className="home-section-header">
-          <h2 className="home-section-title">ABOUT TERMINALITY</h2>
+          <h2 className="home-section-title">CLASSIFIED DOSSIER</h2>
           <div className="home-section-divider"></div>
         </div>
 
         <div className="home-about-content">
           <div className="home-about-box">
-            <h3>A Hacking Simulator for the Modern Era</h3>
+            <h3>Welcome, Agent</h3>
             <p>
-              Terminality is an educational project that reimagines what a fictional operating system could look like. 
-              Inspired by cyberpunk aesthetics and hacking interfaces from popular media, it combines cutting-edge web 
-              technologies with creative design. Every window can be dragged, resized, and minimized. Every application 
-              is functional—your desktop state persists across sessions.
+              You have been recruited into TERMINALITY—a covert investigation network. Your mission: 
+              solve mysteries using a network of interconnected tools and databases. Each case presents unique challenges, 
+              from cryptographic puzzles to digital forensics. Every decision matters. Every clue is critical. 
+              Can you crack the case before time runs out?
             </p>
           </div>
 
           <div className="home-stats-grid">
             <div className="home-stat-card">
-              <div className="home-stat-number">17</div>
-              <div className="home-stat-label">THEMES</div>
+              <div className="home-stat-number">∞</div>
+              <div className="home-stat-label">CASES</div>
             </div>
             <div className="home-stat-card">
               <div className="home-stat-number">10+</div>
-              <div className="home-stat-label">APPLICATIONS</div>
+              <div className="home-stat-label">TOOLS</div>
             </div>
             <div className="home-stat-card">
-              <div className="home-stat-number">100%</div>
-              <div className="home-stat-label">RESPONSIVE</div>
+              <div className="home-stat-number">LIVE</div>
+              <div className="home-stat-label">STATUS</div>
             </div>
           </div>
         </div>
@@ -216,33 +240,33 @@ export const HomePage: React.FC = () => {
       {/* Tech Stack Section */}
       <section className="home-tech">
         <div className="home-section-header">
-          <h2 className="home-section-title">TECHNOLOGY STACK</h2>
+          <h2 className="home-section-title">INVESTIGATOR TOOLKIT</h2>
           <div className="home-section-divider"></div>
         </div>
 
         <div className="home-tech-grid">
           <div className="home-tech-item">
-            <h4>Frontend</h4>
+            <h4>Analysis Tools</h4>
             <ul>
-              <li>React 18.3</li>
-              <li>TypeScript 5.6</li>
-              <li>Vite 5.4</li>
+              <li>File Inspector</li>
+              <li>Email Analyzer</li>
+              <li>Network Monitor</li>
             </ul>
           </div>
           <div className="home-tech-item">
-            <h4>Testing</h4>
+            <h4>Communications</h4>
             <ul>
-              <li>Vitest 2.x</li>
-              <li>@testing-library</li>
-              <li>jsdom</li>
+              <li>Secure Chat</li>
+              <li>Message Decoder</li>
+              <li>Call Logs</li>
             </ul>
           </div>
           <div className="home-tech-item">
-            <h4>Quality Assurance</h4>
+            <h4>Case Management</h4>
             <ul>
-              <li>ESLint 8</li>
-              <li>Prettier 3</li>
-              <li>GitHub Actions CI/CD</li>
+              <li>Clue Board</li>
+              <li>Timeline Tracker</li>
+              <li>Evidence Locker</li>
             </ul>
           </div>
         </div>
@@ -250,10 +274,10 @@ export const HomePage: React.FC = () => {
 
       {/* CTA Section */}
       <section className="home-cta">
-        <h2 className="home-cta-title">READY TO ENTER THE SYSTEM?</h2>
-        <p className="home-cta-subtitle">Experience a cyberpunk-themed interface like never before.</p>
+        <h2 className="home-cta-title">THE INVESTIGATION AWAITS</h2>
+        <p className="home-cta-subtitle">Are you ready to take on the case? Solve mysteries. Uncover the truth. Become a master investigator.</p>
         <a href="/app" className="home-btn home-btn-large">
-          <span className="home-btn-text">LAUNCH OS</span>
+          <span className="home-btn-text">ACCESS CASE FILES</span>
           <span className="home-btn-arrow">→</span>
         </a>
       </section>
@@ -261,13 +285,13 @@ export const HomePage: React.FC = () => {
       {/* Footer */}
       <footer className="home-footer">
         <div className="home-footer-content">
-          <p className="home-footer-text">© 2025 TERMINALITY. An open-source cyberpunk OS simulator.</p>
+          <p className="home-footer-text">© 2025 TERMINALITY INVESTIGATIVE NETWORK. Authorized Access Only.</p>
           <div className="home-footer-links">
             <a href="https://github.com/Axidify/Terminality-V2" target="_blank" rel="noopener noreferrer">GITHUB</a>
             <span className="home-footer-sep">◆</span>
-            <a href="https://github.com/Axidify/Terminality-V2/issues" target="_blank" rel="noopener noreferrer">ISSUES</a>
+            <a href="https://github.com/Axidify/Terminality-V2/issues" target="_blank" rel="noopener noreferrer">BUG REPORTS</a>
             <span className="home-footer-sep">◆</span>
-            <a href="https://github.com/Axidify/Terminality-V2/discussions" target="_blank" rel="noopener noreferrer">DISCUSS</a>
+            <a href="https://github.com/Axidify/Terminality-V2/discussions" target="_blank" rel="noopener noreferrer">SUPPORT</a>
           </div>
         </div>
       </footer>
