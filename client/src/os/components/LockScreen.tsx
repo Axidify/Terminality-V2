@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
+import Icon from './icons/Icon'
 import { isLoggedIn } from '../../services/auth'
 import { hydrateFromServer, getCachedDesktop, saveDesktopState } from '../../services/saveService'
 import { useNotifications } from '../NotificationContext'
@@ -243,7 +244,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
                   className="unlock-button unlock-button-primary"
                 >
                   <span className="unlock-text">UNLOCK</span>
-                  <span className="unlock-arrow">→</span>
+                  <span className="unlock-arrow"><Icon name="arrow-right" size={18} /></span>
                 </button>
           </div>
         </div>

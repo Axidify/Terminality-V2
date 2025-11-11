@@ -49,14 +49,23 @@ export interface UnifiedState {
 let cachedState: UnifiedState | null = null
 
 export async function hydrateFromServer(): Promise<UnifiedState> {
-  const out = await apiRequest<{ session_id: number; state: UnifiedState }>('/api/state', { auth: true })
-  const s = out.state
-  // Ensure keys
-  s.version = s.version || 1
-  s.desktop = s.desktop || {}
-  s.story = s.story || {}
-  cachedState = s
-  return s
+  try {
+    const out = await apiRequest<{ session_id: number; state: UnifiedState }>('/api/state', { auth: true })
+    const s = out.state
+    // Ensure keys
+    s.version = s.version || 1
+    s.desktop = s.desktop || {}
+    s.story = s.story || {}
+    cachedState = s
+    return s
+  } catch (_e: any) {
+    // If API is unreachable (eg. local dev without server), return cached state or a default
+    if (cachedState) return cachedState
+    const s: UnifiedState = { version: 1, desktop: {}, story: {} }
+    cachedState = s
+    // Do not throw, allow application to continue without server
+    return s
+  }
 }
 
 export async function saveDesktopState(partial: Partial<DesktopState>): Promise<UnifiedState> {

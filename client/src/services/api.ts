@@ -37,7 +37,19 @@ export async function apiRequest<T>(path: string, options: { method?: HttpMethod
     body = options.body as any
   }
 
-  const res = await fetch(`${getApiBase()}${path}`, { method, headers, body, credentials: 'include' })
+  // Short-circuit requests if API has been recently offline to avoid spamming console and network
+  const now = Date.now()
+  if ((apiRequest as any)._offlineUntil && now < (apiRequest as any)._offlineUntil) {
+    throw new Error('API seems offline')
+  }
+  let res: Response
+  try {
+    res = await fetch(`${getApiBase()}${path}`, { method, headers, body, credentials: 'include' })
+  } catch (_err) {
+    // Mark API as offline for a short duration to prevent repeated retries
+    ;(apiRequest as any)._offlineUntil = Date.now() + 5000
+    throw new Error('Network error')
+  }
   if (res.status === 401) {
     // Dispatch immersive session expiry event
     window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { path, status: 401 } }))

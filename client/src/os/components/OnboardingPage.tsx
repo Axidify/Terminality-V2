@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 
+import Icon from './icons/Icon'
 import { register } from '../../services/auth'
 import { getCachedDesktop } from '../../services/saveService'
 import { sounds } from '../SoundEffects'
@@ -399,7 +400,7 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
 
           {step === 'complete' && (
             <div className="onboarding-step complete-step">
-              <div className="success-icon">✓</div>
+              <div className="success-icon"><Icon name="check" size={28} /></div>
               <h2>Account Created!</h2>
               <p className="step-description">
                 Welcome to Terminality OS, <strong>{username}</strong>!
@@ -425,7 +426,8 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
             
             {step === 'welcome' && (
               <button className="onboarding-btn btn-primary" onClick={handleNext}>
-                Get Started →
+                <span>Get Started</span>
+                <span className="onboarding-arrow"><Icon name="arrow-right" size={14} /></span>
               </button>
             )}
             
@@ -435,7 +437,8 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
                 onClick={handleNext}
                 disabled={!acceptedTerms}
               >
-                Continue →
+                <span>Continue</span>
+                <span className="onboarding-arrow"><Icon name="arrow-right" size={14} /></span>
               </button>
             )}
             

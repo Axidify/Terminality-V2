@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
+import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
 import { hydrateFromServer } from '../services/saveService'
 
@@ -139,7 +140,7 @@ export const HomePage: React.FC = () => {
             <div className="home-button-group">
               <button onClick={submitHomeLogin} className="home-btn home-btn-primary" disabled={hpBusy || !hpUsername || !hpPassword}>
                 <span className="home-btn-text">AUTHENTICATE</span>
-                <span className="home-btn-arrow">→</span>
+                <span className="home-btn-arrow"><Icon name="arrow-right" size={14} /></span>
               </button>
               <a href="/app?onboarding=1" className="home-btn home-btn-secondary">
                 <span className="home-btn-text">NEW AGENT</span>

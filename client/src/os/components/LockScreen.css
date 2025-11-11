@@ -439,7 +439,9 @@
 }
 
 .unlock-arrow {
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
   z-index: 1;
   transition: transform 0.3s;
@@ -447,6 +449,12 @@
 
 .unlock-button:not(:disabled):hover .unlock-arrow {
   transform: translateX(4px);
+}
+
+.unlock-arrow svg {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
 }
 
 .lock-screen-status {
@@ -506,7 +514,8 @@
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.8);
   animation: statusPulse 2s ease-in-out infinite;
   display: inline-block;
-  transform: translateY(-3px);
+  align-self: center;
+  margin-right: 6px;
 }
 
 @keyframes statusPulse {

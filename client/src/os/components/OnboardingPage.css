@@ -500,6 +500,13 @@
               0 0 60px rgba(var(--color-secondary-rgb), 0.3);
 }
 
+.success-icon svg {
+  width: 36px;
+  height: 36px;
+  stroke: currentColor;
+  fill: currentColor;
+}
+
 @keyframes scaleIn {
   from { transform: scale(0); }
   to { transform: scale(1); }
@@ -583,6 +590,18 @@
 .onboarding-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.onboarding-arrow svg {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  margin-left: 8px;
+  transition: transform 0.25s ease;
+}
+
+.onboarding-btn:hover .onboarding-arrow svg {
+  transform: translateX(6px);
 }
 
 /* Background Particles */
