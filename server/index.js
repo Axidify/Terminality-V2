@@ -3,6 +3,8 @@ const cors = require('cors')
 const fs = require('fs')
 const path = require('path')
 const bodyParser = require('body-parser')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 // Use Prisma for persistence when available
@@ -66,14 +68,33 @@ const app = express()
 app.use(cors({ origin: true, credentials: true }))
 // Ensure preflight requests allow credentials as well
 app.options('*', cors({ origin: true, credentials: true }))
+// Parse JSON and URL-encoded bodies so the API accepts both JSON and x-www-form-urlencoded payloads
 app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: true }))
 
 // Simple in-memory users and tokens (for dev only)
-const users = [{ id: 1, username: 'player1', password: 'password', role: 'user' }, { id: 2, username: 'admin', password: 'admin', role: 'admin' }]
-const tokens = new Map() // token -> userId
+const users = [{ id: 1, username: 'player1', email: 'player1@example.local', password: bcrypt.hashSync('password', 10), role: 'user' }, { id: 2, username: 'admin', email: 'admin@example.local', password: bcrypt.hashSync('admin', 10), role: 'admin' }]
+const tokens = new Map() // token -> { userId, expiresAt, revoked }
 let nextTokenId = 1
 
-app.get('/api/state', async (req, res) => {
+// JWT configuration
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
+
+function signJwt(payload, expiresIn) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: expiresIn || JWT_EXPIRES_IN })
+}
+
+function decodeJwt(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET)
+  } catch (e) {
+    return null
+  }
+}
+
+// Protected state APIs: require authenticated session
+app.get('/api/state', authMiddleware, async (req, res) => {
   try {
     if (!savedState) savedState = await readState()
     res.json({ session_id: 1, state: savedState })
@@ -83,6 +104,40 @@ app.get('/api/state', async (req, res) => {
   }
 })
 
+// Authentication middleware
+async function authMiddleware(req, res, next) {
+  const auth = req.headers['authorization'] || ''
+  const token = String(auth).replace(/^Bearer\s+/i, '')
+  if (!token) return res.status(401).json({ message: 'Missing token' })
+  const verified = decodeJwt(token)
+  if (!verified) return res.status(401).json({ message: 'Invalid token' })
+  const userId = verified.userId
+  try {
+    if (prisma) {
+      const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
+  if (!tk || !tk.user || tk.revoked || tk.type !== 'session') return res.status(401).json({ message: 'Invalid token' })
+      if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+      req.user = { id: tk.user.id, username: tk.user.username, role: tk.user.role }
+      return next()
+    }
+    const tk = tokens.get(token)
+  if (!tk || tk.revoked || tk.type !== 'session') return res.status(401).json({ message: 'Invalid token' })
+    if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+    const user = users.find(u => u.id === tk.userId)
+    if (!user) return res.status(401).json({ message: 'Invalid token' })
+    req.user = { id: user.id, username: user.username, role: user.role }
+    next()
+  } catch (e) {
+    console.error('[auth][middleware] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+}
+
+function requireAdmin(req, res, next) {
+  if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'owner')) return res.status(403).json({ message: 'Forbidden' })
+  next()
+}
+
 // Basic health endpoint for readiness/liveness checks and monitoring
 app.get('/health', (req, res) => {
   const uptime = process.uptime()
@@ -91,7 +146,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime_secs: Math.floor(uptime), mem: { rss: mem.rss }, stateVersion, timestamp: new Date().toISOString() })
 })
 
-app.put('/api/state', async (req, res) => {
+app.put('/api/state', authMiddleware, async (req, res) => {
   try {
     const incoming = req.body && req.body.state
     if (!incoming) return res.status(400).json({ message: 'state missing' })
@@ -105,23 +160,38 @@ app.put('/api/state', async (req, res) => {
 })
 
 app.post('/api/auth/register', async (req, res) => {
-  const { username, password } = req.body || {}
+  const { username, password, email } = req.body || {}
   if (!username || !password) return res.status(400).json({ message: 'Missing username or password' })
   try {
     if (prisma) {
       const existing = await prisma.user.findUnique({ where: { username } })
       if (existing) return res.status(409).json({ message: 'User exists' })
-      const created = await prisma.user.create({ data: { username, password, role: 'user' } })
-      const token = `token-${Date.now()}-${created.id}`
-      await prisma.token.create({ data: { token, userId: created.id } })
-      return res.json({ token })
+      const hashed = await bcrypt.hash(password, 10)
+      const created = await prisma.user.create({ data: { username, email, password: hashed, role: 'user' } })
+      const token = signJwt({ userId: created.id, username: created.username, role: created.role })
+      const decoded = jwt.decode(token)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      try {
+        await prisma.token.create({ data: { token, userId: created.id, expiresAt, type: 'session' } })
+      } catch (err) {
+        // If token already exists (unlikely but possible in tests), ignore and proceed
+        if (err && err.code === 'P2002') {
+          console.warn('[prisma] token already exists, skipping insert')
+        } else {
+          throw err
+        }
+      }
+      return res.json({ access_token: token })
     }
     const existing = users.find(u => u.username === username)
     if (existing) return res.status(409).json({ message: 'User exists' })
-    const id = users.length + 1
-    users.push({ id, username, password, role: 'user' })
-    const token = `token-${nextTokenId++}`
-    tokens.set(token, id)
+  const id = users.length + 1
+  const hashed = await bcrypt.hash(password, 10)
+  users.push({ id, username, email, password: hashed, role: 'user' })
+    const token = signJwt({ userId: id, username, role: 'user' })
+    const decoded = jwt.decode(token)
+    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+  tokens.set(token, { userId: id, expiresAt, revoked: false, type: 'session' })
     res.json({ token })
   } catch (e) {
     console.error('[auth][register] error', e)
@@ -134,16 +204,33 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     if (prisma) {
       const user = await prisma.user.findUnique({ where: { username } })
-      if (!user || user.password !== password) return res.status(401).json({ message: 'Invalid credentials' })
-      const token = `token-${Date.now()}-${user.id}`
-      await prisma.token.create({ data: { token, userId: user.id } })
-      return res.json({ token })
+      if (!user) return res.status(401).json({ message: 'Invalid credentials' })
+      const ok = await bcrypt.compare(password, user.password)
+      if (!ok) return res.status(401).json({ message: 'Invalid credentials' })
+      const token = signJwt({ userId: user.id, username: user.username, role: user.role })
+      const decoded = jwt.decode(token)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      try {
+        await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'session' } })
+      } catch (err) {
+        if (err && err.code === 'P2002') {
+          console.warn('[prisma] token already exists, skipping insert')
+        } else {
+          throw err
+        }
+      }
+      return res.json({ access_token: token })
     }
-    const u = users.find(x => x.username === username && x.password === password)
+    const u = users.find(x => x.username === username)
     if (!u) return res.status(401).json({ message: 'Invalid credentials' })
-    const token = `token-${nextTokenId++}`
-    tokens.set(token, u.id)
-    res.json({ token })
+    const ok = await bcrypt.compare(password, u.password)
+    if (!ok) return res.status(401).json({ message: 'Invalid credentials' })
+    if (!u) return res.status(401).json({ message: 'Invalid credentials' })
+  const token = signJwt({ userId: u.id, username: u.username, role: u.role })
+    const decoded = jwt.decode(token)
+    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+  tokens.set(token, { userId: u.id, expiresAt, revoked: false, type: 'session' })
+  res.json({ access_token: token })
   } catch (e) {
     console.error('[auth][login] error', e)
     res.status(500).json({ message: 'Server error' })
@@ -154,14 +241,19 @@ app.get('/api/auth/me', async (req, res) => {
   const auth = req.headers['authorization'] || ''
   const token = String(auth).replace(/^Bearer\s+/i, '')
   try {
+    const verified = decodeJwt(token)
+    if (!verified) return res.status(401).json({ message: 'Invalid token' })
+    const userId = verified.userId
     if (prisma) {
       const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
-      if (!tk || !tk.user) return res.status(401).json({ message: 'Invalid token' })
+      if (!tk || !tk.user || tk.revoked) return res.status(401).json({ message: 'Invalid token' })
+      if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
       return res.json({ id: tk.user.id, username: tk.user.username })
     }
-    const id = tokens.get(token)
-    if (!id) return res.status(401).json({ message: 'Invalid token' })
-    const user = users.find(u => u.id === id)
+    const tk = tokens.get(token)
+    if (!tk || tk.revoked) return res.status(401).json({ message: 'Invalid token' })
+    if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+    const user = users.find(u => u.id === tk.userId)
     if (!user) return res.status(401).json({ message: 'Invalid token' })
     res.json({ id: user.id, username: user.username })
   } catch (e) {
@@ -170,7 +262,127 @@ app.get('/api/auth/me', async (req, res) => {
   }
 })
 
-app.post('/api/command', (req, res) => {
+// Update profile (username or password). Requires current session token
+app.patch('/api/auth/me', authMiddleware, async (req, res) => {
+  const { username, password, oldPassword } = req.body || {}
+  try {
+    if (prisma) {
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } })
+      if (!user) return res.status(404).json({ message: 'Not found' })
+      if (password) {
+        // require old password to change
+        if (!oldPassword) return res.status(400).json({ message: 'oldPassword required' })
+        const ok = await bcrypt.compare(oldPassword, user.password)
+        if (!ok) return res.status(401).json({ message: 'Invalid credentials' })
+        const hashed = await bcrypt.hash(password, 10)
+        await prisma.user.update({ where: { id: user.id }, data: { password: hashed } })
+        return res.json({ message: 'Password updated' })
+      }
+      if (username) {
+        await prisma.user.update({ where: { id: user.id }, data: { username } })
+        return res.json({ message: 'Username updated' })
+      }
+      res.json({ message: 'No changes' })
+    } else {
+      const user = users.find(u => u.id === req.user.id)
+      if (!user) return res.status(404).json({ message: 'Not found' })
+      if (password) {
+        if (!oldPassword) return res.status(400).json({ message: 'oldPassword required' })
+        const ok = await bcrypt.compare(oldPassword, user.password)
+        if (!ok) return res.status(401).json({ message: 'Invalid credentials' })
+        const hashed = await bcrypt.hash(password, 10)
+        Object.assign(user, { password: hashed })
+        return res.json({ message: 'Password updated' })
+      }
+      if (username) { Object.assign(user, { username }); return res.json({ message: 'Username updated' }) }
+      res.json({ message: 'No changes' })
+    }
+  } catch (e) {
+    console.error('[auth][me][patch] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Password reset: request creates a reset token and (for dev) returns it; confirm consumes the token to update password
+app.post('/api/auth/reset/request', async (req, res) => {
+  const { username, email } = req.body || {}
+  console.log('[auth/reset/request] body:', req.body)
+  const lookup = username || email
+  if (!lookup) return res.status(400).json({ message: 'username or email required' })
+  try {
+    if (prisma) {
+      const user = username ? await prisma.user.findUnique({ where: { username } }) : await prisma.user.findUnique({ where: { email } })
+      if (!user) return res.status(404).json({ message: 'Not found' })
+      const token = signJwt({ userId: user.id, username: user.username, role: user.role }, '1h')
+      const decoded = jwt.decode(token)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'reset' } })
+      // For dev, return the reset token so UI can simulate email delivery
+      return res.json({ reset_token: token })
+    }
+  const user = users.find(u => (username && u.username === username) || (email && u.email === email))
+    if (!user) return res.status(404).json({ message: 'Not found' })
+    const token = signJwt({ userId: user.id, username: user.username, role: user.role }, '1h')
+    const decoded = jwt.decode(token)
+    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+    tokens.set(token, { userId: user.id, expiresAt, revoked: false, type: 'reset' })
+    return res.json({ reset_token: token })
+  } catch (e) {
+    console.error('[auth][reset][request] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/auth/reset/confirm', async (req, res) => {
+  const { token, password } = req.body || {}
+  if (!token || !password) return res.status(400).json({ message: 'token and password required' })
+  try {
+    if (prisma) {
+      const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
+      if (!tk || !tk.user || tk.revoked || tk.type !== 'reset') return res.status(401).json({ message: 'Invalid token' })
+      if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+      const hashed = await bcrypt.hash(password, 10)
+      await prisma.user.update({ where: { id: tk.user.id }, data: { password: hashed } })
+      await prisma.token.updateMany({ where: { userId: tk.user.id, type: 'reset' }, data: { revoked: true } })
+      return res.json({ message: 'Password reset' })
+    }
+    const tk = tokens.get(token)
+    if (!tk || tk.revoked || tk.type !== 'reset') return res.status(401).json({ message: 'Invalid token' })
+    if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+    const user = users.find(u => u.id === tk.userId)
+    if (!user) return res.status(404).json({ message: 'Not found' })
+    const hashed = await bcrypt.hash(password, 10)
+    user.password = hashed
+    // revoke all reset tokens for user in fallback
+    for (const [k, v] of tokens.entries()) { if (v.userId === user.id && v.type === 'reset') v.revoked = true }
+    return res.json({ message: 'Password reset' })
+  } catch (e) {
+    console.error('[auth][reset][confirm] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Add a logout endpoint to revoke a token
+app.post('/api/auth/logout', async (req, res) => {
+  const auth = req.headers['authorization'] || ''
+  const token = String(auth).replace(/^Bearer\s+/i, '')
+  try {
+    if (!token) return res.status(400).json({ message: 'Token required' })
+    if (prisma) {
+      await prisma.token.updateMany({ where: { token }, data: { revoked: true } })
+      return res.json({ message: 'Logged out' })
+    }
+    const tk = tokens.get(token)
+    if (tk) tk.revoked = true
+    res.json({ message: 'Logged out' })
+  } catch (e) {
+    console.error('[auth][logout] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Protected command execution endpoint
+app.post('/api/command', authMiddleware, (req, res) => {
   const { command } = req.body || {}
   if (!command) return res.status(400).json({ message: 'command required' })
   // Minimal command handling for dev convenience
@@ -183,7 +395,7 @@ app.post('/api/command', (req, res) => {
 })
 
 // Admin endpoints (basic)
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   try {
     if (prisma) {
       const users = await prisma.user.findMany({ select: { id: true, username: true, role: true } })
@@ -196,16 +408,22 @@ app.get('/api/admin/users', async (req, res) => {
   }
 })
 
-app.patch('/api/admin/users/:id', async (req, res) => {
+app.patch('/api/admin/users/:id', authMiddleware, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10)
   try {
+    const updateData = { ...req.body }
+    // Hash password if provided
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10)
+    }
+    
     if (prisma) {
-      const user = await prisma.user.update({ where: { id }, data: req.body })
+      const user = await prisma.user.update({ where: { id }, data: updateData })
       return res.json({ id: user.id, username: user.username, role: user.role })
     }
     const user = users.find(u => u.id === id)
     if (!user) return res.status(404).json({ message: 'Not found' })
-    Object.assign(user, req.body)
+    Object.assign(user, updateData)
     res.json(user)
   } catch (e) {
     console.error('[admin][user][patch] error', e)
@@ -213,7 +431,7 @@ app.patch('/api/admin/users/:id', async (req, res) => {
   }
 })
 
-app.delete('/api/admin/users/:id', async (req, res) => {
+app.delete('/api/admin/users/:id', authMiddleware, requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10)
   try {
     if (prisma) {
@@ -230,16 +448,51 @@ app.delete('/api/admin/users/:id', async (req, res) => {
   }
 })
 
+// Dev-only admin creation endpoint - only permitted outside of production.
+app.post('/api/admin/create', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') return res.status(403).json({ message: 'Not allowed in production' })
+  const { username = 'admin', password = 'admin', secret } = req.body || {}
+  if (process.env.DEV_ADMIN_SECRET && process.env.DEV_ADMIN_SECRET !== secret) {
+    return res.status(403).json({ message: 'Invalid secret' })
+  }
+  try {
+    if (prisma) {
+      let user = await prisma.user.findUnique({ where: { username } })
+      if (user) {
+        user = await prisma.user.update({ where: { id: user.id }, data: { role: 'admin' } })
+        return res.json({ id: user.id, username: user.username, role: user.role })
+      }
+      const hashed = await bcrypt.hash(password, 10)
+      user = await prisma.user.create({ data: { username, password: hashed, role: 'admin' } })
+      return res.json({ id: user.id, username: user.username, role: user.role })
+    }
+    let user = users.find(u => u.username === username)
+    if (user) {
+      user.role = 'admin'
+      return res.json(user)
+    }
+    const id = users.length + 1
+    const hashed = await bcrypt.hash(password, 10)
+    users.push({ id, username, password: hashed, role: 'admin' })
+    res.json({ id, username, role: 'admin' })
+  } catch (e) {
+    console.error('[admin][create] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
 // fallback
 app.use((req, res) => {
   res.status(404).json({ message: 'Not found' })
 })
 
-const server = app.listen(DEFAULT_PORT, () => {
-  console.log(`Terminality dev api listening on http://localhost:${DEFAULT_PORT}`)
-})
+let server = null
+if (require.main === module) {
+  server = app.listen(DEFAULT_PORT, () => {
+    console.log(`Terminality dev api listening on http://localhost:${DEFAULT_PORT}`)
+  })
 
-server.on('error', (err) => {
+  server.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
     console.error(`[server] Port ${DEFAULT_PORT} already in use. Please stop other servers or set PORT env var.`)
     process.exit(1)
@@ -247,15 +500,18 @@ server.on('error', (err) => {
   console.error('[server] Unhandled server error:', err)
   process.exit(1)
 })
+}
 
 // Graceful shutdown so nodemon restarts cleanly
 process.on('SIGINT', async () => {
   console.log('[server] SIGINT received, shutting down')
   try { if (prisma) await prisma.$disconnect() } catch (e) { /* ignore */ }
-  server.close(() => process.exit(0))
+  if (server) server.close(() => process.exit(0))
 })
 process.on('SIGTERM', async () => {
   console.log('[server] SIGTERM received, shutting down')
   try { if (prisma) await prisma.$disconnect() } catch (e) { /* ignore */ }
-  server.close(() => process.exit(0))
+  if (server) server.close(() => process.exit(0))
 })
+
+module.exports = { app, prisma }

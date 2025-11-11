@@ -2,8 +2,9 @@ import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } f
 
 import { ContextMenu, MenuItem } from './ContextMenu'
 import { DesktopDialog } from './DesktopDialog'
-import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, AdminIcon } from './Icons'
+import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, AdminIcon, UserManagementIcon } from './Icons'
 import { fs } from '../../programs/FileSystem'
+import Icon from './icons/Icon'
 import { saveDesktopState, getCachedDesktop } from '../../services/saveService'
 import { useUser } from '../UserContext'
 import { useWindowManager, WindowType } from '../WindowManager'
@@ -31,7 +32,7 @@ const baseIcons: DesktopIconDef[] = [
     icon: <TerminalIcon size={50} />, 
     x: 20, 
     y: 20,
-    defaultOpts: { title: 'Terminal' } 
+    defaultOpts: { title: 'Terminal', width: 1400, height: 500 } 
   },
   { 
     type: 'explorer', 
@@ -105,6 +106,14 @@ const baseIcons: DesktopIconDef[] = [
     y: 320,
     defaultOpts: { title: 'Terminality Store', width: 1200, height: 800 } 
   },
+    { 
+      type: 'profile',
+      name: 'Profile',
+      icon: <Icon name="user" size={50} />,
+      x: 130,
+      y: 420,
+      defaultOpts: { title: 'Profile', width: 520, height: 420 }
+    }
 ]
 
 export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
@@ -147,6 +156,14 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
         y: 420,
         defaultOpts: { title: 'Admin Console', width: 900, height: 600 }
       })
+      icons.push({
+        type: 'usermgmt',
+        name: 'Users',
+        icon: <UserManagementIcon size={50} />,
+        x: 130,
+        y: 520,
+        defaultOpts: { title: 'User Management', width: 900, height: 650 }
+      })
     }
     return icons
   }
@@ -183,7 +200,8 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
   // Auto-arrange on first launch if no saved positions exist
   useEffect(() => {
     const hasServerIcons = !!getCachedDesktop()?.icons
-    if (!hasServerIcons && !hasAutoArranged) {
+    const hasAnyPositions = Object.keys(iconPositions).length > 0
+    if (!hasServerIcons && !hasAnyPositions && !hasAutoArranged) {
       autoArrange()
       setHasAutoArranged(true)
     }

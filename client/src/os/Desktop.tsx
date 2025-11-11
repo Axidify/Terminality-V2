@@ -9,9 +9,11 @@ import SystemInfo from './components/SystemInfo'
 import { Taskbar } from './components/Taskbar'
 import { WindowFrame } from './components/WindowFrame'
 import { sounds } from './SoundEffects'
-import { useUser } from './UserContext'
 import { useWindowManager } from './WindowManager'
+import { saveDesktopState } from '../services/saveService'
 import { AdminApp } from '../programs/AdminApp'
+import { ProfileApp } from '../programs/ProfileApp'
+import { UserManagementApp } from '../programs/UserManagementApp'
 import { ChatApp } from '../programs/ChatApp'
 import { EmailApp } from '../programs/EmailApp'
 import { FileExplorerApp } from '../programs/FileExplorerApp'
@@ -37,12 +39,10 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
     desktopIconsRef.current?.autoArrange()
   }
 
-  const { logout: ctxLogout } = useUser()
-
   const handleLock = () => {
     sounds.logout()
-    // Clear auth/session so LockScreen doesn't auto-login
-  try { ctxLogout(); } catch { /* ignore logout errors */ }
+    // Persist locked state so we show lock screen on return
+    try { saveDesktopState({ isLocked: true }) } catch { /* ignore */ }
     
     // Stop music player if it's playing
     const audio = document.querySelector('audio') as HTMLAudioElement
@@ -88,7 +88,9 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
             {win.type === 'music' && <MusicPlayerApp />}
             {win.type === 'settings' && <SystemSettingsApp />}
             {win.type === 'store' && <StoreApp />}
-      {win.type === 'admin' && <AdminApp />}
+            {win.type === 'admin' && <AdminApp />}
+            {win.type === 'profile' && <ProfileApp />}
+            {win.type === 'usermgmt' && <UserManagementApp />}
           </WindowFrame>
         ))}
 

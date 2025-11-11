@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 
 import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon } from './Icons'
+import Icon from './icons/Icon'
 import { NotificationPanel } from './NotificationPanel'
 import { useNotifications } from '../NotificationContext'
+import { useUser } from '../UserContext'
 import { useWindowManager, WindowType } from '../WindowManager'
 import './Taskbar.css'
 
@@ -24,6 +26,7 @@ const apps: AppDefinition[] = [
   { type: 'recycle', name: 'Recycle Bin', icon: <RecycleBinIcon size={20} />, defaultOpts: { title: 'Recycle Bin', width: 1000, height: 760 } },
   { type: 'email', name: 'Mail', icon: <MailIcon size={20} />, defaultOpts: { title: 'Mail', width: 1200, height: 800 } },
   { type: 'chat', name: 'Chat', icon: <ChatIcon size={20} />, defaultOpts: { title: 'Chat', width: 500, height: 600 } },
+  { type: 'profile', name: 'Profile', icon: <Icon name="user" size={20} />, defaultOpts: { title: 'Profile', width: 500, height: 400 } },
 ]
 
 interface TaskbarProps {
@@ -32,6 +35,7 @@ interface TaskbarProps {
 
 export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
   const wm = useWindowManager()
+  const { logout } = useUser()
   const { unreadCount } = useNotifications()
   const [startOpen, setStartOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -102,8 +106,33 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
               ))}
             </div>
             <div className="start-menu-footer">
-              <button className="start-menu-power" onClick={() => { setStartOpen(false); onLock(); }}>
-                🔒 Log Off
+              <button 
+                className="start-menu-power" 
+                onClick={() => { 
+                  setStartOpen(false); 
+                  onLock(); 
+                }}
+                title="Return to lock screen"
+              >
+                <svg className="power-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="5" y="11" width="14" height="10" rx="2" />
+                  <path d="M12 11V7M9 7h6" />
+                </svg>
+                <span>Lock</span>
+              </button>
+              <button 
+                className="start-menu-power" 
+                onClick={() => { 
+                  setStartOpen(false); 
+                  logout(); 
+                  window.location.href = '/'; 
+                }}
+                title="Log out and return to home page"
+              >
+                <svg className="power-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+                <span>Log Out</span>
               </button>
             </div>
           </div>

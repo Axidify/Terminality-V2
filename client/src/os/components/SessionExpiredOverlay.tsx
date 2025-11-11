@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { logout } from '../../services/auth'
 
 import { SettingsIcon } from './Icons'
 
@@ -6,7 +7,14 @@ export const SessionExpiredOverlay: React.FC = () => {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    const onExpire = () => setShow(true)
+    const onExpire = () => {
+      setShow(true)
+      // Auto redirect after a brief delay to give the overlay a chance to show
+      setTimeout(() => {
+        try { logout() } catch { /* ignore */ }
+        window.location.href = '/'
+      }, 1200)
+    }
     window.addEventListener('sessionExpired', onExpire as EventListener)
     return () => window.removeEventListener('sessionExpired', onExpire as EventListener)
   }, [])

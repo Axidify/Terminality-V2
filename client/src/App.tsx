@@ -9,10 +9,12 @@ import { ThemeProvider } from './os/ThemeContext'
 import { UserProvider } from './os/UserContext'
 import { WindowManagerProvider } from './os/WindowManager'
 import { HomePage } from './pages/HomePage'
+import ResetPage from './pages/ResetPage'
 import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
+import { isLoggedIn } from './services/auth'
 
 type AppView = 'lock' | 'onboarding' | 'desktop'
-type AppPage = 'home' | 'os'
+type AppPage = 'home' | 'os' | 'reset'
 
 function OSApp() {
   const [view, setView] = useState<AppView>(() => {
@@ -38,6 +40,10 @@ function OSApp() {
     hydrateFromServer().then(state => {
       if (state.desktop && typeof state.desktop.isLocked === 'boolean') {
         setView(state.desktop.isLocked ? 'lock' : 'desktop')
+      }
+      // After hydration, if we landed on desktop but want a mandatory lock screen on fresh session, re-lock
+      else if (isLoggedIn()) {
+        setView('lock')
       }
     }).catch(() => {})
   }, [])
@@ -73,16 +79,32 @@ function OSApp() {
 
 export default function App() {
   const path = window.location.pathname
-  const page: AppPage = path === '/app' ? 'os' : 'home'
-  const [currentPage, setCurrentPage] = useState<AppPage>(page)
+  const initial: AppPage = path === '/app' ? 'os' : path === '/reset' ? 'reset' : 'home'
+  // Gate /app behind auth: if not logged in, force home page
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => {
+    if (initial === 'os' && !isLoggedIn()) return 'home'
+    return initial
+  })
 
   useEffect(() => {
     const handlePopState = () => {
       const p = window.location.pathname
-      setCurrentPage(p === '/app' ? 'os' : 'home')
+      const next: AppPage = p === '/app' ? 'os' : p === '/reset' ? 'reset' : 'home'
+      setCurrentPage(next === 'os' && !isLoggedIn() ? 'home' : next)
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    // React to auth token changes (login/logout) to keep gate accurate
+    const onAuthChange = () => {
+      const p = window.location.pathname
+      const next: AppPage = p === '/app' ? 'os' : p === '/reset' ? 'reset' : 'home'
+      setCurrentPage(next === 'os' && !isLoggedIn() ? 'home' : next)
+    }
+    window.addEventListener('authTokenChanged', onAuthChange as any)
+    return () => window.removeEventListener('authTokenChanged', onAuthChange as any)
   }, [])
 
   if (currentPage === 'home') {
@@ -91,6 +113,18 @@ export default function App() {
         <NotificationProvider>
           <UserProvider>
             <HomePage />
+          </UserProvider>
+        </NotificationProvider>
+      </ThemeProvider>
+    )
+  }
+
+  if (currentPage === 'reset') {
+    return (
+      <ThemeProvider>
+        <NotificationProvider>
+          <UserProvider>
+            <ResetPage />
           </UserProvider>
         </NotificationProvider>
       </ThemeProvider>

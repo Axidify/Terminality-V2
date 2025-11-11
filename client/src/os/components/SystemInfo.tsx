@@ -12,10 +12,10 @@ export default function SystemInfo() {
   const [cpuHistory, setCpuHistory] = useState<number[]>(Array(20).fill(30));
   const [netHistory, setNetHistory] = useState<number[]>(Array(20).fill(10));
   const cached = getCachedDesktop();
-  const [isHorizontal, setIsHorizontal] = useState<boolean>(() => cached?.systemInfoLayout ?? false);
+  const [isHorizontal, setIsHorizontal] = useState<boolean>(() => cached?.systemInfoLayout ?? true);
   const [isDragging, setIsDragging] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number }>(() => cached?.systemInfoPosition ?? { x: 20, y: 60 });
-  const [snappedEdge, setSnappedEdge] = useState<'left' | 'right' | 'top' | 'bottom' | null>(() => cached?.systemInfoSnappedEdge ?? null);
+  const [snappedEdge, setSnappedEdge] = useState<'left' | 'right' | 'top' | 'bottom' | null>(() => cached?.systemInfoSnappedEdge ?? 'bottom');
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => cached?.systemInfoCollapsed ?? false);
   const dragRef = useRef({ startX: 0, startY: 0, offsetX: 0, offsetY: 0 });
   const monitorRef = useRef<HTMLDivElement>(null);
@@ -26,20 +26,27 @@ export default function SystemInfo() {
   const dns = '8.8.8.8';
 
   useEffect(() => {
-    // On first launch (no saved position/edge), snap the monitor to the right by default.
+    // On first launch (no saved position/edge), snap horizontally to bottom center above taskbar
     const hasSavedPos = !!cached?.systemInfoPosition;
     const hasSavedEdge = !!cached?.systemInfoSnappedEdge;
+    const hasSavedLayout = cached?.systemInfoLayout !== undefined;
     if (!hasSavedPos && !hasSavedEdge) {
       requestAnimationFrame(() => {
         const el = monitorRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
-        const x = Math.max(0, window.innerWidth - rect.width);
-        const y = position.y; // keep default top offset
+        const TASKBAR_HEIGHT = 40;
+        const x = Math.max(0, (window.innerWidth - rect.width) / 2); // center horizontally
+        const y = window.innerHeight - TASKBAR_HEIGHT - rect.height - 10; // above taskbar
         const next = { x, y };
         setPosition(next);
-        setSnappedEdge('right');
-        saveDesktopState({ systemInfoPosition: next, systemInfoSnappedEdge: 'right' }).catch(() => {});
+        setSnappedEdge('bottom');
+        if (!hasSavedLayout) {
+          setIsHorizontal(true);
+          saveDesktopState({ systemInfoPosition: next, systemInfoSnappedEdge: 'bottom', systemInfoLayout: true }).catch(() => {});
+        } else {
+          saveDesktopState({ systemInfoPosition: next, systemInfoSnappedEdge: 'bottom' }).catch(() => {});
+        }
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

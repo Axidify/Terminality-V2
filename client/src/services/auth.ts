@@ -25,6 +25,19 @@ export function logout() {
   setToken(null)
 }
 
+export async function requestReset(payload: { username?: string; email?: string } | string): Promise<{ reset_token?: string }> {
+  const body = typeof payload === 'string' ? { username: payload } : payload
+  return apiRequest('/api/auth/reset/request', { method: 'POST', body })
+}
+
+export async function confirmReset(token: string, password: string): Promise<void> {
+  await apiRequest('/api/auth/reset/confirm', { method: 'POST', body: { token, password } })
+}
+
+export async function updateProfile(body: { username?: string; password?: string; oldPassword?: string }) {
+  return apiRequest('/api/auth/me', { method: 'PATCH', auth: true, body })
+}
+
 export function isLoggedIn(): boolean {
   return !!getToken()
 }

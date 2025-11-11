@@ -151,6 +151,8 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
     sounds.click()
     sounds.login()
     setIsExiting(true)
+    // Persist unlocked state immediately so hydration reflects desktop
+    try { saveDesktopState({ isLocked: false }) } catch { /* ignore */ }
     
     // Fade out ambient music over 1 second
     if (masterGainRef.current && audioContextRef.current) {
@@ -193,10 +195,16 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
   // Removed login form & logic from lock screen; moved to HomePage
 
   useEffect(() => {
-    // If already logged in, hydrate and unlock automatically
+    // If already logged in, hydrate state; only auto-unlock if server says not locked
     (async () => {
       if (isLoggedIn()) {
-  try { await hydrateFromServer(); handleUnlock() } catch { /* ignore */ }
+        try {
+          const s = await hydrateFromServer()
+          const locked = !s || !s.desktop ? true : (s.desktop.isLocked !== false ? true : false)
+          if (!locked) {
+            handleUnlock()
+          }
+        } catch { /* ignore: stay on lock screen */ }
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps

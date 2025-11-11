@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 
 import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
-import { hydrateFromServer } from '../services/saveService'
+import { hydrateFromServer, saveDesktopState } from '../services/saveService'
 
 import './HomePage.css'
 
@@ -33,7 +33,7 @@ export const HomePage: React.FC = () => {
   // features array removed (replaced with game-focused feature cards)
 
   // Authentication for HomePage (moved from LockScreen)
-  const { login: ctxLogin } = useUser()
+  const { user, login: ctxLogin } = useUser()
   const [hpUsername, setHpUsername] = useState('')
   const [hpPassword, setHpPassword] = useState('')
   const [hpBusy, setHpBusy] = useState(false)
@@ -44,13 +44,23 @@ export const HomePage: React.FC = () => {
     setHpBusy(true)
     try {
       await ctxLogin(hpUsername, hpPassword)
-      await hydrateFromServer()
-      // Navigate to OS (causes App to render OSApp)
+      // After successful auth, ensure the OS starts at the Lock screen
+      await saveDesktopState({ isLocked: true })
+      // Navigate to OS (App gates /app and OSApp will show Lock first)
       window.location.href = '/app'
     } catch (e: any) {
       setHpError(e?.message || 'Authentication failed')
     } finally {
       setHpBusy(false)
+    }
+  }
+
+  // Guard navigation to OS routes behind auth
+  const guardNav = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+    if (!user) {
+      e.preventDefault()
+      setHpError('Please authenticate to access the system')
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {}
     }
   }
 
@@ -142,7 +152,8 @@ export const HomePage: React.FC = () => {
                 <span className="home-btn-text">AUTHENTICATE</span>
                 <span className="home-btn-arrow"><Icon name="arrow-right" size={14} /></span>
               </button>
-              <a href="/app?onboarding=1" className="home-btn home-btn-secondary">
+              <a href="/reset" className="home-forgot-link">Forgot password?</a>
+              <a href="/app?onboarding=1" className="home-btn home-btn-secondary" onClick={guardNav}>
                 <span className="home-btn-text">NEW AGENT</span>
                 <span className="home-btn-arrow">
                   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
@@ -150,7 +161,7 @@ export const HomePage: React.FC = () => {
                   </svg>
                 </span>
               </a>
-              <a href="/app" className="home-btn home-btn-secondary">
+              <a href="/app" className="home-btn home-btn-secondary" onClick={guardNav}>
                 <span className="home-btn-text">ENTER SYSTEM</span>
                 <span className="home-btn-arrow">
                   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
@@ -309,7 +320,7 @@ export const HomePage: React.FC = () => {
       <section className="home-cta">
         <h2 className="home-cta-title">THE INVESTIGATION AWAITS</h2>
         <p className="home-cta-subtitle">Are you ready to take on the case? Solve mysteries. Uncover the truth. Become a master investigator.</p>
-        <a href="/app" className="home-btn home-btn-large home-btn-primary">
+        <a href="/app" className="home-btn home-btn-large home-btn-primary" onClick={guardNav}>
           <span className="home-btn-text">ACCESS CASE FILES</span>
           <span className="home-btn-arrow">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">

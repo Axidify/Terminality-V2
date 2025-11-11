@@ -5,6 +5,7 @@ export type IconName =
   | 'star'
   | 'search'
   | 'monitor'
+  | 'user'
   | 'chart'
   | 'trophy'
   | 'bolt'
@@ -48,6 +49,13 @@ export const Icon: React.FC<IconProps> = ({ name, size = 16, weight = 'normal', 
           <rect x="7" y="17" width="10" height="1.6" rx="0.8" fill="currentColor" />
         </svg>
       )
+      case 'user':
+        return (
+          <svg className={className} {...common} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="8" r="4" fill="currentColor" />
+            <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="currentColor" />
+          </svg>
+        )
     case 'chart':
       return (
         <svg className={className} {...common} viewBox="0 0 24 24" aria-hidden="true" focusable="false">

@@ -46,3 +46,18 @@ jobs:
         with:
           name: client-dist
           path: client/dist
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Prepare Prisma and seed
+        working-directory: server
+        run: |
+          npm run prisma:dbpush
+          npm run prisma:generate
+          npm run prisma:seed
+
+      - name: Run server tests
+        working-directory: server
+        run: npm test

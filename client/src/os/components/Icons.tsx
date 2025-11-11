@@ -287,3 +287,11 @@ export const AdminIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColo
     <path d="M7 16C7.5 14.5 9.5 13.5 12 13.5C14.5 13.5 16.5 14.5 17 16" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
   </svg>
 )
+
+export const UserManagementIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="9" cy="7" r="4" stroke={color} strokeWidth="1.5"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)

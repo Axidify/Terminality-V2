@@ -69,6 +69,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export function useUser(): UserContextValue {
   const ctx = useContext(UserContext)
-  if (!ctx) throw new Error('useUser must be used within a UserProvider')
+  if (!ctx) {
+    // In development HMR scenarios, it's possible a component might briefly render
+    // outside the provider. Avoid throwing and return a safe fallback to keep UI stable.
+    console.warn('useUser used outside UserProvider; returning fallback')
+    return {
+      user: null,
+      loading: false,
+      isAdmin: false,
+      login: async () => { throw new Error('UserProvider not mounted') },
+      logout: () => {},
+      refresh: async () => {}
+    }
+  }
   return ctx
 }

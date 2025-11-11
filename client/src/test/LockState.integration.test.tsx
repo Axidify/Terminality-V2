@@ -33,6 +33,8 @@ vi.mock('../os/Desktop', () => ({ Desktop: ({ onLock }: any) => (<div><button on
 describe('Lock state persistence', () => {
   beforeEach(() => {
     state = { version: 1, desktop: { isLocked: true }, story: {} }
+    // Gate allows /app only if logged in; simulate an authenticated user
+    try { localStorage.setItem('authToken', 'test-token') } catch {}
   })
 
   it('hydrates from server isLocked and persists changes', async () => {
