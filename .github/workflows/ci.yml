@@ -24,6 +24,10 @@ jobs:
         working-directory: client
         run: npm ci
 
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
       - name: Build
         working-directory: client
         run: npm run build
@@ -31,3 +35,10 @@ jobs:
       - name: Test
         working-directory: client
         run: npm test
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: client/dist
