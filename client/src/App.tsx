@@ -8,11 +8,13 @@ import { NotificationProvider } from './os/NotificationContext'
 import { ThemeProvider } from './os/ThemeContext'
 import { UserProvider } from './os/UserContext'
 import { WindowManagerProvider } from './os/WindowManager'
+import { HomePage } from './pages/HomePage'
 import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
 
 type AppView = 'lock' | 'onboarding' | 'desktop'
+type AppPage = 'home' | 'os'
 
-export default function App() {
+function OSApp() {
   const [view, setView] = useState<AppView>(() => {
     const cached = getCachedDesktop()
     if (cached && typeof cached.isLocked === 'boolean') {
@@ -62,4 +64,25 @@ export default function App() {
       </NotificationProvider>
     </ThemeProvider>
   )
+}
+
+export default function App() {
+  const path = window.location.pathname
+  const page: AppPage = path === '/app' ? 'os' : 'home'
+  const [currentPage, setCurrentPage] = useState<AppPage>(page)
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname
+      setCurrentPage(p === '/app' ? 'os' : 'home')
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  if (currentPage === 'home') {
+    return <HomePage />
+  }
+
+  return <OSApp />
 }

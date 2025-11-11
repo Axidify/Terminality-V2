@@ -24,6 +24,8 @@ vi.mock('../os/ThemeContext', () => ({ ThemeProvider: ({ children }: any) => <>{
 vi.mock('../os/NotificationContext', () => ({ NotificationProvider: ({ children }: any) => <>{children}</> }))
 vi.mock('../os/UserContext', () => ({ UserProvider: ({ children }: any) => <>{children}</> }))
 vi.mock('../os/WindowManager', () => ({ WindowManagerProvider: ({ children }: any) => <>{children}</> }))
+vi.mock('../os/components/SessionExpiredOverlay', () => ({ default: () => null }))
+vi.mock('../pages/HomePage', () => ({ HomePage: () => null }))
 vi.mock('../os/components/LockScreen', () => ({ LockScreen: ({ onUnlock, onRegister }: any) => (<div><button onClick={onUnlock}>Unlock</button><button onClick={onRegister}>Register</button></div>) }))
 vi.mock('../os/components/OnboardingPage', () => ({ OnboardingPage: ({ onComplete, onBack }: any) => (<div><button onClick={onComplete}>Complete</button><button onClick={onBack}>Back</button></div>) }))
 vi.mock('../os/Desktop', () => ({ Desktop: ({ onLock }: any) => (<div><button onClick={() => onLock()}>Lock</button><span>Desktop</span></div>) }))
@@ -34,6 +36,12 @@ describe('Lock state persistence', () => {
   })
 
   it('hydrates from server isLocked and persists changes', async () => {
+    // Mock the pathname to /app so we render OSApp instead of HomePage
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, pathname: '/app' },
+      writable: true
+    })
+
     render(<App />)
     // Starts locked
     expect(await screen.findByRole('button', { name: 'Unlock' })).toBeInTheDocument()
