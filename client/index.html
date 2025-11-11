@@ -3,8 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Terminality</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <title>Terminality</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <!-- Fallbacks for browsers that don't support svg favicons: -->
+  <!-- 32x32 PNG fallback (data URI small placeholder) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAQAAABi8VxXAAAAI0lEQVRIiWNgGAWjYBSMglEwCq8Yk4kQmE6mQmQ1QqjAAAPC0Q8Z6w8bAAAAAElFTkSuQmCC" />
+  <!-- Shortcut icon fallback (for older browsers) -->
+  <link rel="shortcut icon" href="/favicon.svg" />
   </head>
   <body>
     <div id="root"></div>
