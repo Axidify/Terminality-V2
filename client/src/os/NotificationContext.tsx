@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
+
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 
 export interface Notification {
@@ -29,7 +30,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (saved) {
         return saved.map((n: any) => ({ ...n, timestamp: new Date(n.timestamp) }))
       }
-    } catch {}
+  } catch { /* ignore: notification init failed */ }
     return []
   })
 

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
+
 import { sounds } from './SoundEffects'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 
@@ -46,9 +47,7 @@ interface WindowMemory {
 const loadWindowMemory = (): WindowMemory => {
   try {
     return getCachedDesktop()?.windowMemory || {}
-  } catch {
-    return {}
-  }
+  } catch { /* ignore: unable to read cached desktop */ return {} }
 }
 
 const saveWindowMemory = (type: WindowType, bounds: { x: number; y: number; width: number; height: number }) => {
@@ -57,7 +56,7 @@ const saveWindowMemory = (type: WindowType, bounds: { x: number; y: number; widt
     const memory: WindowMemory = { ...current, [type]: bounds }
     // Sync to server (auth required); silently ignore errors
     saveDesktopState({ windowMemory: memory }).catch(() => {})
-  } catch {}
+  } catch { /* ignore: save memory failed */ }
 }
 
 export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -186,7 +185,7 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
       if (w) {
         saveWindowMemory(w.type, { x: w.x, y: w.y, width: w.width, height: w.height })
       }
-    } catch {}
+    } catch { /* ignore */ }
   }, [windows])
 
   return (

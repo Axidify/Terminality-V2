@@ -1,13 +1,14 @@
 import React, { useState, KeyboardEvent, useEffect, useRef } from 'react'
-import { HomeWebsite } from './HomeWebsite'
-import { PCStoreWebsite } from './PCStoreWebsite'
+
 import { BankWebsite } from './BankWebsite'
-import { RedditWebsite } from './RedditWebsite'
+import { HomeWebsite } from './HomeWebsite'
 import { InstagramWebsite } from './InstagramWebsite'
+import { PCStoreWebsite } from './PCStoreWebsite'
+import { RedditWebsite } from './RedditWebsite'
 import './MiniBrowserApp.css'
-import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 import { ContextMenuPortal } from '../os/components/ContextMenuPortal'
 import { BackIcon, ForwardIcon, RefreshIcon, HomeIcon, InfoIcon } from '../os/components/Icons'
+import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 
 interface MiniBrowserAppProps {
   payload?: { initialUrl?: string }
@@ -17,9 +18,9 @@ export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
   const initialUrlValue = payload?.initialUrl || 'https://home.axi'
   const [url, setUrl] = useState(initialUrlValue)
   const [currentUrl, setCurrentUrl] = useState(initialUrlValue)
-  const [canGoBack, setCanGoBack] = useState(false)
-  const [canGoForward, setCanGoForward] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [canGoBack, _setCanGoBack] = useState(false)
+  const [canGoForward, _setCanGoForward] = useState(false)
+  const [_error, _setError] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const { ref: menuRef, pos: menuPos } = useContextMenuPosition(contextMenu?.x ?? 0, contextMenu?.y ?? 0)
@@ -72,7 +73,7 @@ export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
     let processedUrl = urlToNavigate
     
     // Check for local sites first
-    if (urlToNavigate.includes('home.axi') || urlToNavigate === 'home') {
+    if (isLocalSite(urlToNavigate)) {
       setCurrentUrl('https://home.axi')
       setUrl('https://home.axi')
       scrollToTop()

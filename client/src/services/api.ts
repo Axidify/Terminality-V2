@@ -9,7 +9,7 @@ export function getApiBase(): string {
 }
 
 export function getToken(): string | null {
-  try { return localStorage.getItem('authToken') } catch { return null }
+  try { return localStorage.getItem('authToken') } catch { /* ignore: localStorage unavailable */ return null }
 }
 
 export function setToken(token: string | null) {
@@ -18,7 +18,7 @@ export function setToken(token: string | null) {
     else localStorage.removeItem('authToken')
     // Dispatch a custom event so auth-aware contexts can refresh without polling
     window.dispatchEvent(new Event('authTokenChanged'))
-  } catch {}
+  } catch { /* ignore: localStorage unavailable */ }
 }
 
 export async function apiRequest<T>(path: string, options: { method?: HttpMethod; headers?: Record<string, string>; body?: any; auth?: boolean } = {}): Promise<T> {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 import './AdminPanel.css'
 
@@ -207,8 +208,9 @@ export const AdminPanel: React.FC = () => {
             <h2>Create Test Scenario</h2>
             <div className="scenario-form">
               <div className="form-group">
-                <label>Scenario Name</label>
+                <label htmlFor="scenario-name">Scenario Name</label>
                 <input 
+                  id="scenario-name"
                   type="text" 
                   value={scenarioName}
                   onChange={(e) => setScenarioName(e.target.value)}
@@ -217,8 +219,9 @@ export const AdminPanel: React.FC = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Description</label>
+                <label htmlFor="scenario-desc">Description</label>
                 <textarea 
+                  id="scenario-desc"
                   value={scenarioDesc}
                   onChange={(e) => setScenarioDesc(e.target.value)}
                   placeholder="Describe the scenario state..."

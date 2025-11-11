@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
@@ -51,11 +52,11 @@ const getSpecValue = (component: string, level: number): string => {
 
 export const SystemSettingsApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('themes')
-  const { currentTheme, themeName, setTheme } = useTheme()
+  const { currentTheme: _currentTheme, themeName, setTheme } = useTheme()
   const wm = useWindowManager()
   const [previewTheme, setPreviewTheme] = useState<string>(themeName)
   const [wallpaper, setWallpaper] = useState(() => getCachedDesktop()?.wallpaper || 'default')
-  const [specs, setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
+  const [specs, _setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
 
   useEffect(() => {
     saveDesktopState({ computerSpecs: specs }).catch(() => {})
@@ -121,7 +122,7 @@ export const SystemSettingsApp: React.FC = () => {
             <line x1="12" y1="16" x2="12" y2="12"/>
             <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
-          What's New
+          What&apos;s New
         </button>
       </div>
 
@@ -256,13 +257,10 @@ export const SystemSettingsApp: React.FC = () => {
             </p>
             
             <div className="specs-grid">
-              {Object.entries(specs).map(([key, comp]) => {
-                const cost = calculateUpgradeCost(comp.level)
-                const canUpgrade = comp.level < comp.maxLevel
-                const displayValue = key === 'cpu' ? comp.speed : 
-                                    key === 'ram' ? comp.size :
-                                    key === 'gpu' ? comp.model :
-                                    comp.capacity
+                {Object.entries(specs).map(([key, comp]) => {
+                const _cost = calculateUpgradeCost(comp.level)
+                const _canUpgrade = comp.level < comp.maxLevel
+                const displayValue = getSpecValue(key, comp.level)
                 
                 return (
                   <div key={key} className="spec-card">
@@ -335,7 +333,7 @@ export const SystemSettingsApp: React.FC = () => {
             </div>
 
             <div className="changelog-section">
-              <h2>What's New in v0.5.3</h2>
+              <h2>What&apos;s New in v0.5.3</h2>
               <div className="changelog-content compact">
                 <div className="changelog-item">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -347,7 +345,7 @@ export const SystemSettingsApp: React.FC = () => {
             </div>
 
             <div className="changelog-section">
-              <h2>What's New in v0.5.2</h2>
+              <h2>What&apos;s New in v0.5.2</h2>
               <div className="changelog-content compact">
                 <div className="changelog-item">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -365,7 +363,7 @@ export const SystemSettingsApp: React.FC = () => {
             </div>
 
             <div className="changelog-section">
-              <h2>What's New in v0.5.1</h2>
+              <h2>What&apos;s New in v0.5.1</h2>
               <div className="changelog-content compact">
                 <div className="changelog-item">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
+
 import { fs } from './FileSystem'
 import './NotepadApp.css'
-import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
-import { CopyIcon, PasteIcon, SaveIcon, SelectAllIcon, InfoIcon } from '../os/components/Icons'
 import { ContextMenu } from '../os/components/ContextMenu'
+import { CopyIcon, PasteIcon, SaveIcon, SelectAllIcon, InfoIcon } from '../os/components/Icons'
+import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 
 interface Props { 
@@ -21,22 +22,21 @@ export const NotepadApp: React.FC<Props> = ({ path: initialPath, onPathChange })
   })
   const [showFileDialog, setShowFileDialog] = useState(!initialPath)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const { ref: menuRef, pos: menuPos } = useContextMenuPosition(contextMenu?.x ?? 0, contextMenu?.y ?? 0)
+  const { ref: _menuRef, pos: menuPos } = useContextMenuPosition(contextMenu?.x ?? 0, contextMenu?.y ?? 0)
 
   useEffect(() => {
-    if (currentPath) {
-      loadFile(currentPath)
-    }
-  }, [currentPath])
-
-  const loadFile = (path: string) => {
-    const file = fs.read(path)
+    if (!currentPath) return
+    const file = fs.read(currentPath)
     if (file) {
       setContent(file.content)
       setUnsavedChanges(false)
-      addToRecent(path)
+      const updated = [currentPath, ...recentFiles.filter(p => p !== currentPath)].slice(0, 10)
+      setRecentFiles(updated)
+      saveDesktopState({ notepadRecent: updated }).catch(() => {})
     }
-  }
+  }, [currentPath, recentFiles])
+
+  // loadFile inlined above in effect
 
   const addToRecent = (path: string) => {
     const updated = [path, ...recentFiles.filter(p => p !== path)].slice(0, 10)

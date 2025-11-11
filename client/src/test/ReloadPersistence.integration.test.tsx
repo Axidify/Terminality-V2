@@ -1,13 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { createFileSystem, fs as singletonFs } from '../programs/FileSystem'
 import { RecycleBinApp } from '../programs/RecycleBinApp'
 
+/* eslint-disable no-var */
 // Use var declarations to avoid temporal dead zone with hoisted vi.mock
 var seededFSNodes: any = undefined
 var seededRecycleMeta: Array<{ recyclePath: string; originalPath: string; name: string; deletedAt: string }> = []
+/* eslint-enable no-var */
 
 vi.mock('../services/saveService', () => {
   return {
@@ -31,7 +34,7 @@ function seedRecycleBin() {
   singletonFs.ensurePath(filePath)
   if (!singletonFs.exists(filePath)) singletonFs.touch(filePath)
   const recyclePath = '/.recycle/tmp_delete.txt'
-  try { singletonFs.mkdir('/.recycle') } catch {}
+  try { singletonFs.mkdir('/.recycle'); } catch { /* ignore if exists */ }
   singletonFs.move(filePath, recyclePath)
   seededRecycleMeta = [{ recyclePath, originalPath: filePath, name: 'tmp_delete.txt', deletedAt: new Date().toISOString() }]
 }

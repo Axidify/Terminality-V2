@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useWindowManager } from '../os/WindowManager'
+
+// useWindowManager intentionally not used in TerminalApp
 import { fs } from './FileSystem'
 import './TerminalApp.css'
-import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 import { ContextMenuPortal } from '../os/components/ContextMenuPortal'
 import { CopyIcon, PasteIcon, ClearIcon, InfoIcon } from '../os/components/Icons'
+import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 import { apiRequest } from '../services/api'
 
 // Use centralized API client for auth and error handling
@@ -12,7 +13,7 @@ import { apiRequest } from '../services/api'
 type Line = { role: 'system' | 'user'; text: string }
 
 export const TerminalApp: React.FC = () => {
-  const wm = useWindowManager()
+  // Keep useWindowManager import commented out for potential future use
   const [lines, setLines] = useState<Line[]>([
     { role: 'system', text: 'Terminal ready. Type help.' }
   ])
@@ -111,7 +112,7 @@ Discovery: find <path>, grep <pattern> <file>, file <path>, strings <file>, ps, 
               results.push(item.path)
               if (item.type === 'dir') search(item.path)
             })
-          } catch {}
+          } catch { /* ignore: permission or path errors */ }
         }
         search(resolve(searchPath))
         if (results.length === 0) {

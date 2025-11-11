@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 import './BankWebsite.css'
 
@@ -12,9 +13,9 @@ interface Transaction {
 
 export const BankWebsite: React.FC = () => {
   const cached = getCachedDesktop()
-  const [balance, setBalance] = useState<number>(() => cached?.credits ?? 1000)
+  const [balance, _setBalance] = useState<number>(() => cached?.credits ?? 1000)
   
-  const [transactions, setTransactions] = useState<Transaction[]>(() => cached?.bankTransactions ?? [
+  const [transactions, _setTransactions] = useState<Transaction[]>(() => cached?.bankTransactions ?? [
     {
       id: '1',
       date: new Date().toISOString().split('T')[0],

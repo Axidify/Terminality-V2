@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef } from 'react'
-import { useWindowManager, WindowType } from '../WindowManager'
-import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, AdminIcon } from './Icons'
-import './DesktopIcons.css'
-import { saveDesktopState, getCachedDesktop } from '../../services/saveService'
-import { useUser } from '../UserContext'
+
 import { ContextMenu, MenuItem } from './ContextMenu'
 import { DesktopDialog } from './DesktopDialog'
+import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, AdminIcon } from './Icons'
 import { fs } from '../../programs/FileSystem'
+import { saveDesktopState, getCachedDesktop } from '../../services/saveService'
+import { useUser } from '../UserContext'
+import { useWindowManager, WindowType } from '../WindowManager'
+import './DesktopIcons.css'
 
 interface DesktopIconDef {
   type: WindowType
@@ -264,7 +265,7 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
     setShowEmptyDialog(false)
   }
 
-  const flushPendingPosition = () => {
+  const flushPendingPosition = React.useCallback(() => {
     if (!draggingIconRef.current || !pendingPositionRef.current) {
       dragFrameRef.current = null
       return
@@ -283,12 +284,12 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
       }
     })
     dragFrameRef.current = null
-  }
+  }, [])
 
-  const schedulePositionUpdate = () => {
+  const schedulePositionUpdate = React.useCallback(() => {
     if (dragFrameRef.current !== null) return
     dragFrameRef.current = window.requestAnimationFrame(flushPendingPosition)
-  }
+  }, [flushPendingPosition])
 
   const handlePointerDown = (e: React.PointerEvent, icon: DesktopIconDef, idx: number) => {
     setContextMenu(null)
@@ -345,7 +346,7 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
         dragFrameRef.current = null
       }
     }
-  }, [draggingIcon])
+  }, [draggingIcon, schedulePositionUpdate, flushPendingPosition])
 
   return (
     <div className="desktop-icons">

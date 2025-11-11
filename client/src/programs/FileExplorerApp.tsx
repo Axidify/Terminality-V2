@@ -1,10 +1,11 @@
 import React from 'react'
-import { useUser } from '../os/UserContext'
+
 import { fs, FSNode } from './FileSystem'
-import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 import { ContextMenu } from '../os/components/ContextMenu'
 import { DesktopDialog } from '../os/components/DesktopDialog'
 import { DeleteIcon } from '../os/components/Icons'
+import { useUser } from '../os/UserContext'
+import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 
 interface Props { openNotepad: (path: string) => void }
 
@@ -96,14 +97,14 @@ export const FileExplorerApp: React.FC<Props> = ({ openNotepad }) => {
     closeDialog()
   }, [dialog, closeDialog])
 
-  const refresh = () => setItems(fs.list(cwd))
+  const refresh = React.useCallback(() => setItems(fs.list(cwd)), [cwd])
 
   // Auto-refresh when window gains focus
   React.useEffect(() => {
     const handleFocus = () => refresh()
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-  }, [cwd])
+  }, [refresh])
 
   // Refresh on cwd change
   React.useEffect(() => {

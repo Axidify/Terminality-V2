@@ -1,27 +1,27 @@
 import React, { useRef } from 'react'
-import { useWindowManager } from './WindowManager'
-import { WindowFrame } from './components/WindowFrame'
-import { Taskbar } from './components/Taskbar'
-import NowPlayingBar from './components/NowPlayingBar'
-import { DesktopIcons, DesktopIconsRef } from './components/DesktopIcons'
-import { DesktopContainer } from './components/DesktopContextMenu'
+
 import { DesktopBranding } from './components/DesktopBranding'
-import SystemInfo from './components/SystemInfo'
+import { DesktopContainer } from './components/DesktopContextMenu'
+import { DesktopIcons, DesktopIconsRef } from './components/DesktopIcons'
+import NowPlayingBar from './components/NowPlayingBar'
 import SessionExpiredOverlay from './components/SessionExpiredOverlay'
+import SystemInfo from './components/SystemInfo'
+import { Taskbar } from './components/Taskbar'
+import { WindowFrame } from './components/WindowFrame'
 import { sounds } from './SoundEffects'
-import { TerminalApp } from '../programs/TerminalApp'
-import { FileExplorerApp } from '../programs/FileExplorerApp'
-import { NotepadApp } from '../programs/NotepadApp'
-import { MiniBrowserApp } from '../programs/MiniBrowserApp'
-import { RecycleBinApp } from '../programs/RecycleBinApp'
-import { EmailApp } from '../programs/EmailApp'
-import { ChatApp } from '../programs/ChatApp'
-import { MusicPlayerApp } from '../programs/MusicPlayerApp'
-import { SystemSettingsApp } from '../programs/SystemSettingsApp'
-import { StoreApp } from '../programs/StoreApp'
-import { AdminApp } from '../programs/AdminApp'
-import { logout } from '../services/auth'
 import { useUser } from './UserContext'
+import { useWindowManager } from './WindowManager'
+import { AdminApp } from '../programs/AdminApp'
+import { ChatApp } from '../programs/ChatApp'
+import { EmailApp } from '../programs/EmailApp'
+import { FileExplorerApp } from '../programs/FileExplorerApp'
+import { MiniBrowserApp } from '../programs/MiniBrowserApp'
+import { MusicPlayerApp } from '../programs/MusicPlayerApp'
+import { NotepadApp } from '../programs/NotepadApp'
+import { RecycleBinApp } from '../programs/RecycleBinApp'
+import { StoreApp } from '../programs/StoreApp'
+import { SystemSettingsApp } from '../programs/SystemSettingsApp'
+import { TerminalApp } from '../programs/TerminalApp'
 import './Desktop.css'
 
 interface DesktopProps {
@@ -42,7 +42,7 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
   const handleLock = () => {
     sounds.logout()
     // Clear auth/session so LockScreen doesn't auto-login
-    try { ctxLogout(); } catch {}
+  try { ctxLogout(); } catch { /* ignore logout errors */ }
     
     // Stop music player if it's playing
     const audio = document.querySelector('audio') as HTMLAudioElement

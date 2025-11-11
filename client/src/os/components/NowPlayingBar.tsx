@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { getCachedDesktop, saveDesktopState } from '../../services/saveService'
+import React, { useEffect, useState } from 'react'
+
 import { PlayIcon, PauseIcon, NoteIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, ShuffleIcon, RepeatIcon, RepeatOneIcon } from './Icons'
+import { getCachedDesktop, saveDesktopState } from '../../services/saveService'
 import { useWindowManager } from '../WindowManager'
 
 export const NowPlayingBar: React.FC = () => {
@@ -48,7 +49,7 @@ export const NowPlayingBar: React.FC = () => {
           setCurrentTime(0)
           setDuration(0)
         }
-      } catch {}
+  } catch { /* ignore: audio element update issue */ }
     }
     refresh()
     const iv = setInterval(refresh, 1000)

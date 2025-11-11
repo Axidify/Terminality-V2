@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+
 import { SettingsIcon } from './Icons'
 
 export const SessionExpiredOverlay: React.FC = () => {

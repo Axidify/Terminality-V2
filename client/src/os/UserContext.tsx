@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
+
 import { isLoggedIn as hasToken, me as fetchMe, login as authLogin, logout as authLogout, MeOut } from '../services/auth'
 
 export interface User {

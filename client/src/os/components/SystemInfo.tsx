@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+
 import { getCachedDesktop, saveDesktopState } from '../../services/saveService';
 import './SystemInfo.css';
 
 export default function SystemInfo() {
-  const [time, setTime] = useState(new Date());
+  const [_time, setTime] = useState(new Date());
   const [cpuUsage, setCpuUsage] = useState(45);
   const [memUsage, setMemUsage] = useState(62);
   const [netUsage, setNetUsage] = useState(15);
@@ -99,7 +100,7 @@ export default function SystemInfo() {
       const windowHeight = window.innerHeight;
       
       let snapped: 'left' | 'right' | 'top' | 'bottom' | null = null;
-      let finalPosition = { ...position };
+      const finalPosition = { ...position };
       
       // Check proximity to edges
       if (rect.left < snapThreshold) {
@@ -146,7 +147,7 @@ export default function SystemInfo() {
       const rect = monitorRef.current.getBoundingClientRect();
       const windowWidth = window.innerWidth;
       const windowHeight = window.innerHeight;
-      let newPosition = { ...position };
+      const newPosition = { ...position };
       
       switch (snappedEdge) {
         case 'right':

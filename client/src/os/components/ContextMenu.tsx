@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useContextMenuPosition } from '../hooks/useContextMenuPosition'
+
 import { ContextMenuPortal } from './ContextMenuPortal'
+import { useContextMenuPosition } from '../hooks/useContextMenuPosition'
 
 export interface MenuItem {
   id?: string

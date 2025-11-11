@@ -1,4 +1,5 @@
 import React from 'react'
+
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 import './StoreApp.css'
 

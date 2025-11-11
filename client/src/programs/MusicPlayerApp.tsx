@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+
 import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, ShuffleIcon, RepeatIcon, RepeatOneIcon, VolumeIcon, NoteIcon, RecycleBinIcon } from '../os/components/Icons'
 import './MusicPlayerApp.css'
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
@@ -139,7 +140,7 @@ interface MusicPersistState {
   repeat: RepeatMode
   volume: number
 }
-const MUSIC_STATE_KEY = 'musicStateV2'
+const _MUSIC_STATE_KEY = 'musicStateV2'
 
 const getPlaylists = (): Playlist[] => {
   try {
@@ -230,9 +231,9 @@ export const MusicPlayerApp: React.FC = () => {
             }
           }
         }
-      } catch {}
+  } catch { /* ignore */ }
     }
-  }, [])
+  }, [playlists, currentTrack])
 
   // Persist state when key values change
   useEffect(() => {
@@ -248,7 +249,23 @@ export const MusicPlayerApp: React.FC = () => {
   }, [currentPlaylistId, currentTrack?.id, playQueue, shuffle, repeat, volume])
 
   const currentPlaylist = playlists.find(p => p.id === currentPlaylistId) || playlists[0]
-  const tracks = currentPlaylist?.tracks || []
+  const tracks = React.useMemo(() => currentPlaylist?.tracks || [], [currentPlaylist])
+
+  const playNext = React.useCallback(() => {
+    if (playQueue.length === 0) return
+    const idx = playQueue.findIndex(t => t.id === currentTrack?.id)
+    const nextIdx = (idx + 1) % playQueue.length
+    playTrack(playQueue[nextIdx], false)
+  }, [playQueue, currentTrack, playTrack])
+
+  const playPrev = React.useCallback(() => {
+    if (playQueue.length === 0) return
+    const idx = playQueue.findIndex(t => t.id === currentTrack?.id)
+    const prevIdx = idx <= 0 ? playQueue.length - 1 : idx - 1
+    playTrack(playQueue[prevIdx], false)
+  }, [playQueue, currentTrack, playTrack])
+
+  
 
   useEffect(() => {
     saveDesktopState({ musicPlaylists: playlists }).catch(() => {})
@@ -291,22 +308,23 @@ export const MusicPlayerApp: React.FC = () => {
       a.removeEventListener('timeupdate', onTime)
       a.removeEventListener('ended', onEnd)
     }
+  // We intentionally omit playNext from deps because it's stable via callback; adding it may cause early re-runs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repeat, currentTrack, playQueue])
 
   // Stop playback when component unmounts (window closed)
   useEffect(() => {
+    const a = audioRef.current
     return () => {
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause()
-        } catch {}
+      if (a) {
+        try { a.pause() } catch { /* ignore */ }
         // Optional: keep src for quick resume next time or clear to free resources
-        // audioRef.current.src = ''
+        // a.src = ''
       }
     }
   }, [])
 
-  const buildPlayQueue = (startTrack: Track) => {
+  const buildPlayQueue = React.useCallback((startTrack: Track) => {
     const trackList = [...tracks]
     if (shuffle) {
       // Fisher-Yates shuffle
@@ -321,9 +339,9 @@ export const MusicPlayerApp: React.FC = () => {
       trackList.unshift(trackList.splice(startIdx, 1)[0])
     }
     setPlayQueue(trackList)
-  }
+  }, [tracks, shuffle])
 
-  const playTrack = (track: Track, buildQueue = true) => {
+  const playTrack = React.useCallback((track: Track, buildQueue = true) => {
     if (buildQueue) buildPlayQueue(track)
     setCurrentTrack(track)
     setIsPlaying(true)
@@ -333,21 +351,9 @@ export const MusicPlayerApp: React.FC = () => {
       }
       audioRef.current.play().catch(() => {/* autoplay block ignored */})
     }
-  }
+  }, [buildPlayQueue, audioRef])
 
-  const playNext = () => {
-    if (playQueue.length === 0) return
-    const idx = playQueue.findIndex(t => t.id === currentTrack?.id)
-    const nextIdx = (idx + 1) % playQueue.length
-    playTrack(playQueue[nextIdx], false)
-  }
-
-  const playPrev = () => {
-    if (playQueue.length === 0) return
-    const idx = playQueue.findIndex(t => t.id === currentTrack?.id)
-    const prevIdx = idx <= 0 ? playQueue.length - 1 : idx - 1
-    playTrack(playQueue[prevIdx], false)
-  }
+  
 
   const togglePlay = () => {
     if (audioRef.current && currentTrack?.url) {
@@ -359,12 +365,7 @@ export const MusicPlayerApp: React.FC = () => {
     }
   }
 
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime)
-      setDuration(audioRef.current.duration)
-    }
-  }
+  // handleTimeUpdate is unnecessary because onTime event handles timeupdate; kept for clarity if needed
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = parseFloat(e.target.value)

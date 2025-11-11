@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
+
 import './ChatApp.css'
-import { CopyIcon, ClearIcon, InfoIcon, ChatIcon } from '../os/components/Icons'
 import { ContextMenu } from '../os/components/ContextMenu'
+import { CopyIcon, ClearIcon, InfoIcon, ChatIcon } from '../os/components/Icons'
 
 interface Message {
   id: number
@@ -94,7 +95,7 @@ export const ChatApp: React.FC = () => {
     try {
       const sel = window.getSelection()?.toString() || ''
       if (sel) await navigator.clipboard.writeText(sel)
-    } catch {}
+    } catch { /* ignore */ }
     closeMenu()
   }
 
@@ -163,7 +164,8 @@ export const ChatApp: React.FC = () => {
           onClose={closeMenu}
           items={[
             { label: 'Copy', icon: <CopyIcon size={14}/>, hint: 'Ctrl+C', onClick: handleCopy },
-            { label: 'Paste', icon: <ChatIcon size={14}/>, hint: 'Ctrl+V', onClick: async () => { try { const text = await navigator.clipboard.readText(); if (text) setInput(i => i + text) } catch {} closeMenu() } },
+            { label: 'Paste', icon: <ChatIcon size={14}/>, hint: 'Ctrl+V', onClick: async () => { try { const text = await navigator.clipboard.readText(); if (text) setInput(i => i + text) } catch { /* ignore clipboard errors */ } closeMenu() } },
+  { label: 'Paste', icon: <ChatIcon size={14}/>, hint: 'Ctrl+V', onClick: async () => { try { const text = await navigator.clipboard.readText(); if (text) setInput(i => i + text) } catch { /* ignore clipboard errors */ } closeMenu() } },
             { label: 'Clear Chat', icon: <ClearIcon size={14}/>, onClick: handleClear },
             { label: 'Clear Input', icon: <ChatIcon size={14}/>, onClick: () => { setInput(''); closeMenu() } },
             { divider: true },

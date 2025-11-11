@@ -1,11 +1,14 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import React from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import React from 'react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
 import { AdminPanel } from '../programs/AdminPanel'
 
+/* eslint-disable no-var */
 // Use var to avoid TDZ with hoisted vi.mock
 var desktop: any = { playerCurrency: 1000, installedTools: [], playerLevel: 1, playerExperience: 0, notifications: [] }
+/* eslint-enable no-var */
 
 vi.mock('../services/saveService', () => ({
   saveDesktopState: vi.fn().mockImplementation(async (partial: any) => {

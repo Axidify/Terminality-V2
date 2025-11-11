@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useWindowManager } from '../WindowManager'
-import { sounds } from '../SoundEffects'
-import './DesktopContextMenu.css'
+
+import { ContextMenu } from './ContextMenu'
 import { RefreshIcon, ArrangeIcon, SettingsIcon, VolumeIcon, VolumeOffIcon, InfoIcon, ResetIcon } from './Icons'
 import { useContextMenuPosition } from '../hooks/useContextMenuPosition'
-import { ContextMenu } from './ContextMenu'
+import { sounds } from '../SoundEffects'
+import { useWindowManager } from '../WindowManager'
+import './DesktopContextMenu.css'
 
 interface ContextMenuProps {
   x: number
@@ -19,7 +20,7 @@ export const DesktopContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, 
   const wm = useWindowManager()
   const [soundsEnabled, setSoundsEnabled] = useState(sounds.isEnabled())
   const [showAbout, setShowAbout] = useState(false)
-  const { ref: posRef, pos: position } = useContextMenuPosition(x, y)
+  const { ref: _posRef, pos: position } = useContextMenuPosition(x, y)
 
   useEffect(() => { /* positioning handled by hook */ }, [x, y])
 
@@ -64,7 +65,7 @@ export const DesktopContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, 
     try {
       localStorage.removeItem('windowMemory')
       sounds.click()
-    } catch {}
+  } catch { /* ignore */ }
     onClose()
   }
 

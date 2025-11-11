@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useWindowManager, WindowType } from '../WindowManager'
-import { useNotifications } from '../NotificationContext'
-import { NotificationPanel } from './NotificationPanel'
+
 import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon } from './Icons'
+import { NotificationPanel } from './NotificationPanel'
+import { useNotifications } from '../NotificationContext'
+import { useWindowManager, WindowType } from '../WindowManager'
 import './Taskbar.css'
 
 interface AppDefinition {

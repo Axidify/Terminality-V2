@@ -100,7 +100,7 @@ function loadSnapshot(): Snapshot {
         return parsed
       }
     }
-  } catch {}
+  } catch { /* ignore: operation failed */ }
   return initialFS()
 }
 
@@ -121,7 +121,7 @@ export function createFileSystem(): FileSystemAPI {
   hydrateFromServer().then(s => {
     const nodes = s.desktop?.fs?.nodes
     if (nodes && nodes['/']) {
-      try { snap = { nodes: nodes as Record<string, FSNode> } } catch {}
+  try { snap = { nodes: nodes as Record<string, FSNode> } } catch { /* ignore */ }
     }
   }).catch(() => {})
 
@@ -150,13 +150,11 @@ export function createFileSystem(): FileSystemAPI {
     const parent = snap.nodes[parentPath]
     if (!parent || parent.type !== 'dir') throw new Error('Parent not dir')
     // Enforce nesting limit under /home: prevent creating folders deeper than 1 level under /home
-    try {
-      if (path.startsWith('/home')) {
-        const parts = path.split('/').filter(Boolean)
-        // parts example: ['home','player','newfolder',...]
-        if (parts.length > 3) throw new Error('Folder nesting limit exceeded')
-      }
-    } catch (e) { throw e }
+    if (path.startsWith('/home')) {
+      const parts = path.split('/').filter(Boolean)
+      // parts example: ['home','player','newfolder',...]
+      if (parts.length > 3) throw new Error('Folder nesting limit exceeded')
+    }
     const dir: FSDir = { type: 'dir', name, path, parent: parentPath, children: [] }
     parent.children.push(path)
     snap.nodes[path] = dir

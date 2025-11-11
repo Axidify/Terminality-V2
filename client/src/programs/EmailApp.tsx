@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
+
 import './EmailApp.css'
-import { CopyIcon, PasteIcon, SelectAllIcon, DeleteIcon, InfoIcon, MailIcon } from '../os/components/Icons'
 import { ContextMenu } from '../os/components/ContextMenu'
+import { CopyIcon, PasteIcon, SelectAllIcon, DeleteIcon, InfoIcon, MailIcon } from '../os/components/Icons'
 
 interface Email {
   id: number
@@ -85,7 +86,7 @@ export const EmailApp: React.FC = () => {
     try {
       const sel = window.getSelection()?.toString() || ''
       if (sel) await navigator.clipboard.writeText(sel)
-    } catch {}
+  } catch { /* ignore */ }
     closeMenu()
   }
 
@@ -104,7 +105,7 @@ export const EmailApp: React.FC = () => {
         input.dispatchEvent(evt)
         setTimeout(() => { (input as any).selectionStart = (input as any).selectionEnd = start + text.length }, 0)
       }
-    } catch {}
+  } catch { /* ignore */ }
     closeMenu()
   }
 
@@ -179,9 +180,10 @@ export const EmailApp: React.FC = () => {
           <div className="email-compose-container">
             <h3 className="email-compose-title">New Message</h3>
             <div className="email-compose-field">
-              <label className="email-compose-label">To:</label>
+              <label className="email-compose-label" htmlFor="email-to">To:</label>
               <input
                 type="text"
+                id="email-to"
                 value={newEmail.to}
                 onChange={e => setNewEmail({ ...newEmail, to: e.target.value })}
                 placeholder="recipient@terminality.os"
@@ -190,9 +192,10 @@ export const EmailApp: React.FC = () => {
             />
             </div>
             <div className="email-compose-field">
-              <label className="email-compose-label">Subject:</label>
+              <label className="email-compose-label" htmlFor="email-subject">Subject:</label>
               <input
                 type="text"
+                id="email-subject"
                 value={newEmail.subject}
                 onChange={e => setNewEmail({ ...newEmail, subject: e.target.value })}
                 placeholder="Email subject"
@@ -201,8 +204,9 @@ export const EmailApp: React.FC = () => {
             />
             </div>
             <div className="email-compose-textarea-wrapper">
-              <label className="email-compose-label">Message:</label>
+              <label className="email-compose-label" htmlFor="email-body">Message:</label>
               <textarea
+                id="email-body"
                 value={newEmail.body}
                 onChange={e => setNewEmail({ ...newEmail, body: e.target.value })}
                 placeholder="Type your message here..."

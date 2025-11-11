@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
+
+import { ContextMenuPortal } from '../os/components/ContextMenuPortal'
+import { RefreshIcon, InfoIcon } from '../os/components/Icons'
+import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 import { listUsers, updateUser, resetUserPassword, deleteUser, AdminUser } from '../services/admin'
 import { me } from '../services/auth'
 import './AdminApp.css'
-import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
-import { ContextMenuPortal } from '../os/components/ContextMenuPortal'
-import { RefreshIcon, InfoIcon } from '../os/components/Icons'
 
 type ModalType = 'password' | 'delete' | null
 
@@ -214,19 +215,20 @@ export const AdminApp: React.FC = () => {
             <div className="admin-modal-body">
               <p className="admin-modal-text">Reset password for <strong>{selectedUser.username}</strong></p>
               <div className="admin-form-group">
-                <label>New Password</label>
+                <label htmlFor="new-pw">New Password</label>
                 <input
+                  id="new-pw"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter new password (min 6 characters)"
-                  autoFocus
                   disabled={modalBusy}
                 />
               </div>
               <div className="admin-form-group">
-                <label>Confirm Password</label>
+                <label htmlFor="confirm-pw">Confirm Password</label>
                 <input
+                  id="confirm-pw"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

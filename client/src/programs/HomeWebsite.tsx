@@ -7,7 +7,7 @@ interface HomeWebsiteProps {
 
 type ViewType = 'home' | 'article' | 'category'
 
-export const HomeWebsite: React.FC<HomeWebsiteProps> = ({ onNavigate }) => {
+export const HomeWebsite: React.FC<HomeWebsiteProps> = ({ onNavigate: _onNavigate }) => {
   const [currentView, setCurrentView] = useState<ViewType>('home')
   const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string>('home')

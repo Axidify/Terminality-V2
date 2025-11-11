@@ -1,12 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
-import { RecycleBinApp } from '../programs/RecycleBinApp'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { fs } from '../programs/FileSystem'
+import { RecycleBinApp } from '../programs/RecycleBinApp'
 
 // Server-backed state mocks
+/* eslint-disable no-var */
 var seededMeta: Array<{ recyclePath: string; originalPath: string; name: string; deletedAt: string }> = []
+/* eslint-enable no-var */
 vi.mock('../services/saveService', () => ({
   saveDesktopState: vi.fn().mockImplementation(async (partial: any) => {
     if (partial && Array.isArray(partial.recycleBin)) {
@@ -25,7 +28,7 @@ function seedRecycleBin() {
   if (!fs.exists(filePath)) fs.touch(filePath)
   const recyclePath = '/.recycle/trashme.txt'
   // Ensure recycle dir exists
-  try { fs.mkdir('/.recycle') } catch {}
+  try { fs.mkdir('/.recycle') } catch { /* ignore if exists */ }
   fs.move(filePath, recyclePath)
   const meta = [{ recyclePath, originalPath: filePath, name: 'trashme.txt', deletedAt: new Date().toISOString() }]
   seededMeta = meta

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { sounds } from '../SoundEffects'
+
 import { register } from '../../services/auth'
 import { getCachedDesktop } from '../../services/saveService'
+import { sounds } from '../SoundEffects'
 import './OnboardingPage.css'
 
 interface Props {
@@ -326,7 +327,7 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
                 
                 <h3>4. Disclaimer</h3>
                 <p>
-                  This software is provided "as is" without warranty. Use at your own risk.
+                  This software is provided &quot;as is&quot; without warranty. Use at your own risk.
                 </p>
               </div>
               
@@ -350,21 +351,22 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
               
               <div className="account-form">
                 <div className="form-group">
-                  <label>Username</label>
+                  <label htmlFor="onboarding-username">Username</label>
                   <input
+                    id="onboarding-username"
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Choose a username (min 3 characters)"
                     disabled={busy}
                     autoComplete="username"
-                    autoFocus
                   />
                 </div>
                 
                 <div className="form-group">
-                  <label>Password</label>
+                  <label htmlFor="onboarding-password">Password</label>
                   <input
+                    id="onboarding-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -375,8 +377,9 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
                 </div>
                 
                 <div className="form-group">
-                  <label>Confirm Password</label>
+                  <label htmlFor="onboarding-confirm">Confirm Password</label>
                   <input
+                    id="onboarding-confirm"
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}

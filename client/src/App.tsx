@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react'
-import { Desktop } from './os/Desktop'
+
 import { LockScreen } from './os/components/LockScreen'
 import { OnboardingPage } from './os/components/OnboardingPage'
-import { WindowManagerProvider } from './os/WindowManager'
-import { ThemeProvider } from './os/ThemeContext'
-import { NotificationProvider } from './os/NotificationContext'
-import { UserProvider } from './os/UserContext'
-import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
 import SessionExpiredOverlay from './os/components/SessionExpiredOverlay'
+import { Desktop } from './os/Desktop'
+import { NotificationProvider } from './os/NotificationContext'
+import { ThemeProvider } from './os/ThemeContext'
+import { UserProvider } from './os/UserContext'
+import { WindowManagerProvider } from './os/WindowManager'
+import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
 
 type AppView = 'lock' | 'onboarding' | 'desktop'
 

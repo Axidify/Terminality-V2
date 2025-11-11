@@ -1,7 +1,8 @@
-import React from 'react'
-import { describe, it, expect, beforeEach } from 'vitest'
 import { render, fireEvent, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import React from 'react'
+import { describe, it, expect, beforeEach } from 'vitest'
+
 import { DesktopContainer } from './DesktopContextMenu'
 import { WindowManagerProvider } from '../WindowManager'
 

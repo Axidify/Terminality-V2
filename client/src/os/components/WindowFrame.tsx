@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react'
+
 import { WindowInstance, useWindowManager } from '../WindowManager'
 import './WindowFrame.css'
 

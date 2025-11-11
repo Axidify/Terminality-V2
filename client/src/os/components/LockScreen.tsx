@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { sounds } from '../SoundEffects'
-import { useNotifications } from '../NotificationContext'
-import { register, isLoggedIn } from '../../services/auth'
-import { useUser } from '../UserContext'
+
+import { isLoggedIn } from '../../services/auth'
 import { hydrateFromServer, getCachedDesktop } from '../../services/saveService'
+import { useNotifications } from '../NotificationContext'
+import { sounds } from '../SoundEffects'
+import { useUser } from '../UserContext'
 import './LockScreen.css'
 
 interface Props {
@@ -193,7 +194,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
     // If already logged in, hydrate and unlock automatically
     (async () => {
       if (isLoggedIn()) {
-        try { await hydrateFromServer(); handleUnlock() } catch {}
+  try { await hydrateFromServer(); handleUnlock() } catch { /* ignore */ }
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
