@@ -249,8 +249,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
         </div>
 
         <div className="lock-screen-status">
-          <span className="status-indicator" aria-hidden="true"></span>
-          <span className="status-text">SECURE CONNECTION</span>
+          <span className="status-label" role="status" aria-live="polite">SECURE CONNECTION</span>
         </div>
         
         <div className="lock-footer-controls">
@@ -261,7 +260,12 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
             aria-pressed={muted}
             title={muted ? 'Unmute ambient audio' : 'Mute ambient audio'}
           >
-            <span className="footer-icon">{muted ? '🔇' : '🔊'}</span>
+            <svg className="footer-icon mute-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path className="speaker" d="M5 9v6h4l5 3V6L9 9H5z" strokeWidth="1" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+              <path className="waves" d="M16.5 8.5a4 4 0 010 7" strokeWidth="1" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+              <path className="waves" d="M18.5 6.5a6 6 0 010 11" strokeWidth="1" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+              <path className="cross" d="M20 8l-4 8M16 8l4 8" strokeWidth="1.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
           <a href="/" className="footer-link" title="Return to home page">HOME</a>
         </div>

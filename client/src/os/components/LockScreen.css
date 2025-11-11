@@ -451,10 +451,11 @@
 
 .lock-screen-status {
   margin-top: clamp(15px, 2.5vh, 25px);
-  display: flex;
+  display: inline-grid;
+  grid-auto-flow: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  column-gap: 8px;
   font-size: clamp(8px, 1.3vw, 10px);
   color: var(--color-textDim);
   opacity: 0.5;
@@ -462,8 +463,7 @@
   font-family: 'Courier New', monospace;
   text-transform: uppercase;
   flex-shrink: 1;
-  line-height: 1.4;
-  min-height: 16px;
+  line-height: 1;
 }
 
 .status-indicator {
@@ -473,15 +473,40 @@
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.8);
   animation: statusPulse 2s ease-in-out infinite;
-  flex-shrink: 0;
-  line-height: 1;
+  align-self: center;
+  justify-self: center;
+  transform: translateY(-3px);
 }
 
 .status-text {
+  display: inline-flex;
+  align-items: center;
   font-size: 10px;
-  line-height: 1.4;
+  line-height: 1;
   margin: 0;
   padding: 0;
+}
+
+/* Combined status label (dot rendered via ::before) to avoid alignment drift */
+.status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-textDim);
+}
+
+.status-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.8);
+  animation: statusPulse 2s ease-in-out infinite;
+  display: inline-block;
+  transform: translateY(-3px);
 }
 
 @keyframes statusPulse {
@@ -541,6 +566,40 @@
   border-radius: 2px;
   padding: 2px;
 }
+
+/* SVG speaker icon styles */
+.mute-icon {
+  width: 18px;
+  height: 18px;
+}
+.mute-icon .speaker {
+  stroke: currentColor;
+}
+.mute-icon .waves {
+  stroke: currentColor;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.mute-icon .cross {
+  stroke: currentColor;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  transform-origin: center;
+}
+/* When muted, hide waves and show cross */
+.mute-button[aria-pressed="true"] .mute-icon .waves {
+  opacity: 0;
+  transform: translateX(0.5px);
+}
+.mute-button[aria-pressed="true"] .mute-icon .cross {
+  opacity: 1;
+}
+.mute-button[aria-pressed="false"] .mute-icon .cross {
+  opacity: 0;
+}
+/* Color states: default subdued, hover and active use primary */
+.footer-button { color: var(--color-textDim); }
+.footer-button:hover { color: var(--color-primary); }
+.mute-button[aria-pressed="true"] { color: var(--color-secondary); opacity: 0.95; }
 
 .footer-link {
   color: var(--color-textDim);

@@ -515,6 +515,30 @@ body {
 .home-status-text {
   text-transform: uppercase;
   font-weight: 300;
+  line-height: 1;
+}
+
+/* Combined status label for home page */
+.home-status-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--color-primary);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.home-status-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.6);
+  animation: pulse 1s ease-in-out infinite;
+  display: inline-block;
+  transform: translateY(-3px);
 }
 
 /* Sections */

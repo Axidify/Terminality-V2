@@ -274,8 +274,7 @@ export const HomePage: React.FC = () => {
 
       {/* Status bar */}
       <div className={`home-status-bar ${scrolled ? 'scrolled' : ''}`}>
-        <span className="home-status-indicator"></span>
-        <span className="home-status-text">SYSTEM ONLINE</span>
+        <span className="home-status-label" role="status" aria-live="polite">SYSTEM ONLINE</span>
       </div>
     </div>
   )
