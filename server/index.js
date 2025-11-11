@@ -115,6 +115,25 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Not found' })
 })
 
-app.listen(DEFAULT_PORT, () => {
+const server = app.listen(DEFAULT_PORT, () => {
   console.log(`Terminality dev api listening on http://localhost:${DEFAULT_PORT}`)
+})
+
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`[server] Port ${DEFAULT_PORT} already in use. Please stop other servers or set PORT env var.`)
+    process.exit(1)
+  }
+  console.error('[server] Unhandled server error:', err)
+  process.exit(1)
+})
+
+// Graceful shutdown so nodemon restarts cleanly
+process.on('SIGINT', () => {
+  console.log('[server] SIGINT received, shutting down')
+  server.close(() => process.exit(0))
+})
+process.on('SIGTERM', () => {
+  console.log('[server] SIGTERM received, shutting down')
+  server.close(() => process.exit(0))
 })

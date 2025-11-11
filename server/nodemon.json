@@ -1,0 +1,5 @@
+{
+  "watch": ["index.js"],
+  "ext": "js,json",
+  "ignore": ["state.json", "package-lock.json", "node_modules/*", "*.log"]
+}
