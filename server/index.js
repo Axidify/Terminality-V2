@@ -38,6 +38,14 @@ app.get('/api/state', (req, res) => {
   res.json({ session_id: 1, state: savedState })
 })
 
+// Basic health endpoint for readiness/liveness checks and monitoring
+app.get('/health', (req, res) => {
+  const uptime = process.uptime()
+  const mem = process.memoryUsage()
+  const stateVersion = savedState && savedState.version ? savedState.version : null
+  res.json({ status: 'ok', uptime_secs: Math.floor(uptime), mem: { rss: mem.rss }, stateVersion, timestamp: new Date().toISOString() })
+})
+
 app.put('/api/state', (req, res) => {
   const incoming = req.body && req.body.state
   if (!incoming) return res.status(400).json({ message: 'state missing' })

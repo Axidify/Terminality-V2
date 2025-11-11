@@ -19,3 +19,19 @@ VITE_API_BASE=http://localhost:8000
 ```
 
 This server is intentionally minimal: it persists `state` to `server/state.json`, supports `/api/state` GET/PUT, a simple token-based auth mock, `/api/command` and basic `admin` endpoints for testing.
+
+Health check
+------------
+This server exposes a simple `/health` endpoint that can be used for readiness/liveness checks and simple monitoring. It returns a JSON payload with basic process metrics and the persisted state version.
+
+Example:
+
+```powershell
+curl http://localhost:3000/health
+```
+
+Response:
+
+```json
+{ "status": "ok", "uptime_secs": 12, "mem": {"rss": 12345678}, "stateVersion": 1, "timestamp": "2025-11-11T00:00:00Z" }
+```
