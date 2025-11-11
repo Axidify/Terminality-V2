@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react'
+
+import { useUser } from '../os/UserContext'
+import { hydrateFromServer } from '../services/saveService'
+
 import './HomePage.css'
 
 export const HomePage: React.FC = () => {
@@ -33,6 +37,28 @@ export const HomePage: React.FC = () => {
     { title: 'Persistent Storage', icon: '◀' },
     { title: 'Responsive Design', icon: '▶' }
   ]
+
+  // Authentication for HomePage (moved from LockScreen)
+  const { login: ctxLogin } = useUser()
+  const [hpUsername, setHpUsername] = useState('')
+  const [hpPassword, setHpPassword] = useState('')
+  const [hpBusy, setHpBusy] = useState(false)
+  const [hpError, setHpError] = useState<string | null>(null)
+
+  const submitHomeLogin = async () => {
+    setHpError(null)
+    setHpBusy(true)
+    try {
+      await ctxLogin(hpUsername, hpPassword)
+      await hydrateFromServer()
+      // Navigate to OS (causes App to render OSApp)
+      window.location.href = '/app'
+    } catch (e: any) {
+      setHpError(e?.message || 'Authentication failed')
+    } finally {
+      setHpBusy(false)
+    }
+  }
 
   return (
     <div className="home-page">
@@ -96,15 +122,41 @@ export const HomePage: React.FC = () => {
             Built with React, TypeScript, and modern web technologies.
           </p>
 
-          <div className="home-button-group">
-            <a href="/app" className="home-btn home-btn-primary">
-              <span className="home-btn-text">ENTER SYSTEM</span>
-              <span className="home-btn-arrow">→</span>
-            </a>
-            <a href="https://github.com/Axidify/Terminality-V2" target="_blank" rel="noopener noreferrer" className="home-btn home-btn-secondary">
-              <span className="home-btn-text">SOURCE CODE</span>
-              <span className="home-btn-arrow">◆</span>
-            </a>
+          <div className="home-auth-form">
+            <input
+              className="home-auth-input"
+              disabled={hpBusy}
+              value={hpUsername}
+              onChange={e => setHpUsername(e.target.value)}
+              placeholder="USERNAME"
+              autoComplete="username"
+              onKeyDown={e => e.key === 'Enter' && !hpBusy && submitHomeLogin()}
+            />
+            <input
+              className="home-auth-input"
+              disabled={hpBusy}
+              type="password"
+              value={hpPassword}
+              onChange={e => setHpPassword(e.target.value)}
+              placeholder="PASSWORD"
+              autoComplete="current-password"
+              onKeyDown={e => e.key === 'Enter' && !hpBusy && submitHomeLogin()}
+            />
+            {hpError && <div className="home-auth-error">{hpError}</div>}
+            <div className="home-button-group">
+              <button onClick={submitHomeLogin} className="home-btn home-btn-primary" disabled={hpBusy || !hpUsername || !hpPassword}>
+                <span className="home-btn-text">LOGIN</span>
+                <span className="home-btn-arrow">→</span>
+              </button>
+              <a href="/app?onboarding=1" className="home-btn home-btn-secondary">
+                <span className="home-btn-text">CREATE ACCOUNT</span>
+                <span className="home-btn-arrow">★</span>
+              </a>
+              <a href="/app" className="home-btn home-btn-secondary">
+                <span className="home-btn-text">ENTER SYSTEM</span>
+                <span className="home-btn-arrow">→</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>

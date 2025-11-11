@@ -409,6 +409,32 @@ body {
   font-size: clamp(12px, 1.3vw, 14px);
 }
 
+/* Authentication Form - HomePage */
+.home-auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.home-auth-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 2px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.15);
+  background: rgba(0,0,0,0.35);
+  color: var(--color-text);
+}
+
+.home-auth-error {
+  color: var(--color-accent);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
 /* Status Bar */
 .home-status-bar {
   position: fixed;

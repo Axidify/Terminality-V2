@@ -4,7 +4,6 @@ import { isLoggedIn } from '../../services/auth'
 import { hydrateFromServer, getCachedDesktop } from '../../services/saveService'
 import { useNotifications } from '../NotificationContext'
 import { sounds } from '../SoundEffects'
-import { useUser } from '../UserContext'
 import './LockScreen.css'
 
 interface Props {
@@ -17,10 +16,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
   const [time, setTime] = useState('')
   const [date, setDate] = useState('')
   const [isExiting, setIsExiting] = useState(false)
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Authentication removed from lock screen; handled on HomePage
   const audioContextRef = useRef<AudioContext | null>(null)
   const intervalRef = useRef<number | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
@@ -174,21 +170,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
     }, 500) // Match animation duration
   }
 
-  const { login: ctxLogin } = useUser()
-
-  const submitLogin = async () => {
-    setError(null)
-    setBusy(true)
-    try {
-      await ctxLogin(username, password)
-      await hydrateFromServer()
-      handleUnlock()
-    } catch (e: any) {
-      setError(e?.message || 'Authentication failed')
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Removed login form & logic from lock screen; moved to HomePage
 
   useEffect(() => {
     // If already logged in, hydrate and unlock automatically
@@ -234,48 +216,24 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
         <div className="lock-screen-date">{date}</div>
 
         <div className="lock-auth-section">
-          <div className="lock-user-label">USER AUTHENTICATION</div>
-          <div className="lock-auth-form">
-            <input
-              disabled={busy}
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !busy && submitLogin()}
-              placeholder="USERNAME"
-              className="lock-input"
-              autoComplete="username"
-            />
-            <input
-              disabled={busy}
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !busy && submitLogin()}
-              placeholder="PASSWORD"
-              className="lock-input"
-              autoComplete="current-password"
-            />
-            {error && <div className="lock-error-message">{error}</div>}
-            <div className="lock-button-group">
-              <button 
-                onClick={submitLogin} 
-                onMouseEnter={handleButtonHover} 
-                className="unlock-button unlock-button-primary" 
-                disabled={busy || !username || !password}
-              >
-                <span className="unlock-text">LOGIN</span>
-                <span className="unlock-arrow">→</span>
-              </button>
-              <button 
-                onClick={() => { sounds.click(); onRegister(); }} 
-                onMouseEnter={handleButtonHover} 
-                className="unlock-button unlock-button-secondary" 
-                disabled={busy}
-              >
-                <span className="unlock-text">CREATE ACCOUNT</span>
-                <span className="unlock-arrow">★</span>
-              </button>
-            </div>
+          <div className="lock-user-label">WELCOME</div>
+          <div className="lock-button-group">
+            <button
+              onClick={() => { sounds.click(); handleUnlock(); }}
+              onMouseEnter={handleButtonHover}
+              className="unlock-button unlock-button-primary"
+            >
+              <span className="unlock-text">UNLOCK</span>
+              <span className="unlock-arrow">→</span>
+            </button>
+            <button
+              onClick={() => { sounds.click(); onRegister(); }}
+              onMouseEnter={handleButtonHover}
+              className="unlock-button unlock-button-secondary"
+            >
+              <span className="unlock-text">CREATE ACCOUNT</span>
+              <span className="unlock-arrow">★</span>
+            </button>
           </div>
         </div>
 

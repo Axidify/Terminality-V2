@@ -24,6 +24,11 @@ function OSApp() {
   })
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('onboarding')) {
+      setView('onboarding')
+      return
+    }
     // Persist lock state server-backed (onboarding counts as locked until complete)
     saveDesktopState({ isLocked: view === 'desktop' ? false : true }).catch(() => {})
   }, [view])
@@ -81,7 +86,15 @@ export default function App() {
   }, [])
 
   if (currentPage === 'home') {
-    return <HomePage />
+    return (
+      <ThemeProvider>
+        <NotificationProvider>
+          <UserProvider>
+            <HomePage />
+          </UserProvider>
+        </NotificationProvider>
+      </ThemeProvider>
+    )
   }
 
   return <OSApp />
