@@ -1,6 +1,6 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
-const DEFAULT_BASE = 'http://localhost:8000'
+const DEFAULT_BASE = 'http://localhost:3000'
 const API_BASE = (import.meta as any)?.env?.VITE_API_BASE || DEFAULT_BASE
 
 export function getApiBase(): string {
@@ -39,6 +39,15 @@ export async function apiRequest<T>(path: string, options: { method?: HttpMethod
 
   // Short-circuit requests if API has been recently offline to avoid spamming console and network
   const now = Date.now()
+  // If the browser is offline, avoid attempting fetch and mark API offline
+  try {
+    if (typeof navigator !== 'undefined' && !(navigator as any).onLine) {
+      ;(apiRequest as any)._offlineUntil = Date.now() + 5000
+      throw new Error('Browser seems offline')
+    }
+  } catch (_e) {
+    /* ignore: navigator may be absent in some environments */
+  }
   if ((apiRequest as any)._offlineUntil && now < (apiRequest as any)._offlineUntil) {
     throw new Error('API seems offline')
   }

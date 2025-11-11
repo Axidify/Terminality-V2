@@ -47,25 +47,37 @@ export interface UnifiedState {
 
 // In-memory cache of server state to allow merging partial updates
 let cachedState: UnifiedState | null = null
+// Shared promise to dedupe concurrent hydration requests
+let hydrationPromise: Promise<UnifiedState> | null = null
 
 export async function hydrateFromServer(): Promise<UnifiedState> {
-  try {
-    const out = await apiRequest<{ session_id: number; state: UnifiedState }>('/api/state', { auth: true })
-    const s = out.state
-    // Ensure keys
-    s.version = s.version || 1
-    s.desktop = s.desktop || {}
-    s.story = s.story || {}
-    cachedState = s
-    return s
-  } catch (_e: any) {
-    // If API is unreachable (eg. local dev without server), return cached state or a default
-    if (cachedState) return cachedState
-    const s: UnifiedState = { version: 1, desktop: {}, story: {} }
-    cachedState = s
-    // Do not throw, allow application to continue without server
-    return s
-  }
+  // Return cached state if available (avoids unnecessary fetch attempts)
+  if (cachedState) return cachedState
+  // If a hydration request is already in flight, return that promise
+  if (hydrationPromise) return hydrationPromise
+
+  hydrationPromise = (async () => {
+    try {
+      const out = await apiRequest<{ session_id: number; state: UnifiedState }>('/api/state', { auth: true })
+      const s = out.state
+      // Ensure keys
+      s.version = s.version || 1
+      s.desktop = s.desktop || {}
+      s.story = s.story || {}
+      cachedState = s
+      return s
+    } catch (_e: any) {
+      // If API is unreachable (eg. local dev without server), return cached state or a default
+      if (cachedState) return cachedState
+      const s: UnifiedState = { version: 1, desktop: {}, story: {} }
+      cachedState = s
+      return s
+    } finally {
+      hydrationPromise = null
+    }
+  })()
+
+  return hydrationPromise
 }
 
 export async function saveDesktopState(partial: Partial<DesktopState>): Promise<UnifiedState> {
