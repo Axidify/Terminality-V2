@@ -47,12 +47,12 @@ module.exports = {
   'jsx-a11y/no-noninteractive-tabindex': 'off',
   'react/no-unescaped-entities': 'warn',
   'no-useless-catch': 'warn',
-    'jsx-a11y/label-has-associated-control': 'warn',
-    'jsx-a11y/no-autofocus': 'warn',
+  'jsx-a11y/label-has-associated-control': 'error',
+  'jsx-a11y/no-autofocus': 'error',
 
     // Import ordering as a soft rule
     'import/order': [
-      'warn',
+      'error',
       {
         'newlines-between': 'always',
         groups: [

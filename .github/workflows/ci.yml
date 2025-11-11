@@ -24,9 +24,9 @@ jobs:
         working-directory: client
         run: npm ci
 
-      - name: Lint
+      - name: Lint (CI - fail on warnings)
         working-directory: client
-        run: npm run lint
+        run: npm run lint:ci
 
       - name: Build
         working-directory: client
