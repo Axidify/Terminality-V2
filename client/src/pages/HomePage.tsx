@@ -29,14 +29,7 @@ export const HomePage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const features = [
-    { title: 'Immersive OS Desktop', icon: '⊞' },
-    { title: '10+ Applications', icon: '⚙' },
-    { title: '17 Themes', icon: '◆' },
-    { title: 'Open Source', icon: '◇' },
-    { title: 'Persistent Storage', icon: '◀' },
-    { title: 'Responsive Design', icon: '▶' }
-  ]
+  // features array removed (replaced with game-focused feature cards)
 
   // Authentication for HomePage (moved from LockScreen)
   const { login: ctxLogin } = useUser()
@@ -150,11 +143,19 @@ export const HomePage: React.FC = () => {
               </button>
               <a href="/app?onboarding=1" className="home-btn home-btn-secondary">
                 <span className="home-btn-text">NEW AGENT</span>
-                <span className="home-btn-arrow">★</span>
+                <span className="home-btn-arrow">
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                    <path d="M12 2l2.6 5.4L20 9l-4 3.1L17 19l-5-2.8L7 19l1-6.9L4 9l5.4-1.6L12 2z" fill="currentColor" />
+                  </svg>
+                </span>
               </a>
               <a href="/app" className="home-btn home-btn-secondary">
                 <span className="home-btn-text">ENTER SYSTEM</span>
-                <span className="home-btn-arrow">→</span>
+                <span className="home-btn-arrow">
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+                    <path d="M5 12h11M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </svg>
+                </span>
               </a>
             </div>
           </div>
@@ -170,32 +171,63 @@ export const HomePage: React.FC = () => {
 
         <div className="home-features-grid">
           <div className="home-feature-item">
-            <div className="home-feature-icon">🔍</div>
+            <div className="home-feature-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" focusable="false">
+                <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                <rect x="16.5" y="16" width="6" height="1.8" rx="0.9" transform="rotate(45 16.5 16)" fill="currentColor" />
+              </svg>
+            </div>
             <div className="home-feature-title">Solve Mysteries</div>
             <div className="home-feature-desc">Uncover clues using desktop tools</div>
           </div>
           <div className="home-feature-item">
-            <div className="home-feature-icon">💻</div>
+            <div className="home-feature-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" focusable="false">
+                <rect x="3" y="4" width="18" height="12" rx="1" stroke="currentColor" strokeWidth="1.4" fill="none" />
+                <rect x="7" y="17" width="10" height="1.6" rx="0.8" fill="currentColor" />
+              </svg>
+            </div>
             <div className="home-feature-title">Use Hacking Tools</div>
             <div className="home-feature-desc">Analyze files, emails, networks</div>
           </div>
           <div className="home-feature-item">
-            <div className="home-feature-icon">📊</div>
+            <div className="home-feature-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" focusable="false">
+                <rect x="4" y="12" width="3" height="8" fill="currentColor" />
+                <rect x="9" y="8" width="3" height="12" fill="currentColor" />
+                <rect x="14" y="4" width="3" height="16" fill="currentColor" />
+              </svg>
+            </div>
             <div className="home-feature-title">Track Progress</div>
             <div className="home-feature-desc">Monitor case status in real-time</div>
           </div>
           <div className="home-feature-item">
-            <div className="home-feature-icon">🎯</div>
+            <div className="home-feature-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.4" fill="none" />
+                <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.4" fill="none" />
+                <line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </div>
             <div className="home-feature-title">Multiple Cases</div>
             <div className="home-feature-desc">Tackle diverse investigations</div>
           </div>
           <div className="home-feature-item">
-            <div className="home-feature-icon">🏆</div>
+            <div className="home-feature-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" focusable="false">
+                <path d="M7 4v2a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V4" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+                <path d="M6 19a6 6 0 0 0 12 0" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+              </svg>
+            </div>
             <div className="home-feature-title">Unlock Achievements</div>
             <div className="home-feature-desc">Master investigator rank awaits</div>
           </div>
           <div className="home-feature-item">
-            <div className="home-feature-icon">⚡</div>
+            <div className="home-feature-icon">
+              <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true" focusable="false">
+                <polyline points="13 2 3 14 12 14 11 22 21 10 12 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
             <div className="home-feature-title">Real-Time Gameplay</div>
             <div className="home-feature-desc">Dynamic puzzle environments</div>
           </div>
@@ -276,9 +308,13 @@ export const HomePage: React.FC = () => {
       <section className="home-cta">
         <h2 className="home-cta-title">THE INVESTIGATION AWAITS</h2>
         <p className="home-cta-subtitle">Are you ready to take on the case? Solve mysteries. Uncover the truth. Become a master investigator.</p>
-        <a href="/app" className="home-btn home-btn-large">
+        <a href="/app" className="home-btn home-btn-large home-btn-primary">
           <span className="home-btn-text">ACCESS CASE FILES</span>
-          <span className="home-btn-arrow">→</span>
+          <span className="home-btn-arrow">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <path d="M5 12h11M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+          </span>
         </a>
       </section>
 

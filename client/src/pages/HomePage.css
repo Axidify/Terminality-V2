@@ -404,6 +404,21 @@ body {
   opacity: 0.8;
 }
 
+.home-btn-arrow svg {
+  transform-origin: center;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  display: inline-block;
+}
+
+.home-btn:hover .home-btn-arrow svg {
+  transform: translateX(6px);
+}
+
+.home-btn-primary {
+  border: 1px solid rgba(var(--color-primary-rgb), 0.6);
+  box-shadow: 0 0 30px rgba(var(--color-primary-rgb), 0.12), inset 0 0 18px rgba(var(--color-primary-rgb), 0.06);
+}
+
 .home-btn-large {
   padding: clamp(14px, 2vh, 18px) clamp(28px, 4vw, 40px);
   font-size: clamp(12px, 1.3vw, 14px);
@@ -623,6 +638,15 @@ section {
   color: var(--color-primary);
   text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.4);
   line-height: 1;
+}
+
+.home-feature-icon svg {
+  width: clamp(24px, 4vw, 36px);
+  height: clamp(24px, 4vw, 36px);
+  display: inline-block;
+  color: var(--color-primary);
+  stroke: currentColor;
+  fill: none;
 }
 
 .home-feature-title {
