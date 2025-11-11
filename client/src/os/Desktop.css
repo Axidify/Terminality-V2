@@ -1,0 +1,100 @@
+.desktop {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  animation: desktopIn 0.5s ease-out;
+}
+
+.desktop.exiting {
+  animation: desktopOut 0.5s ease-in forwards;
+}
+
+@keyframes desktopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes desktopOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+    filter: blur(10px);
+  }
+}
+
+.desktop-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.7) 0%,
+    rgba(0, 0, 0, 0.9) 50%,
+    #000000 100%
+  );
+  z-index: 0;
+  pointer-events: none;
+}
+
+.desktop-clickable-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 40px; /* Leave space for taskbar */
+  z-index: 0;
+  pointer-events: all;
+}
+
+.desktop-bg::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.65) 0px,
+      rgba(0, 0, 0, 0.65) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  pointer-events: none;
+  animation: scanlines 8s linear infinite;
+  opacity: 0.6;
+  z-index: 999999;
+}
+
+@keyframes scanlines {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(3px); }
+}
+
+.desktop-bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle, transparent 0%, rgba(0, 0, 0, 0.2) 100%);
+  pointer-events: none;
+}

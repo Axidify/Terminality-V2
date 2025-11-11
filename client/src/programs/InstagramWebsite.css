@@ -1,0 +1,562 @@
+/* Instagram-like Website Styles */
+
+.instagram-site {
+  width: 100%;
+  height: 100%;
+  background: var(--color-background);
+  color: var(--color-text);
+  overflow-y: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Scrollbar theming */
+.instagram-site::-webkit-scrollbar {
+  width: 10px;
+}
+
+.instagram-site::-webkit-scrollbar-track {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.instagram-site::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border: 1px solid var(--color-border);
+}
+
+.instagram-site::-webkit-scrollbar-thumb:hover {
+  background: var(--color-secondary);
+}
+
+.instagram-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.instagram-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: bold;
+  font-size: 20px;
+  color: var(--color-primary);
+  font-family: 'VT323', cursive;
+}
+
+.instagram-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.instagram-search input {
+  padding: 6px 16px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 8px;
+  font-size: 14px;
+  width: 250px;
+}
+
+.instagram-search input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.instagram-nav {
+  display: flex;
+  gap: 16px;
+}
+
+.nav-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  padding: 4px;
+}
+
+.nav-icon:hover {
+  transform: scale(1.1);
+}
+
+.instagram-container {
+  display: flex;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  gap: 32px;
+}
+
+/* Stories Bar */
+.stories-bar {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.story {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.story-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-background);
+  border: 2px solid var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  padding: 2px;
+}
+
+.story-avatar.you {
+  border: 2px solid var(--color-textDim);
+}
+
+.story-name {
+  font-size: 12px;
+  color: var(--color-textDim);
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Feed */
+.instagram-feed {
+  flex: 1;
+  max-width: 630px;
+}
+
+.posts-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.instagram-post {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.post-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.post-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-background);
+  border: 2px solid var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.username {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.post-menu {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.post-image {
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--color-background);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.placeholder-image {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+}
+
+.post-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.action-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  padding: 4px;
+}
+
+.action-icon:hover {
+  transform: scale(1.1);
+}
+
+.action-icon.liked {
+  animation: like 0.3s ease;
+  color: #ff3040;
+}
+
+@keyframes like {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+.post-info {
+  padding: 0 16px 16px;
+}
+
+.likes-count {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.caption {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.caption-user {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.view-comments {
+  background: transparent;
+  border: none;
+  color: var(--color-textDim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.view-comments:hover {
+  color: var(--color-text);
+}
+
+.post-time {
+  font-size: 12px;
+  color: var(--color-textDim);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* Sidebar */
+.instagram-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
+  height: fit-content;
+}
+
+.sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-background);
+  border: 2px solid var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.profile-info {
+  flex: 1;
+}
+
+.profile-username {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.profile-name {
+  font-size: 14px;
+  color: var(--color-textDim);
+}
+
+.switch-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.suggestions {
+  margin-top: 24px;
+}
+
+.suggestions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-textDim);
+}
+
+.see-all {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.suggestion-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-background);
+  border: 2px solid var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.suggestion-info {
+  flex: 1;
+}
+
+.suggestion-username {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.suggestion-desc {
+  font-size: 12px;
+  color: var(--color-textDim);
+}
+
+.follow-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Profile View */
+.profile-view {
+  flex: 1;
+  max-width: 975px;
+  margin: 0 auto;
+}
+
+.profile-header {
+  display: flex;
+  gap: 64px;
+  padding: 32px 0;
+  margin-bottom: 32px;
+}
+
+.profile-avatar-large {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: var(--color-background);
+  border: 3px solid var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 64px;
+  flex-shrink: 0;
+}
+
+.profile-details {
+  flex: 1;
+}
+
+.profile-username-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.profile-username-row h1 {
+  font-size: 20px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.edit-profile-btn {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.edit-profile-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.profile-stats {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 20px;
+  font-size: 16px;
+}
+
+.profile-stats strong {
+  font-weight: 600;
+}
+
+.profile-bio {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.profile-display-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.profile-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+  margin-bottom: 24px;
+}
+
+.profile-tab {
+  background: transparent;
+  border: none;
+  color: var(--color-textDim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 0;
+  border-top: 2px solid transparent;
+  margin-top: -17px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.profile-tab.active {
+  color: var(--color-text);
+  border-top-color: var(--color-primary);
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.grid-item {
+  aspect-ratio: 1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.grid-item:hover {
+  opacity: 0.8;
+}
+
+.grid-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+}
+
+@media (max-width: 1024px) {
+  .instagram-sidebar {
+    display: none;
+  }
+}

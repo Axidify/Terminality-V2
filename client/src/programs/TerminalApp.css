@@ -1,0 +1,90 @@
+/* Terminal App - Theme-aware styles using CSS variables */
+
+.terminal-container {
+  font-family: monospace;
+  font-size: 12px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+.terminal-output {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+.terminal-line {
+  margin-bottom: 2px;
+  line-height: 1.4;
+}
+
+.terminal-line.user {
+  color: #aff;
+}
+
+.terminal-line.system {
+  color: #afa;
+}
+
+.terminal-input-row {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.terminal-prompt {
+  color: var(--color-text);
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.terminal-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 4px var(--color-shadow);
+}
+
+/* Context Menu */
+.terminal-context-menu {
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.5);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.terminal-context-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: all 0.2s ease;
+}
+
+.terminal-context-item:hover {
+  background: rgba(var(--color-primary-rgb), 0.2);
+  color: var(--color-primary);
+}
+
+.terminal-context-divider {
+  height: 1px;
+  background: rgba(var(--color-primary-rgb), 0.3);
+  margin: 4px 0;
+}

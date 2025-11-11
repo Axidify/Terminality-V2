@@ -1,0 +1,126 @@
+/* Chat App - Theme-aware styles using CSS variables */
+
+.chat-app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header */
+.chat-header {
+  padding: 8px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-header-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.chat-header-info {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* Messages Area */
+.chat-messages-area {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-message-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+}
+
+.chat-message-wrapper.own {
+  align-items: flex-end;
+  align-self: flex-end;
+}
+
+.chat-message-wrapper.other {
+  align-items: flex-start;
+  align-self: flex-start;
+}
+
+.chat-message-meta {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-bottom: 2px;
+  color: var(--color-textDim);
+}
+
+.chat-message-bubble {
+  padding: 8px 12px;
+  border-radius: 8px;
+  max-width: 100%;
+  word-wrap: break-word;
+  color: var(--color-text);
+}
+
+.chat-message-bubble.own {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.chat-message-bubble.other {
+  background: var(--color-background);
+  border: 1px solid var(--color-shadow);
+}
+
+/* Input Area */
+.chat-input-area {
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  padding: 8px;
+  color: var(--color-text);
+}
+
+.chat-input::placeholder {
+  color: var(--color-textDim);
+  opacity: 0.6;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.chat-send-button {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  padding: 8px 16px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chat-send-button:hover:not(:disabled) {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.chat-send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

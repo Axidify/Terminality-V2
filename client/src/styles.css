@@ -1,0 +1,67 @@
+@font-face {
+  font-family: 'VT323';
+  src: local('VT323'), url('https://fonts.gstatic.com/s/vt323/v17/pxiKyp0ihIEF2isfFJU.woff2') format('woff2');
+}
+
+:root {
+  --bg: #0c0c0c;
+  --fg: #00cc88;
+  /* Theme colors - muted retro palette with turquoise accent */
+  --color-primary: #00b380;
+  --color-primary-rgb: 0, 179, 128;
+  --color-secondary: #00a89e;
+  --color-secondary-rgb: 0, 168, 158;
+  --color-turquoise: #00d4cc;
+  --color-turquoise-rgb: 0, 212, 204;
+  --color-background: #000000;
+  --color-surface: #0a120f;
+  --color-text: #00cc88;
+  --color-textDim: #009966;
+  --color-border: #008866;
+  --color-shadow: rgba(0, 179, 128, 0.15);
+  --color-glow: rgba(0, 212, 204, 0.2);
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, rgba(0, 179, 128, 0.1) 0%, rgba(0, 168, 158, 0.05) 100%);
+  --gradient-surface: linear-gradient(180deg, rgba(0, 179, 128, 0.03) 0%, rgba(0, 0, 0, 0) 100%);
+  --gradient-accent: linear-gradient(90deg, rgba(0, 212, 204, 0.15) 0%, rgba(0, 179, 128, 0.15) 100%);
+}
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: 'Courier New', monospace; }
+
+/* Global Typography Standardization */
+* {
+  font-family: 'Courier New', monospace;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Courier New', monospace;
+  font-weight: 300;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.3);
+}
+
+button, input, textarea, select {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
+
+.wrap { display: grid; place-items: center; height: 100%; }
+.crt { width: min(900px, 95vw); border: 2px solid var(--color-primary); padding: 12px; box-shadow: 0 0 20px var(--color-shadow); }
+.toolbar { display: flex; gap: 16px; align-items: center; font-size: 18px; }
+.toolbar .spacer { flex: 1; }
+.screen { height: 60vh; overflow: auto; padding: 12px; border: 1px dashed var(--color-border); margin-top: 8px; font-size: 22px; line-height: 1.6; }
+.prompt { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 20px; }
+.prompt input { flex: 1; background: transparent; border: none; outline: none; color: var(--fg); font: inherit; }
+.user { color: var(--color-primary); }
+.system { color: #afa; }
+
+/* OS look tweaks */
+button { 
+  background: var(--color-surface); 
+  color: var(--color-text); 
+  border: 1px solid var(--color-textDim); 
+  padding: 4px 8px; 
+  cursor: pointer; 
+}
+button:hover { filter: brightness(1.1); }

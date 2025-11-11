@@ -1,0 +1,150 @@
+/* Recycle Bin App - Theme-aware styles using CSS variables */
+
+.recycle-bin-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+
+.recycle-bin-header {
+  padding: 8px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recycle-bin-title {
+  color: var(--color-text);
+  font-weight: bold;
+}
+
+.empty-bin-btn {
+  margin-left: 16px;
+  background: #200;
+  color: #f66;
+  border: 1px solid var(--color-border);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.empty-bin-btn:hover {
+  background: #400;
+  border-color: #f66;
+}
+
+.recycle-bin-empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+}
+
+.empty-state-content {
+  text-align: center;
+  color: var(--color-textDim);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.recycle-bin-table-container {
+  flex: 1;
+  overflow: auto;
+}
+
+.recycle-bin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.recycle-bin-table thead tr {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.recycle-bin-table th {
+  padding: 8px;
+  text-align: left;
+  color: var(--color-text);
+  font-weight: bold;
+}
+
+.recycle-bin-table th.actions-col {
+  text-align: right;
+}
+
+.recycle-bin-table tbody tr {
+  background: transparent;
+  border-bottom: 1px solid var(--color-background);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.recycle-bin-table tbody tr:hover {
+  background: var(--color-surface);
+}
+
+.recycle-bin-table tbody tr.selected {
+  background: var(--color-shadow);
+}
+
+.recycle-bin-table td {
+  padding: 8px;
+  color: var(--color-text);
+}
+
+.file-name-col {
+  color: var(--color-text);
+}
+
+.file-location-col {
+  opacity: 0.7;
+  font-size: 12px;
+  color: var(--color-textDim);
+}
+
+.file-deleted-col {
+  opacity: 0.7;
+  font-size: 12px;
+  color: var(--color-textDim);
+}
+
+.file-actions-col {
+  text-align: right;
+}
+
+.restore-btn {
+  margin-right: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.restore-btn:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.delete-btn {
+  background: #200;
+  color: #f66;
+  border: 1px solid var(--color-border);
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover {
+  background: #400;
+  border-color: #f66;
+}
