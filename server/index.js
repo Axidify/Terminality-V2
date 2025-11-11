@@ -248,14 +248,14 @@ app.get('/api/auth/me', async (req, res) => {
       const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
       if (!tk || !tk.user || tk.revoked) return res.status(401).json({ message: 'Invalid token' })
       if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
-      return res.json({ id: tk.user.id, username: tk.user.username })
+      return res.json({ id: tk.user.id, username: tk.user.username, is_admin: tk.user.role === 'admin' })
     }
     const tk = tokens.get(token)
     if (!tk || tk.revoked) return res.status(401).json({ message: 'Invalid token' })
     if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
     const user = users.find(u => u.id === tk.userId)
     if (!user) return res.status(401).json({ message: 'Invalid token' })
-    res.json({ id: user.id, username: user.username })
+    res.json({ id: user.id, username: user.username, is_admin: user.role === 'admin' })
   } catch (e) {
     console.error('[auth][me] error', e)
     res.status(500).json({ message: 'Server error' })
