@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 
 import { isLoggedIn } from '../../services/auth'
-import { hydrateFromServer, getCachedDesktop } from '../../services/saveService'
+import { hydrateFromServer, getCachedDesktop, saveDesktopState } from '../../services/saveService'
 import { useNotifications } from '../NotificationContext'
 import { sounds } from '../SoundEffects'
 import './LockScreen.css'
@@ -11,7 +11,7 @@ interface Props {
   onRegister: () => void
 }
 
-export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
+export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister }) => {
   const { addNotification } = useNotifications()
   const [time, setTime] = useState('')
   const [date, setDate] = useState('')
@@ -34,11 +34,14 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
     }))
   )
 
+  const initialMuted = getCachedDesktop()?.soundEffectsEnabled === false
+  const [muted, setMuted] = useState<boolean>(initialMuted)
+
   // Initialize ambient music - changes based on currentPreview
   useEffect(() => {
-    // Respect server-backed sound effects setting
-    const enabled = getCachedDesktop()?.soundEffectsEnabled
-    if (enabled === false) return
+  // Respect server-backed sound effects setting and runtime mute state
+  const enabled = getCachedDesktop()?.soundEffectsEnabled
+  if (enabled === false || muted === true) return
 
     // Clean up previous context
     if (intervalRef.current) { clearInterval(intervalRef.current) }
@@ -112,14 +115,14 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
     bellSeq()
     padIntervalRef.current = setInterval(bellSeq, 18000)
 
-    return () => {
+  return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (padIntervalRef.current) clearInterval(padIntervalRef.current)
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close()
       }
     }
-  }, [])
+  }, [muted])
 
   useEffect(() => {
     const updateTime = () => {
@@ -170,6 +173,22 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
     }, 500) // Match animation duration
   }
 
+  const toggleMute = async () => {
+    const nextMuted = !muted
+    setMuted(nextMuted)
+    try { await saveDesktopState({ soundEffectsEnabled: !nextMuted }) } catch { /* ignore */ }
+    if (!audioContextRef.current || !masterGainRef.current || audioContextRef.current.state === 'closed') return
+    const now = audioContextRef.current.currentTime
+    masterGainRef.current.gain.cancelScheduledValues(now)
+    if (nextMuted) {
+      masterGainRef.current.gain.setValueAtTime(masterGainRef.current.gain.value, now)
+      masterGainRef.current.gain.linearRampToValueAtTime(0, now + 0.3)
+    } else {
+      masterGainRef.current.gain.setValueAtTime(0, now)
+      masterGainRef.current.gain.linearRampToValueAtTime(2.0, now + 0.5)
+    }
+  }
+
   // Removed login form & logic from lock screen; moved to HomePage
 
   useEffect(() => {
@@ -218,28 +237,33 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister }) => {
         <div className="lock-auth-section">
           <div className="lock-user-label">WELCOME</div>
           <div className="lock-button-group">
-            <button
-              onClick={() => { sounds.click(); handleUnlock(); }}
-              onMouseEnter={handleButtonHover}
-              className="unlock-button unlock-button-primary"
-            >
-              <span className="unlock-text">UNLOCK</span>
-              <span className="unlock-arrow">→</span>
-            </button>
-            <button
-              onClick={() => { sounds.click(); onRegister(); }}
-              onMouseEnter={handleButtonHover}
-              className="unlock-button unlock-button-secondary"
-            >
-              <span className="unlock-text">CREATE ACCOUNT</span>
-              <span className="unlock-arrow">★</span>
-            </button>
+                <button 
+                  onClick={handleUnlock} 
+                  onMouseEnter={handleButtonHover} 
+                  className="unlock-button unlock-button-primary"
+                >
+                  <span className="unlock-text">UNLOCK</span>
+                  <span className="unlock-arrow">→</span>
+                </button>
+                <button 
+                  onClick={() => { sounds.click(); toggleMute(); }} 
+                  onMouseEnter={handleButtonHover} 
+                  className={`unlock-button ${muted ? 'unlock-button-secondary' : 'unlock-button'}`}
+                  aria-pressed={muted}
+                  title={muted ? 'Unmute' : 'Mute'}
+                >
+                  <span className="unlock-text">{muted ? 'UNMUTE' : 'MUTE'}</span>
+                  <span className="unlock-arrow">🔇</span>
+                </button>
           </div>
         </div>
 
         <div className="lock-screen-status">
-          <span className="status-indicator"></span>
+          <span className="status-indicator" aria-hidden="true"></span>
           <span className="status-text">SECURE CONNECTION</span>
+        </div>
+        <div className="lock-home-link-wrapper">
+          <a href="/" className="lock-home-link">HOME</a>
         </div>
       </div>
 

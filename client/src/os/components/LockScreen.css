@@ -454,7 +454,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(8px, 1.3vw, 10px);
+    font-size: clamp(8px, 1.3vw, 10px);
   color: var(--color-textDim);
   opacity: 0.5;
   letter-spacing: clamp(1px, 0.2vw, 1.5px);
@@ -471,8 +471,26 @@
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.8);
   animation: statusPulse 2s ease-in-out infinite;
-  flex-shrink: 0;
-  margin-top: -3px;
+    flex-shrink: 0;
+    margin-top: 0;
+    align-self: center;
+.lock-home-link-wrapper {
+  margin-top: 8px;
+}
+
+.lock-home-link {
+  font-size: 11px;
+  color: var(--color-textDim);
+  text-decoration: underline;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.lock-home-link:hover {
+  color: var(--color-primary);
+  opacity: 1;
+}
 }
 
 @keyframes statusPulse {
