@@ -450,11 +450,11 @@
 }
 
 .lock-screen-status {
-  margin-top: clamp(10px, 2vh, 20px);
+  margin-top: clamp(15px, 2.5vh, 25px);
   display: flex;
   align-items: center;
-  gap: 8px;
-    font-size: clamp(8px, 1.3vw, 10px);
+  gap: 6px;
+  font-size: clamp(8px, 1.3vw, 10px);
   color: var(--color-textDim);
   opacity: 0.5;
   letter-spacing: clamp(1px, 0.2vw, 1.5px);
@@ -465,32 +465,20 @@
 }
 
 .status-indicator {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   background: var(--color-primary);
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.8);
   animation: statusPulse 2s ease-in-out infinite;
-    flex-shrink: 0;
-    margin-top: 0;
-    align-self: center;
-.lock-home-link-wrapper {
-  margin-top: 8px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
 }
 
-.lock-home-link {
-  font-size: 11px;
-  color: var(--color-textDim);
-  text-decoration: underline;
-  opacity: 0.7;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.lock-home-link:hover {
-  color: var(--color-primary);
-  opacity: 1;
-}
+.status-text {
+  font-size: 10px;
+  vertical-align: middle;
 }
 
 @keyframes statusPulse {
@@ -504,8 +492,74 @@
   }
 }
 
-.status-text {
-  font-size: 10px;
+/* Discreet footer controls */
+.lock-footer-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 4vw, 28px);
+  margin-top: clamp(12px, 2vh, 18px);
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
+.lock-footer-controls:hover {
+  opacity: 1;
+}
+
+.footer-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  font-size: clamp(14px, 2.5vw, 18px);
+  opacity: 0.7;
+}
+
+.footer-button:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.footer-button:active {
+  transform: scale(0.95);
+}
+
+.footer-icon {
+  display: inline-block;
+}
+
+.mute-button:focus-visible {
+  outline: 1px solid rgba(var(--color-primary-rgb), 0.5);
+  border-radius: 2px;
+  padding: 2px;
+}
+
+.footer-link {
+  color: var(--color-textDim);
+  text-decoration: none;
+  font-size: clamp(8px, 1.2vw, 9px);
+  letter-spacing: 1px;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+  opacity: 0.7;
+  transition: all 0.3s;
+  padding: 2px 4px;
+  border-radius: 1px;
+}
+
+.footer-link:hover {
+  color: var(--color-primary);
+  opacity: 1;
+  text-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.4);
+}
+
+.footer-link:focus-visible {
+  outline: 1px solid rgba(var(--color-primary-rgb), 0.5);
 }
 
 /* Ambient Particles */

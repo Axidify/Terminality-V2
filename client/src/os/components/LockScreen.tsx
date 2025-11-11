@@ -245,16 +245,6 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
                   <span className="unlock-text">UNLOCK</span>
                   <span className="unlock-arrow">→</span>
                 </button>
-                <button 
-                  onClick={() => { sounds.click(); toggleMute(); }} 
-                  onMouseEnter={handleButtonHover} 
-                  className={`unlock-button ${muted ? 'unlock-button-secondary' : 'unlock-button'}`}
-                  aria-pressed={muted}
-                  title={muted ? 'Unmute' : 'Mute'}
-                >
-                  <span className="unlock-text">{muted ? 'UNMUTE' : 'MUTE'}</span>
-                  <span className="unlock-arrow">🔇</span>
-                </button>
           </div>
         </div>
 
@@ -262,8 +252,18 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
           <span className="status-indicator" aria-hidden="true"></span>
           <span className="status-text">SECURE CONNECTION</span>
         </div>
-        <div className="lock-home-link-wrapper">
-          <a href="/" className="lock-home-link">HOME</a>
+        
+        <div className="lock-footer-controls">
+          <button 
+            onClick={() => { sounds.click(); toggleMute(); }} 
+            onMouseEnter={handleButtonHover} 
+            className="footer-button mute-button"
+            aria-pressed={muted}
+            title={muted ? 'Unmute ambient audio' : 'Mute ambient audio'}
+          >
+            <span className="footer-icon">{muted ? '🔇' : '🔊'}</span>
+          </button>
+          <a href="/" className="footer-link" title="Return to home page">HOME</a>
         </div>
       </div>
 

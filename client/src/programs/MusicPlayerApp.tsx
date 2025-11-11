@@ -251,6 +251,35 @@ export const MusicPlayerApp: React.FC = () => {
   const currentPlaylist = playlists.find(p => p.id === currentPlaylistId) || playlists[0]
   const tracks = React.useMemo(() => currentPlaylist?.tracks || [], [currentPlaylist])
 
+  const buildPlayQueue = React.useCallback((startTrack: Track) => {
+    const trackList = [...tracks]
+    if (shuffle) {
+      // Fisher-Yates shuffle
+      for (let i = trackList.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [trackList[i], trackList[j]] = [trackList[j], trackList[i]]
+      }
+    }
+    // Move startTrack to front
+    const startIdx = trackList.findIndex(t => t.id === startTrack.id)
+    if (startIdx > 0) {
+      trackList.unshift(trackList.splice(startIdx, 1)[0])
+    }
+    setPlayQueue(trackList)
+  }, [tracks, shuffle])
+
+  const playTrack = React.useCallback((track: Track, buildQueue = true) => {
+    if (buildQueue) buildPlayQueue(track)
+    setCurrentTrack(track)
+    setIsPlaying(true)
+    if (audioRef.current && track.url) {
+      if (audioRef.current.src !== track.url) {
+        audioRef.current.src = track.url
+      }
+      audioRef.current.play().catch(() => {/* autoplay block ignored */})
+    }
+  }, [buildPlayQueue, audioRef])
+
   const playNext = React.useCallback(() => {
     if (playQueue.length === 0) return
     const idx = playQueue.findIndex(t => t.id === currentTrack?.id)
@@ -264,8 +293,6 @@ export const MusicPlayerApp: React.FC = () => {
     const prevIdx = idx <= 0 ? playQueue.length - 1 : idx - 1
     playTrack(playQueue[prevIdx], false)
   }, [playQueue, currentTrack, playTrack])
-
-  
 
   useEffect(() => {
     saveDesktopState({ musicPlaylists: playlists }).catch(() => {})
@@ -310,7 +337,7 @@ export const MusicPlayerApp: React.FC = () => {
     }
   // We intentionally omit playNext from deps because it's stable via callback; adding it may cause early re-runs
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repeat, currentTrack, playQueue])
+  }, [repeat, currentTrack, playQueue, playNext])
 
   // Stop playback when component unmounts (window closed)
   useEffect(() => {
@@ -323,35 +350,6 @@ export const MusicPlayerApp: React.FC = () => {
       }
     }
   }, [])
-
-  const buildPlayQueue = React.useCallback((startTrack: Track) => {
-    const trackList = [...tracks]
-    if (shuffle) {
-      // Fisher-Yates shuffle
-      for (let i = trackList.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [trackList[i], trackList[j]] = [trackList[j], trackList[i]]
-      }
-    }
-    // Move startTrack to front
-    const startIdx = trackList.findIndex(t => t.id === startTrack.id)
-    if (startIdx > 0) {
-      trackList.unshift(trackList.splice(startIdx, 1)[0])
-    }
-    setPlayQueue(trackList)
-  }, [tracks, shuffle])
-
-  const playTrack = React.useCallback((track: Track, buildQueue = true) => {
-    if (buildQueue) buildPlayQueue(track)
-    setCurrentTrack(track)
-    setIsPlaying(true)
-    if (audioRef.current && track.url) {
-      if (audioRef.current.src !== track.url) {
-        audioRef.current.src = track.url
-      }
-      audioRef.current.play().catch(() => {/* autoplay block ignored */})
-    }
-  }, [buildPlayQueue, audioRef])
 
   
 
