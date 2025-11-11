@@ -61,24 +61,16 @@ export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
     }
   ]
 
-  const isLocalSite = (testUrl: string) => {
-    return testUrl.includes('home.axi') || testUrl.includes('axi-pcstore.com') || testUrl.includes('axi-bank.com') || 
-           testUrl.includes('threadit.com') || testUrl.includes('pictogram.com') ||
-           testUrl.includes('axipcs tore') || testUrl === 'axi-pcstore' || testUrl === 'axi-bank' ||
-           testUrl === 'threadit' || testUrl === 'pictogram' || testUrl === 'home'
+  // Check if the URL is a 'home' site (special-case homepage)
+  const isHomeUrl = (testUrl: string) => {
+    return testUrl.includes('home.axi') || testUrl === 'home' || testUrl === 'https://home.axi'
   }
 
   const navigate = (targetUrl?: string) => {
     const urlToNavigate = targetUrl || url
     let processedUrl = urlToNavigate
     
-    // Check for local sites first
-    if (isLocalSite(urlToNavigate)) {
-      setCurrentUrl('https://home.axi')
-      setUrl('https://home.axi')
-      scrollToTop()
-      return
-    }
+    // Specific local site handling first
     if (urlToNavigate.includes('axi-bank.com') || urlToNavigate === 'axi-bank') {
       setCurrentUrl('https://axi-bank.com')
       setUrl('https://axi-bank.com')
@@ -100,6 +92,13 @@ export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
     if (urlToNavigate.includes('pictogram.com') || urlToNavigate === 'pictogram') {
       setCurrentUrl('https://pictogram.com')
       setUrl('https://pictogram.com')
+      scrollToTop()
+      return
+    }
+    // Home URL
+    if (isHomeUrl(urlToNavigate) || urlToNavigate === 'https://home.axi') {
+      setCurrentUrl('https://home.axi')
+      setUrl('https://home.axi')
       scrollToTop()
       return
     }

@@ -1,26 +1,108 @@
 {
   "version": 1,
   "desktop": {
-    "icons": {},
+    "icons": {
+      "terminal-0": {
+        "x": 20,
+        "y": 20
+      },
+      "explorer-1": {
+        "x": 20,
+        "y": 110
+      },
+      "notepad-2": {
+        "x": 20,
+        "y": 200
+      },
+      "browser-3": {
+        "x": 20,
+        "y": 290
+      },
+      "recycle-4": {
+        "x": 20,
+        "y": 380
+      },
+      "email-5": {
+        "x": 20,
+        "y": 470
+      },
+      "music-6": {
+        "x": 20,
+        "y": 560
+      },
+      "settings-7": {
+        "x": 20,
+        "y": 650
+      },
+      "chat-8": {
+        "x": 20,
+        "y": 740
+      },
+      "store-9": {
+        "x": 120,
+        "y": 20
+      }
+    },
     "isLocked": true,
     "wallpaper": "default",
     "theme": "green",
     "systemInfoPosition": {
-      "x": 1233,
-      "y": 60
+      "x": 1223,
+      "y": 70
     },
     "systemInfoSnappedEdge": "right",
     "notifications": [
       {
-        "id": "notif-1762877186125-bratgnv1ae9",
+        "id": "notif-1762879489870-01r3dl6ea098",
         "title": "Welcome to Terminality OS",
         "message": "System initialized successfully. All tools are ready.",
-        "timestamp": "2025-11-11T16:06:26.125Z",
+        "timestamp": "2025-11-11T16:44:49.870Z",
         "read": false,
         "type": "success"
       }
     ],
-    "soundEffectsEnabled": false
+    "soundEffectsEnabled": false,
+    "systemInfoCollapsed": false,
+    "windowMemory": {
+      "browser": {
+        "x": 40,
+        "y": 40,
+        "width": 1200,
+        "height": 800
+      },
+      "settings": {
+        "x": 40,
+        "y": 40,
+        "width": 1200,
+        "height": 800
+      }
+    },
+    "computerSpecs": {
+      "cpu": {
+        "name": "CPU",
+        "level": 1,
+        "maxLevel": 10,
+        "speed": "1.5 GHz"
+      },
+      "ram": {
+        "name": "RAM",
+        "level": 1,
+        "maxLevel": 10,
+        "size": "2 GB"
+      },
+      "gpu": {
+        "name": "GPU",
+        "level": 1,
+        "maxLevel": 10,
+        "model": "Integrated"
+      },
+      "storage": {
+        "name": "Storage",
+        "level": 1,
+        "maxLevel": 10,
+        "capacity": "128 GB"
+      }
+    }
   },
   "story": {}
 }
