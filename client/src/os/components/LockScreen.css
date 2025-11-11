@@ -453,7 +453,8 @@
   margin-top: clamp(15px, 2.5vh, 25px);
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
   font-size: clamp(8px, 1.3vw, 10px);
   color: var(--color-textDim);
   opacity: 0.5;
@@ -461,7 +462,8 @@
   font-family: 'Courier New', monospace;
   text-transform: uppercase;
   flex-shrink: 1;
-  line-height: 1.2;
+  line-height: 1.4;
+  min-height: 16px;
 }
 
 .status-indicator {
@@ -472,13 +474,14 @@
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.8);
   animation: statusPulse 2s ease-in-out infinite;
   flex-shrink: 0;
-  display: inline-block;
-  vertical-align: middle;
+  line-height: 1;
 }
 
 .status-text {
   font-size: 10px;
-  vertical-align: middle;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0;
 }
 
 @keyframes statusPulse {
