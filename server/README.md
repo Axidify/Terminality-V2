@@ -83,6 +83,9 @@ npm run dev
 
 The server will fall back to the file-based `state.json` if Prisma is not available.
 
+IMPORTANT: Do not commit your local `server/prisma/dev.db` file. It's a local SQLite database used for development and will lead to conflicts if checked in across branches.
+Prefer using the seed and setup scripts to create a local DB: `npm run prisma:setup`.
+
 Health check
 ------------
 This server exposes a simple `/health` endpoint that can be used for readiness/liveness checks and simple monitoring. It returns a JSON payload with basic process metrics and the persisted state version.
