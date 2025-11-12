@@ -38,7 +38,7 @@ interface WMContextValue {
 
 const WindowManagerContext = createContext<WMContextValue | undefined>(undefined)
 
-let zCounter = 1
+let zCounter = 100
 
 interface WindowMemory {
   [key: string]: { x: number; y: number; width: number; height: number }
