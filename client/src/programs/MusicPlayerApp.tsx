@@ -288,13 +288,13 @@ export const MusicPlayerApp: React.FC = () => {
     setIsPlaying(true)
     if (audioRef.current && track.url) {
       const fullUrl = new URL(track.url, window.location.origin).href
-      console.log('Playing track:', track.title, 'URL:', fullUrl)
+  if (import.meta.env.DEV) console.log('Playing track:', track.title, 'URL:', fullUrl)
 
       const playAudio = () => {
         audioRef.current?.play().then(() => {
-          console.log('Audio started playing successfully')
+          if (import.meta.env.DEV) console.log('Audio started playing successfully')
         }).catch((error) => {
-          console.log('Audio play failed:', error)
+          if (import.meta.env.DEV) console.log('Audio play failed:', error)
           setIsPlaying(false)
         })
       }
@@ -305,13 +305,13 @@ export const MusicPlayerApp: React.FC = () => {
         audioRef.current.src = fullUrl
         try { audioRef.current.load() } catch { /* ignore */ }
         try { audioRef.current.currentTime = 0 } catch { /* ignore */ }
-        console.log('Set audio src to:', fullUrl)
+  if (import.meta.env.DEV) console.log('Set audio src to:', fullUrl)
 
         // Wait for audio to be ready before playing
         const onCanPlay = () => {
           audioRef.current?.removeEventListener('canplay', onCanPlay)
       playAudio()
-      console.log('playTrack attempt - after play call; audio.src:', audioRef.current?.src, 'audio.currentSrc:', audioRef.current?.currentSrc)
+  if (import.meta.env.DEV) console.log('playTrack attempt - after play call; audio.src:', audioRef.current?.src, 'audio.currentSrc:', audioRef.current?.currentSrc)
         }
         audioRef.current.addEventListener('canplay', onCanPlay)
 

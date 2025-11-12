@@ -5,15 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      // Dev-only proxy to avoid CORS on remote demo audio files
-      '/ext-audio': {
-        target: 'https://www.soundhelix.com',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/ext-audio/, ''),
-      },
-    },
+    // No proxy required: demo audio files are now served locally under /audio
   },
   build: {
     outDir: 'dist'

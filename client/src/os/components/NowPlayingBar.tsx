@@ -98,7 +98,7 @@ export const NowPlayingBar: React.FC = () => {
     if (audio.src !== fullUrl) {
       audio.src = fullUrl
       try { audio.load() } catch { /* ignore */ }
-      console.log('NowPlayingBar set audio src to:', fullUrl)
+  if (import.meta.env.DEV) console.log('NowPlayingBar set audio src to:', fullUrl)
     }
     audio.play().catch(() => {})
     setIsPlaying(true)
