@@ -59,6 +59,61 @@ Terminality uses a consistent retro-futuristic aesthetic inspired by classic ter
 - **Backdrop Blur**: `backdrop-filter: blur(4-8px)` for glassmorphism
 - **Transitions**: `all 0.3s ease` for smooth interactions
 
+### Context Menu Guidelines
+
+Context menus across programs should follow the system's context menu design language for a consistent look and behavior. Use `client/src/os/ContextMenu.tsx` as the canonical reference implementation and the CSS variables listed above for theming.
+
+- Files to edit:
+  - CSS: `client/src/programs/*App.css` (e.g., `MusicPlayerApp.css`, `RecycleBinApp.css`)
+  - TSX: `client/src/programs/*App.tsx` for event wiring and `client/src/os/ContextMenu.tsx` for keyboard/accessibility reference
+- Styling tokens (CSS variables):
+  - Use `var(--color-surface)`, `var(--color-border)`, `var(--color-background)`, `var(--color-shadow)`, `var(--color-glow)`, `var(--color-primary-rgb)`, and `var(--color-text)` for all color work.
+  - Container: `border: 2px solid var(--color-border); background: var(--color-surface); box-shadow: 0 0 20px var(--color-shadow), inset 0 0 2px var(--color-glow); padding: 4px 0;`
+  - Items: `padding: 8px 16px; font-size: 14px; gap: 12px; color: var(--color-text);` — No `text-transform: uppercase` for menu items (we preserve normal case and use consistent font sizes in menus).
+  - Hover: `background: var(--color-background); box-shadow: inset 0 0 12px rgba(var(--color-primary-rgb), 0.2), 0 0 12px rgba(var(--color-primary-rgb), 0.3); text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);`
+  - Divider: `height: 1px; background: var(--color-border); margin: 4px 8px; opacity: 0.5;`
+
+- Icons:
+  - Use inline SVG with `width`/`height` 14 and `stroke` or `fill` set to `currentColor`. Keep icons monotone so they inherit the menu's text color.
+  - Example:
+  ```tsx
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9 12l-4-4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+  ```
+
+- Positioning (container-relative):
+  - Context menus should be positioned absolutely inside the app window container (not fixed to the viewport). Use a `containerRef` in the app, compute the mouse coordinates relative to the container using `getBoundingClientRect()` (plus scroll offsets), and set the menu `top`/`left` while clamping to container bounds.
+  - Example positioning logic (TSX):
+  ```tsx
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  const openContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const bounds = containerRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const x = e.clientX - bounds.left + (containerRef.current?.scrollLeft || 0);
+    const y = e.clientY - bounds.top + (containerRef.current?.scrollTop || 0);
+    const MENU_W = 180; const MENU_H = 180; // estimate or measure
+    const clampX = Math.max(8, Math.min(x, bounds.width - MENU_W - 8));
+    const clampY = Math.max(8, Math.min(y, bounds.height - MENU_H - 8));
+    setMenuPos({ x: clampX, y: clampY });
+  };
+  ```
+
+- Accessibility & Keyboard Navigation:
+  - Follow `ContextMenu.tsx` for `role="menu"`, `role="menuitem"`, and keyboard handlers (ArrowUp/ArrowDown to move focus, Enter to activate, Escape to close).
+  - Ensure focus trapping and proper ARIA attributes if the menu is modal or overlays interactive content.
+
+- Testing & Validation:
+  1. Run `npm run dev` from `client/` to view in the browser.
+  2. Right-click or trigger the menu in several scenarios (near edges, top-left, scrolled containers) and verify the menu doesn't overflow the container.
+  3. Test keyboard navigation (Arrow Up/Down/Enter/Escape) and screen-reader accessibility if applicable.
+  4. Verify color themes (dark, light, and any custom themes) pick up CSS variables properly.
+
+If you update or add a new context menu component, replicate the above pattern and use `client/src/os/ContextMenu.tsx` as a reference for markup and keyboard behavior.
+
 ### Interactive States
 - **Hover**: Increase border opacity to 1.0, add transform: `translateY(-2px)`, enhance glow
 - **Active/Focus**: Darker background (0.85+), stronger shadows, animated text-shadow glow
