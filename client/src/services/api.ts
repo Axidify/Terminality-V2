@@ -19,7 +19,14 @@ function resolveApiBase(): string {
       const ls = (() => { try { return window.localStorage.getItem('API_BASE_OVERRIDE') } catch { return null } })()
       const global = (window as any).__API_BASE__
       const baked = (import.meta as any)?.env?.VITE_API_BASE
-      const chosen = ls || global || baked || DEFAULT_BASE
+      // Project-specific safe fallback: if hosted on terminality.onrender.com and no config provided,
+      // default to the known backend domain to avoid localhost in production.
+      const host = window.location.hostname
+      const hostFallbacks: Record<string, string> = {
+        'terminality.onrender.com': 'https://terminality-backend.onrender.com',
+      }
+      const fallback = hostFallbacks[host]
+      const chosen = ls || global || baked || fallback || DEFAULT_BASE
       return String(chosen).replace(/\/$/, '')
     }
   } catch { /* ignore */ }
