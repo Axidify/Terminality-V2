@@ -249,6 +249,8 @@ export const MusicPlayerApp: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // No cross-component sync needed now that NowPlayingBar is removed
+
   // Persist state when key values change
   useEffect(() => {
     const state: MusicPersistState = {
@@ -281,6 +283,11 @@ export const MusicPlayerApp: React.FC = () => {
     }
     setPlayQueue(trackList)
   }, [tracks, shuffle])
+
+  // Rebuild the play queue whenever shuffle mode changes
+  useEffect(() => {
+    if (currentTrack) buildPlayQueue(currentTrack)
+  }, [shuffle, currentTrack, buildPlayQueue])
 
   const playTrack = React.useCallback((track: Track, buildQueue = true) => {
     if (buildQueue) buildPlayQueue(track)

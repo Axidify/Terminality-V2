@@ -3,7 +3,6 @@ import React, { useRef } from 'react'
 import { DesktopBranding } from './components/DesktopBranding'
 import { DesktopContainer } from './components/DesktopContextMenu'
 import { DesktopIcons, DesktopIconsRef } from './components/DesktopIcons'
-import NowPlayingBar from './components/NowPlayingBar'
 import SessionExpiredOverlay from './components/SessionExpiredOverlay'
 import SystemInfo from './components/SystemInfo'
 import { Taskbar } from './components/Taskbar'
@@ -92,8 +91,7 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
           </WindowFrame>
         ))}
 
-        {/* Taskbar */}
-        <NowPlayingBar />
+  {/* Taskbar */}
         <Taskbar onLock={handleLock} />
         <SessionExpiredOverlay />
       </div>
