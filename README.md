@@ -176,6 +176,26 @@ This project has two deployables:
 
 Below are step-by-step instructions and the required environment variables.
 
+> Note for Free plan (no Blueprint): Use the Render web UI. You don't need `render.yaml`. The fields below (Build Command, Start Command, Publish Directory) are set directly in the dashboard.
+
+#### Render UI one-liners
+- Backend Build Command (paste as a single line):
+  ```sh
+  npm ci && npm run prisma:generate && (npx prisma migrate deploy || npm run prisma:dbpush)
+  ```
+- Backend Start Command:
+  ```sh
+  node index.js
+  ```
+- Frontend Build Command:
+  ```sh
+  npm ci && npm run build
+  ```
+- Frontend Publish Directory:
+  ```
+  dist
+  ```
+
 ### 1) Backend (server/) — Render Web Service
 
 Recommended setup (production): use a managed Postgres database on Render and Prisma migrations.
@@ -185,9 +205,7 @@ Recommended setup (production): use a managed Postgres database on Render and Pr
    - Repository: this repo
    - Root Directory: `server`
    - Runtime: Node
-   - Build Command (Postgres):
-     - `npm ci && npx prisma generate && npx prisma migrate deploy`
-     - If you haven’t created migrations yet, use `npx prisma db push` as a temporary measure.
+  - Build Command: use the one-liner above (includes a migrate→db push fallback)
    - Start Command: `node index.js`
    - Instance type/region: as needed
 3. Environment Variables (Server):
@@ -230,8 +248,13 @@ SQLite quick demo (not recommended for production):
 1. In Render, create a Static Site:
    - Repository: this repo
    - Root Directory: `client`
-   - Build Command: `npm ci && npm run build`
-   - Publish Directory: `dist`
+  - Build Command: use the one-liner above
+  - Publish Directory: `dist`
+   
+### Common pitfalls
+- If Render detects Python and asks for `requirements.txt`, the service was created with the wrong runtime. Delete it and re-create as a Node service with Root Directory set to `server`.
+- Ensure `DATABASE_URL` is set and accessible from the service (use the Internal Database URL for Render Postgres).
+- Set `NODE_ENV=production` (or `DB_PROVIDER=postgres`) so Prisma uses the Postgres schema in production.
 2. Environment Variables (Client):
    - REQUIRED
      - `VITE_API_BASE` — The base URL of the backend API (e.g., `https://your-api.onrender.com`)

@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: terminality-api
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: |
+      npm ci
+      npm run prisma:generate
+      npx prisma migrate deploy || npm run prisma:dbpush
+    startCommand: node index.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        # Replace with a secret in the Render dashboard or a secret reference
+        value: change-me-in-render
+      - key: CLIENT_FRONTEND_URL
+        # Set this to your static site URL after you create it
+        value: https://your-static-site.onrender.com
+      - key: DB_PROVIDER
+        value: postgres
+      - key: DATABASE_URL
+        # Set this from your Render Postgres instance
+        value: postgres://user:pass@host:5432/db
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        value: admin
+      - key: ADMIN_EMAIL
+        value: admin@example.local
+      # Optional Google OAuth
+      - key: GOOGLE_CLIENT_ID
+        value: ""
+      - key: GOOGLE_CLIENT_SECRET
+        value: ""
+      - key: GOOGLE_REDIRECT_URI
+        value: https://your-api.onrender.com/api/auth/oauth/google/callback
+
+  - type: static
+    name: terminality-client
+    env: static
+    rootDir: client
+    plan: free
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE
+        # Set this to your API URL (the web service above)
+        value: https://your-api.onrender.com
