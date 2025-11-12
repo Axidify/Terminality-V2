@@ -276,6 +276,34 @@
   box-shadow: 
     0 0 10px rgba(0, 0, 0, 0.5),
     inset 0 0 20px rgba(0, 0, 0, 0.3);
+  -webkit-text-fill-color: var(--color-primary);
+  caret-color: var(--color-primary);
+}
+
+.url-input::selection {
+  background: rgba(var(--color-primary-rgb), 0.3);
+  color: var(--color-text);
+}
+
+.url-input::-webkit-input-placeholder {
+  color: rgba(var(--color-primary-rgb), 0.4);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(10px, 1vw, 12px);
+}
+
+.url-input::-moz-placeholder {
+  color: rgba(var(--color-primary-rgb), 0.4);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(10px, 1vw, 12px);
+}
+
+.url-input:-ms-input-placeholder {
+  color: rgba(var(--color-primary-rgb), 0.4);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: clamp(10px, 1vw, 12px);
 }
 
 .url-input::placeholder {

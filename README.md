@@ -19,6 +19,60 @@ Open http://localhost:5173 in your browser.
 - `src/services` – API/auth/state persistence services
 - `src/test` – Integration and component tests (Vitest + Testing Library)
 
+## Cyberpunk Terminal Design Language
+
+Terminality uses a consistent retro-futuristic aesthetic inspired by classic terminal UIs and cyberpunk media. When designing new components or apps, follow these principles:
+
+### Visual Elements
+- **Grid Backgrounds**: Subtle grid patterns using `rgba(var(--color-primary-rgb), 0.05)` at 40-50px intervals
+- **Scanlines**: Horizontal repeating gradients for CRT effect with 8s infinite animation
+- **Particles**: Small floating 2px dots with glow effects (`box-shadow: 0 0 6px var(--color-primary)`)
+- **Radial Gradients**: Elliptical gradients from primary color (5-8% opacity) to background
+
+### Typography
+- **Font**: `'Courier New', monospace` exclusively
+- **Sizing**: Use `clamp()` for responsive text (e.g., `clamp(18px, 2vw, 24px)`)
+- **Letter Spacing**: 4-8px for titles, 1-2px for body text, all uppercase for UI labels
+- **Text Shadow**: Multi-layer glows using `text-shadow: 0 0 10px rgba(...), 0 0 20px rgba(...), 0 0 30px rgba(...)`
+- **Brackets**: Use `[` `]` as decorative elements with pulsing animations (0.5-1 opacity cycle)
+
+### Colors & Theming
+- **Always use CSS variables**: `var(--color-primary)`, `var(--color-text)`, `var(--color-background)`
+- **RGBA patterns**: `rgba(var(--color-primary-rgb), opacity)` for transparency
+- **Opacity levels**: 
+  - Borders: 0.3-0.4 (hover: 0.6-1.0)
+  - Backgrounds: 0.4-0.7 for panels, 0.85+ for focused inputs
+  - Text dim: 0.5-0.7
+
+### Component Styling
+- **Borders**: 2px solid borders using `rgba(var(--color-primary-rgb), 0.4)`
+- **Border Radius**: 4-6px for modern feel within retro aesthetic
+- **Box Shadows**: 
+  - Outer: `0 0 20px rgba(var(--color-primary-rgb), 0.4)` for glow
+  - Inner: `inset 0 0 20px rgba(0, 0, 0, 0.3)` for depth
+- **Backdrop Blur**: `backdrop-filter: blur(4-8px)` for glassmorphism
+- **Transitions**: `all 0.3s ease` for smooth interactions
+
+### Interactive States
+- **Hover**: Increase border opacity to 1.0, add transform: `translateY(-2px)`, enhance glow
+- **Active/Focus**: Darker background (0.85+), stronger shadows, animated text-shadow glow
+- **Disabled**: Reduce opacity to 0.5, remove pointer events
+- **Shine Effect**: Use `::before` pseudo-element with gradient sweep on hover
+
+### Animations
+- **Scanlines**: `translateY(0)` to `translateY(4px)` over 8s
+- **Particles**: Float with opacity fade (0 → 0.5 → 0) over 8-15s
+- **Brackets/Logo**: Gentle pulse or float with 2-4s ease-in-out
+- **Buttons**: Quick transform and glow on hover (<0.3s)
+
+### Layout Patterns
+- **Headers**: Dark background (rgba 0.6), strong borders (2px), 20-24px padding
+- **Toolbars**: Medium background (rgba 0.5), 12-20px padding, flex with gap: 10-12px
+- **Content**: Minimal background or transparent, focus on border definition
+- **Status Bars**: Match headers but inverted (border-top instead of border-bottom)
+
+Reference implementations: `HomePage.css` (lock screen), `AppStoreApp.css`, `MiniBrowserApp.css`
+
 ## Scripts
 
 ```powershell
