@@ -50,6 +50,49 @@ export interface UnifiedState {
 let cachedState: UnifiedState | null = null
 // Shared promise to dedupe concurrent hydration requests
 let hydrationPromise: Promise<UnifiedState> | null = null
+// Debounce/queue for desktop state saves to avoid spamming network and to allow offline/unauthenticated buffering
+let pendingDesktopMerge: Partial<DesktopState> | null = null
+let flushTimer: number | null = null
+let listenersBound = false
+
+function ensureAuthListeners() {
+  if (listenersBound) return
+  listenersBound = true
+  try {
+    // When auth token changes (e.g., user logs in), flush any pending buffered desktop changes
+    window.addEventListener('authTokenChanged', () => {
+      if (hasToken()) {
+        // Try a fast flush when token appears
+        void flushPendingSaves()
+      }
+    })
+  } catch {
+    /* no-op: window may be unavailable in some environments */
+  }
+}
+
+async function flushPendingSaves(): Promise<void> {
+  // Nothing to do
+  if (!pendingDesktopMerge) return
+  // Don't attempt network without a token
+  if (!hasToken()) return
+  const base: UnifiedState = cachedState || { version: 1, desktop: {}, story: {} }
+  const next: UnifiedState = {
+    version: base.version || 1,
+    desktop: { ...(base.desktop || {}), ...pendingDesktopMerge },
+    story: base.story || {}
+  }
+  try {
+    const out = await apiRequest<{ session_id: number; state: UnifiedState }>(
+      '/api/state',
+      { method: 'PUT', auth: true, body: { state: next } }
+    )
+    cachedState = out.state
+    pendingDesktopMerge = null
+  } catch (_e) {
+    // Keep pending to retry later (e.g., when connectivity/auth is restored)
+  }
+}
 
 export async function hydrateFromServer(): Promise<UnifiedState> {
   // Return cached state if available (avoids unnecessary fetch attempts)
@@ -89,27 +132,41 @@ export async function hydrateFromServer(): Promise<UnifiedState> {
 }
 
 export async function saveDesktopState(partial: Partial<DesktopState>): Promise<UnifiedState> {
+  ensureAuthListeners()
   // Ensure cache
   if (!cachedState) {
     // If the user is not logged in, update only the local cache and avoid network calls
     if (!hasToken()) {
       const base = cachedState || { version: 1, desktop: {}, story: {} }
       cachedState = { version: base.version || 1, desktop: { ...(base.desktop || {}), ...partial }, story: base.story || {} }
+      // Buffer pending to flush upon login
+      pendingDesktopMerge = { ...(pendingDesktopMerge || {}), ...partial }
       return cachedState
     }
     try { await hydrateFromServer() } catch { /* ignore to allow best-effort */ }
   }
+  // Merge into local cache immediately for responsive UX
   const base: UnifiedState = cachedState || { version: 1, desktop: {}, story: {} }
-  const next: UnifiedState = {
+  cachedState = {
     version: base.version || 1,
     desktop: { ...(base.desktop || {}), ...partial },
     story: base.story || {}
   }
-  const out = await apiRequest<{ session_id: number; state: UnifiedState }>(
-    '/api/state',
-    { method: 'PUT', auth: true, body: { state: next } }
-  )
-  cachedState = out.state
+
+  // Accumulate pending changes
+  pendingDesktopMerge = { ...(pendingDesktopMerge || {}), ...partial }
+
+  // If not logged-in, don't attempt a network call now; return cached state and keep pending for later
+  if (!hasToken()) {
+    return cachedState
+  }
+
+  // Debounce the actual network PUT to batch rapid updates (e.g., mount effects)
+  if (flushTimer) {
+    try { clearTimeout(flushTimer) } catch { /* ignore */ }
+    flushTimer = null
+  }
+  flushTimer = setTimeout(() => { void flushPendingSaves() }, 300) as unknown as number
   return cachedState
 }
 
