@@ -192,7 +192,6 @@
   font-size: clamp(12px, 1.1vw, 14px);
   border-bottom: 1px solid rgba(var(--color-border-rgb, 40, 50, 70), 0.3);
 }
-}
 
 .file-name-col {
   color: var(--color-text);
