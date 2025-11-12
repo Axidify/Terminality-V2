@@ -26,7 +26,7 @@ const apps: AppDefinition[] = [
   { type: 'recycle', name: 'Recycle Bin', icon: <RecycleBinIcon size={20} />, defaultOpts: { title: 'Recycle Bin', width: 1000, height: 760 } },
   { type: 'email', name: 'Mail', icon: <MailIcon size={20} />, defaultOpts: { title: 'Mail', width: 1200, height: 800 } },
   { type: 'chat', name: 'Chat', icon: <ChatIcon size={20} />, defaultOpts: { title: 'Chat', width: 500, height: 600 } },
-  { type: 'profile', name: 'Profile', icon: <Icon name="user" size={20} />, defaultOpts: { title: 'Profile', width: 500, height: 400 } },
+  { type: 'profile', name: 'Profile', icon: <Icon name="user" size={20} />, defaultOpts: { title: 'Profile', width: 460, height: 700 } },
 ]
 
 interface TaskbarProps {

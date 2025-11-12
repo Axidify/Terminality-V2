@@ -43,17 +43,15 @@ export const ProfileApp: React.FC = () => {
   return (
     <div className="profile-app">
       <div className="profile-header">
-        <svg className="profile-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <svg className="profile-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5">
           <circle cx="12" cy="8" r="4" />
           <path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
         </svg>
         <div className="profile-info">
-          <div className="profile-label">USER PROFILE</div>
-          <div className="profile-username">{user?.username || 'Unknown'}</div>
+          <div className="profile-label">USER ACCOUNT</div>
+          <div className="profile-title">{user?.username || 'Unknown'}</div>
         </div>
       </div>
-      
-      <div className="profile-divider"></div>
       
       <div className="profile-section">
         <h4 className="profile-section-title">CHANGE PASSWORD</h4>
@@ -91,6 +89,13 @@ export const ProfileApp: React.FC = () => {
               disabled={busy}
             />
           </div>
+          <button 
+            className="profile-btn profile-btn-primary profile-btn-inline" 
+            onClick={save} 
+            disabled={busy || !oldPassword || !newPassword || !confirmPassword}
+          >
+            {busy ? 'UPDATING...' : 'UPDATE'}
+          </button>
         </div>
       </div>
 
@@ -99,16 +104,6 @@ export const ProfileApp: React.FC = () => {
           {msg.type === 'success' ? '✓' : '✗'} {msg.text}
         </div>
       )}
-      
-      <div className="profile-actions">
-        <button 
-          className="profile-btn profile-btn-primary" 
-          onClick={save} 
-          disabled={busy || !oldPassword || !newPassword || !confirmPassword}
-        >
-          {busy ? 'UPDATING...' : 'UPDATE PASSWORD'}
-        </button>
-      </div>
     </div>
   )
 }

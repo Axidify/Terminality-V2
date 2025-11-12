@@ -112,7 +112,7 @@ const baseIcons: DesktopIconDef[] = [
       icon: <Icon name="user" size={50} />,
       x: 130,
       y: 420,
-      defaultOpts: { title: 'Profile', width: 520, height: 420 }
+      defaultOpts: { title: 'Profile', width: 460, height: 700 }
     }
 ]
 
