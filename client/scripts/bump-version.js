@@ -3,6 +3,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 const versionFile = path.join(__dirname, '..', 'src', 'version.ts');
 const changelogFile = path.join(__dirname, '..', '..', 'CHANGELOG.md');
@@ -73,6 +74,10 @@ if (fs.existsSync(changelogFile)) {
 console.log(`\n🎉 Version bump complete!`);
 console.log(`\nNext steps:`);
 console.log(`1. Update CHANGELOG.md with your changes for v${newVersion}`);
-console.log(`2. Commit: git add . && git commit -m "chore: bump version to ${newVersion}"`);
-console.log(`3. Tag: git tag v${newVersion}`);
-console.log(`4. Push: git push && git push --tags`);
+console.log(`2. Stage files: git add .`);
+console.log(`3. Commit: git commit -m "chore(release): version ${newVersion}"`);
+console.log(`4. Tag: git tag v${newVersion}`);
+console.log(`5. Push: git push && git push --tags`);
+console.log(`\n📦 Auto-tagging helper:`);
+console.log(`   Run: npm run version:tag ${newVersion}`);
+

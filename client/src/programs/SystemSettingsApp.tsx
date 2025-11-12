@@ -4,6 +4,7 @@ import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 import { VERSION, BUILD_DATE } from '../version'
+import { fetchAndParseChangelog, ParsedChangelog } from '../services/changelogParser'
 import './SystemSettingsApp.css'
 
 type Tab = 'themes' | 'wallpapers' | 'specs' | 'about'
@@ -62,10 +63,31 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [previewTheme, setPreviewTheme] = useState<string>(themeName)
   const [wallpaper, setWallpaper] = useState(() => getCachedDesktop()?.wallpaper || 'default')
   const [specs, _setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
+  const [changelog, setChangelog] = useState<ParsedChangelog>({ entries: [], latest: null })
+  const [copyFeedback, setCopyFeedback] = useState<string>('')
 
   useEffect(() => {
     saveDesktopState({ computerSpecs: specs }).catch(() => {})
   }, [specs])
+
+  // Load changelog on component mount
+  useEffect(() => {
+    fetchAndParseChangelog().then(data => {
+      setChangelog(data)
+    })
+  }, [])
+
+  const copyVersionInfo = async () => {
+    const versionInfo = `Terminality OS v${VERSION} (Built: ${BUILD_DATE})`
+    try {
+      await navigator.clipboard.writeText(versionInfo)
+      setCopyFeedback('Version info copied!')
+      setTimeout(() => setCopyFeedback(''), 2000)
+    } catch (err) {
+      setCopyFeedback('Failed to copy')
+      setTimeout(() => setCopyFeedback(''), 2000)
+    }
+  }
 
   const applyTheme = () => {
     setTheme(previewTheme as keyof typeof themes)
@@ -345,7 +367,16 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <circle cx="50" cy="45" r="8" fill="currentColor" />
               </svg>
               <h1>Terminality OS</h1>
-              <p className="version">Version {VERSION}</p>
+              <div className="version-info">
+                <p className="version">Version {VERSION}</p>
+                <button className="copy-version-btn" onClick={copyVersionInfo} title="Copy version info to clipboard">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                  </svg>
+                  <span>{copyFeedback || 'Copy'}</span>
+                </button>
+              </div>
               <p className="tagline">A Retro-Futuristic Operating System Simulation</p>
             </div>
 
@@ -556,148 +587,73 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
               </div>
             </div>
 
-            <div className="changelog-section">
-              <h2>What&apos;s New in v0.5.3</h2>
-              <div className="changelog-content compact">
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                  </svg>
-                  <span><strong>Changelog & Versioning</strong>: Introduced a centralized changelog and version file (<code>client/src/version.ts</code>) with an automated bump script.</span>
+            {/* Dynamically render changelog from CHANGELOG.md */}
+            {changelog.entries.length > 0 ? (
+              changelog.entries.map((entry, idx) => (
+                <div className="changelog-section" key={entry.version}>
+                  <h2>What&apos;s New in v{entry.version}</h2>
+                  <div className="changelog-content compact">
+                    {entry.added.length > 0 && (
+                      <>
+                        {entry.added.map((item, i) => (
+                          <div className="changelog-item" key={`added-${i}`}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {entry.changed.length > 0 && (
+                      <>
+                        {entry.changed.map((item, i) => (
+                          <div className="changelog-item" key={`changed-${i}`}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M4 7h16M4 12h16M4 17h16"/>
+                            </svg>
+                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {entry.fixed.length > 0 && (
+                      <>
+                        {entry.fixed.map((item, i) => (
+                          <div className="changelog-item" key={`fixed-${i}`}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M12 2l3 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z"/>
+                            </svg>
+                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 7h16M4 12h16M4 17h16"/>
-                  </svg>
-                  <span><strong>Profile & User Management</strong>: Complete redesigns to match system UI, standardized colors, typography and layout, and moved interactive controls inside forms.</span>
-                </div>
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  </svg>
-                  <span><strong>About Page</strong>: Redesigned to a full OS-style About panel with system information, features, tech stack, credits and quick support links.</span>
-                </div>
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2l3 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z"/>
-                  </svg>
-                  <span><strong>Fixes</strong>: Desktop context menu 'About' now opens System Settings on the About tab; improved theme integration and CSS variable usage for consistent theming.</span>
-                </div>
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="12 6 12 12 16 14"/>
-                  </svg>
-                  <span><strong>System Monitor</strong>: Collapse/expand feature & improved z-index handling.</span>
-                </div>
+              ))
+            ) : (
+              <div className="changelog-section">
+                <h2>Changelog</h2>
+                <p style={{ color: 'var(--color-textDim)', fontSize: '14px' }}>Loading changelog...</p>
               </div>
-            </div>
-
-            <div className="changelog-section">
-              <h2>What&apos;s New in v0.5.2</h2>
-              <div className="changelog-content compact">
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                  </svg>
-                  <span><strong>Particles</strong>: 40 ambient effects on login screen</span>
-                </div>
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
-                  </svg>
-                  <span><strong>Audio</strong>: Improved context error handling</span>
-                </div>
-              </div>
-            </div>
+            )}
 
             <div className="changelog-section">
-              <h2>What&apos;s New in v0.5.1</h2>
-              <div className="changelog-content compact">
-                <div className="changelog-item">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/>
-                  </svg>
-                  <span><strong>System Monitor</strong>: Compact width & minimal design</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="changelog-section">
-              <h2>Previous Releases</h2>
-              <div className="changelog-content">
-                <div className="changelog-category">
-                  <h3>v0.4.0 - November 10, 2025</h3>
-                  <ul>
-                    <li><strong>Immersive Article System</strong>: Full article pages with detailed content</li>
-                    <li><strong>Category Navigation</strong>: Dedicated pages for World, Tech, Business, Gaming</li>
-                    <li><strong>Browser Scroll Behavior</strong>: Auto scroll to top on navigation</li>
-                  </ul>
-                </div>
-                <div className="changelog-category">
-                  <h3>v0.3.0 - November 10, 2025</h3>
-                  <ul>
-                    <li><strong>Home Website</strong>: New fake news homepage with breaking news, trending topics, weather widget, and market overview</li>
-                    <li><strong>Changelog System</strong>: Version tracking and changelog integrated into About section</li>
-                    <li><strong>Modern File Explorer</strong>: Windows/Mac-style UI with large folder/file icons, back/refresh buttons, and improved navigation</li>
-                    <li><strong>SVG Icon System</strong>: Complete monotone SVG icon replacement across all applications</li>
-                  </ul>
-                </div>
-
-                <div className="changelog-category">
-                  <h3>🐛 Fixed</h3>
-                  <ul>
-                    <li><strong>Sticky Headers</strong>: All website headers now properly stick to top while scrolling</li>
-                    <li><strong>Browser Layout</strong>: Fixed toolbar and bookmark bar staying fixed while viewport scrolls</li>
-                    <li><strong>ThreadIt Alignment</strong>: Create Post and Log In buttons now properly aligned to right edge</li>
-                  </ul>
-                </div>
-              </div>
-
+              <h2>Version History</h2>
               <div className="version-history">
-                <h2>Version History</h2>
-                <div className="version-item">
-                  <strong>v0.5.3</strong> <span className="version-date">(Nov 12, 2025)</span>
-                  <p>UI redesigns for Profile and Users, About page overhaul, changelog/version system added, and theme integration improvements.</p>
-                  <p>Fixed desktop context menu behavior to open Settings - About and improved color/typography consistency.</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.5.2</strong> <span className="version-date">(Nov 10, 2025)</span>
-                  <p>Login screen particle effects, improved audio context handling</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.5.1</strong> <span className="version-date">(Nov 10, 2025)</span>
-                  <p>Streamlined system monitor with minimal design and compact width</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.5.0</strong> <span className="version-date">(Nov 10, 2025)</span>
-                  <p>17 themes with dual-tone colors, snap-to-edge system monitor, theme-aware UI elements</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.4.0</strong> <span className="version-date">(Nov 10, 2025)</span>
-                  <p>Immersive article system, category navigation, 42 articles, scroll-to-top behavior</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.3.0</strong> <span className="version-date">(Nov 10, 2025)</span>
-                  <p>Home website, changelog system, modern file explorer, SVG icons, standardized sizing</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.2.0</strong> <span className="version-date">(Nov 9, 2025)</span>
-                  <p>Lock screen, music persistence, fake browser architecture</p>
-                </div>
-                <div className="version-item">
-                  <strong>v0.1.0</strong> <span className="version-date">(Nov 8, 2025)</span>
-                  <p>Initial release with core OS features</p>
-                </div>
-              </div>
-
-              <div className="about-footer">
-                <p>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                  </svg>
-                  <strong>Terminality</strong> - A cyberpunk hacking simulation OS
-                </p>
-                <p className="copyright">© 2025 Axidify. All rights reserved.</p>
+                {changelog.entries.map(entry => (
+                  <div className="version-item" key={entry.version}>
+                    <strong>v{entry.version}</strong> <span className="version-date">({entry.date})</span>
+                    <p>
+                      {entry.added.length > 0 && `${entry.added.length} additions`}
+                      {entry.added.length > 0 && (entry.changed.length > 0 || entry.fixed.length > 0) && ', '}
+                      {entry.changed.length > 0 && `${entry.changed.length} changes`}
+                      {entry.changed.length > 0 && entry.fixed.length > 0 && ', '}
+                      {entry.fixed.length > 0 && `${entry.fixed.length} fixes`}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
