@@ -106,6 +106,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.5] - 2025-11-12
+
+### Added
+- **Proxy Chain Icon**: Replaced network placeholder with a system-style SVG to match the UI iconography.
+
+### Changed
+- **Store Search**: Centered the search input horizontally and vertically; added a max-width for better layout on large screens and restored left-aligned placeholder text.
+- **App Store**: Background effects are confined to the app window (position: absolute), categories now wrap to avoid a scrollbar, and featured section spacing was adjusted to prevent overlap.
+- **About Page**: Minor content and presentation tweaks to reflect release notes and make changelog highlights more prominent.
+
+### Fixed
+- **Layout Overlap**: Fixed featured items overlapping the category row and prevented background effects bleeding over windows.
+- **System Monitor**: Ensured the system monitor always stays behind application windows.
+
 ## Version History Quick Reference
 
 - **v0.5.3** (Nov 12, 2025) - UI redesign, changelog system, version management

@@ -103,7 +103,7 @@ export const StoreApp: React.FC = () => {
       id: 'proxy-chain', 
       name: 'Proxy Chain', 
       desc: 'Route traffic through multiple proxies for anonymity', 
-      icon: '[NET]', 
+      icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/><path d="M8 12h.01M14 12h.01"/></svg>, 
       price: 350,
       installed: installedTools.includes('proxy-chain'),
       category: 'stealth'

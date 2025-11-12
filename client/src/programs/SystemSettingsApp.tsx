@@ -447,6 +447,10 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   <span>{copyFeedback || 'Copy'}</span>
                 </button>
               </div>
+              <div className="release-info">
+                <p className="release-latest">Latest release: v{changelog.latest?.version || VERSION}</p>
+                <button className="small" onClick={() => document.querySelector('.changelog-section')?.scrollIntoView({ behavior: 'smooth' })}>View changelog</button>
+              </div>
               <p className="tagline">A Retro-Futuristic Operating System Simulation</p>
             </div>
 
@@ -472,12 +476,6 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   through a mysterious digital world shrouded in intrigue.
                 </p>
                 <p>
-                  Why this game exists: Terminality was created to celebrate the charm of retro
-                  computing and to explore interactive storytelling in a simulated OS. It was built
-                  as a creative exercise to blend puzzles with a narrative that rewards curiosity and
-                  thoughtful investigation.
-                </p>
-                <p>
                   Experience a fully-functional desktop environment with authentic window management, 
                   file systems, applications, and network simulations—all running in your browser.
                 </p>
@@ -499,16 +497,16 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     <span className="info-value">Web-Based (x64 Simulation)</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Kernel</span>
-                    <span className="info-value">React 18.3.1</span>
+                    <span className="info-label">Frontend</span>
+                    <span className="info-value">React 18 + TypeScript + Vite</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Runtime</span>
-                    <span className="info-value">Node.js Backend + Vite Frontend</span>
+                    <span className="info-label">Backend</span>
+                    <span className="info-value">Node.js + Express + Prisma</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Graphics Engine</span>
-                    <span className="info-value">CSS3 + SVG + Canvas</span>
+                    <span className="info-label">Database</span>
+                    <span className="info-value">SQLite with JWT Auth</span>
                   </div>
                   <div className="info-row">
                     <span className="info-label">License</span>
@@ -585,109 +583,72 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 </div>
               </div>
 
-              <div className="about-section about-tech">
-                <h2>Technology Stack</h2>
-                <div className="tech-stack">
-                  <div className="tech-category">
-                    <h3>Frontend</h3>
-                    <ul>
-                      <li>React 18 with TypeScript</li>
-                      <li>Vite for fast development</li>
-                      <li>CSS3 with CSS Variables</li>
-                      <li>Custom window management</li>
-                    </ul>
+              <div className="about-section about-resources" style={{ gridColumn: '1 / -1', marginTop: '32px' }}>
+                <h2>Resources & Support</h2>
+                <div className="resources-content">
+                  <div className="resource-group">
+                    <h3>Project Information</h3>
+                    <p>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      <strong>Created by:</strong> Axidify
+                    </p>
+                    <p>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                      </svg>
+                      <strong>Repository:</strong> github.com/Axidify/Terminality-V2
+                    </p>
+                    <p>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      <strong>License:</strong> MIT License - Open source and free to use
+                    </p>
+                    <p className="copyright">
+                      © 2025 Terminality OS. Designed with passion for retro computing.
+                    </p>
                   </div>
-                  <div className="tech-category">
-                    <h3>Backend</h3>
-                    <ul>
-                      <li>Node.js + Express</li>
-                      <li>Prisma ORM</li>
-                      <li>SQLite Database</li>
-                      <li>JWT Authentication</li>
-                    </ul>
-                  </div>
-                  <div className="tech-category">
-                    <h3>Features</h3>
-                    <ul>
-                      <li>Session persistence</li>
-                      <li>User management</li>
-                      <li>State synchronization</li>
-                      <li>OAuth integration</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="about-section about-credits">
-                <h2>Credits & License</h2>
-                <div className="credits-content">
-                  <p>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    <strong>Created by:</strong> Axidify
-                  </p>
-                  <p>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                    </svg>
-                    <strong>Repository:</strong> github.com/Axidify/Terminality-V2
-                  </p>
-                  <div className="contributors-scaffold">
-                    <h3>Contributors</h3>
-                    {contributors.length === 0 ? (
-                      <p style={{ color: 'var(--color-textDim)' }}>No contributors yet — this is a scaffold for contributor profiles.</p>
-                    ) : (
-                      <ul>
-                        {contributors.map(c => <li key={c}>{c}</li>)}
-                      </ul>
-                    )}
-                    <button className="small" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>Contribute on GitHub</button>
-                  </div>
-                  <p>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                    <strong>License:</strong> MIT License - Open source and free to use
-                  </p>
-                  <p className="copyright">
-                    © 2025 Terminality OS. All rights reserved.<br/>
-                    Designed and built with passion for retro computing and cyberpunk aesthetics.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="about-section about-support">
-              <h2>Need Help?</h2>
-              <div className="support-content">
-                <p>
-                  For documentation, updates, and support, visit our GitHub repository or check the in-app help system.
-                </p>
-                <div className="support-links">
-                  <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                    Documentation
-                  </button>
-                  <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="4 17 10 11 4 5"/>
-                      <line x1="12" y1="19" x2="20" y2="19"/>
-                    </svg>
-                    Open Terminal
-                  </button>
-                  <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
-                    Report an issue
-                  </button>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="support-btn" onClick={() => wm.open('browser', { title: 'Sponsor', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/sponsors/Axidify' } })}>Sponsor</button>
-                    <button className="support-btn" onClick={() => wm.open('browser', { title: 'Donate', width: 1000, height: 700, payload: { initialUrl: 'https://www.example.com/donate' } })}>Donate</button>
+                  
+                  <div className="resource-group">
+                    <h3>Get Help & Contribute</h3>
+                    <p style={{ marginBottom: '12px' }}>
+                      For documentation, updates, and support, visit our GitHub repository.
+                    </p>
+                    <div className="support-links">
+                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                          <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        Documentation
+                      </button>
+                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="12" y1="8" x2="12" y2="12"/>
+                          <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        Report an Issue
+                      </button>
+                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                        Contribute
+                      </button>
+                      <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="4 17 10 11 4 5"/>
+                          <line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                        Open Terminal
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
