@@ -5,6 +5,7 @@ const path = require('path')
 const bodyParser = require('body-parser')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { OAuth2Client } = require('google-auth-library')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 // Use Prisma for persistence when available
@@ -17,6 +18,8 @@ try {
   prisma = null
 }
 const DEFAULT_PORT = parseInt(process.env.PORT || '3000', 10)
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || null
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
 
 async function readState() {
   if (prisma) {
@@ -243,12 +246,19 @@ app.post('/api/auth/google', async (req, res) => {
   const { id_token } = req.body || {}
   if (!id_token) return res.status(400).json({ message: 'id_token required' })
   try {
-    // Verify the ID token with Google's tokeninfo endpoint (simple dev approach)
-    const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`
-    const resp = await fetch(verifyUrl)
-    if (!resp.ok) return res.status(401).json({ message: 'Invalid id_token' })
-    const info = await resp.json()
-    const { email, sub: providerId } = info
+    // Verify the ID token (prefer proper OIDC verification via google-auth-library)
+    let info
+    if (googleClient) {
+      const ticket = await googleClient.verifyIdToken({ idToken: id_token, audience: GOOGLE_CLIENT_ID })
+      info = ticket.getPayload()
+    } else {
+      // Fallback to tokeninfo endpoint when GOOGLE_CLIENT_ID not configured
+      const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`
+      const resp = await fetch(verifyUrl)
+      if (!resp.ok) return res.status(401).json({ message: 'Invalid id_token' })
+      info = await resp.json()
+    }
+    const { email, sub: providerId } = info || {}
     if (!email) return res.status(400).json({ message: 'email required from token' })
 
     // Find or create a local user record

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react'
 import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
 import { loginWithGoogle } from '../services/auth'
+import GoogleSignInButton from '../os/components/GoogleSignInButton'
 import { hydrateFromServer, saveDesktopState } from '../services/saveService'
 
 import './HomePage.css'
@@ -192,9 +193,7 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
           <div style={{ marginTop: 8 }}>
-            <button onClick={submitHomeLoginWithGoogle} className="home-btn home-btn-google" disabled={hpGoogleBusy}>
-              <span className="home-btn-text">Sign in with Google</span>
-            </button>
+            <GoogleSignInButton onSuccess={async (idToken) => { await loginWithGoogle(idToken); await saveDesktopState({ isLocked: true }); window.location.href = '/app' }} onError={(e) => setHpGoogleError(String(e))} disabled={hpGoogleBusy} />
             {hpGoogleError && <div className="home-auth-error">{hpGoogleError}</div>}
           </div>
         </div>
