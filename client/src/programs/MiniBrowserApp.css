@@ -278,6 +278,8 @@
     inset 0 0 20px rgba(0, 0, 0, 0.3);
   -webkit-text-fill-color: var(--color-primary);
   caret-color: var(--color-primary);
+  outline: none;
+  outline-offset: 0;
 }
 
 .url-input::selection {
