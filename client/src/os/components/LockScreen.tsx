@@ -276,7 +276,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
               <path className="cross" d="M20 8l-4 8M16 8l4 8" strokeWidth="1.4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-          <a href="/" className="footer-link" title="Return to home page">HOME</a>
+          {/* Home link removed from lock screen to avoid navigation during lock state */}
         </div>
       </div>
 

@@ -28,6 +28,7 @@ body {
   overflow-x: hidden;
 }
 
+/* Primary scene layout */
 .home-page {
   position: relative;
   min-height: 100vh;
@@ -41,6 +42,25 @@ body {
   color: var(--color-text);
   font-family: 'Courier New', monospace;
   overflow-x: hidden;
+  transform-origin: center;
+}
+
+.home-page.exiting {
+  /* Blur-fade exit to mirror lock screen -> desktop */
+  animation: homePageOut 0.5s ease-in forwards;
+}
+
+@keyframes homePageOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+    filter: blur(10px);
+  }
 }
 
 .home-page::before {

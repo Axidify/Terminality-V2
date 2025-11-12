@@ -1,3 +1,5 @@
+// Load env vars early
+try { require('dotenv').config() } catch {}
 const express = require('express')
 const cors = require('cors')
 const fs = require('fs')
@@ -5,6 +7,7 @@ const path = require('path')
 const bodyParser = require('body-parser')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
+const { OAuth2Client } = require('google-auth-library')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 // Use Prisma for persistence when available
@@ -17,6 +20,16 @@ try {
   prisma = null
 }
 const DEFAULT_PORT = parseInt(process.env.PORT || '3000', 10)
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || null
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || null
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || null
+const CLIENT_FRONTEND_URL = process.env.CLIENT_FRONTEND_URL || process.env.VITE_CLIENT_URL || 'http://localhost:5173'
+// Client to verify ID tokens (no secret required)
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
+// Full OAuth2 client (authorization code exchange)
+const googleOauthClient = (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI)
+  ? new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI)
+  : null
 
 async function readState() {
   if (prisma) {
@@ -38,6 +51,12 @@ async function readState() {
   } catch (e) {
     return { version: 1, desktop: {}, story: {} }
   }
+}
+
+function sanitizeUsername(s) {
+  if (!s) return null
+  // Normalize: lowercase, replace non alpha-numeric with underscore, trim
+  return String(s).normalize('NFKD').replace(/[\s]+/g, '_').replace(/[^a-zA-Z0-9_\-\.]/g, '').toLowerCase().slice(0, 30)
 }
 
 async function writeState(s) {
@@ -237,6 +256,151 @@ app.post('/api/auth/login', async (req, res) => {
   }
 })
 
+// Google ID token authentication helper
+// POST /api/auth/google expects { id_token }
+app.post('/api/auth/google', async (req, res) => {
+  const { id_token } = req.body || {}
+  if (!id_token) return res.status(400).json({ message: 'id_token required' })
+  try {
+    // Verify the ID token (prefer proper OIDC verification via google-auth-library)
+    let info
+    if (googleClient) {
+      const ticket = await googleClient.verifyIdToken({ idToken: id_token, audience: GOOGLE_CLIENT_ID })
+      info = ticket.getPayload()
+    } else {
+      // Fallback to tokeninfo endpoint when GOOGLE_CLIENT_ID not configured
+      const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`
+      const resp = await fetch(verifyUrl)
+      if (!resp.ok) return res.status(401).json({ message: 'Invalid id_token' })
+      info = await resp.json()
+    }
+    const { email, sub: providerId, name } = info || {}
+    if (!email) return res.status(400).json({ message: 'email required from token' })
+
+    // Find or create a local user record
+    if (prisma) {
+      let user = await prisma.user.findUnique({ where: { email } })
+      if (!user) {
+        // Try to construct a friendly username from name or email local part
+        const preferred = sanitizeUsername(name) || sanitizeUsername((email || '').split('@')[0]) || `google_${providerId}`
+        // Ensure uniqueness, fallback to provider id if name taken
+        const exists = await prisma.user.findUnique({ where: { username: preferred } })
+        const usernameToUse = exists ? `google_${providerId}` : preferred
+        user = await prisma.user.create({ data: { username: usernameToUse, email, password: 'oauth', role: 'user' } })
+      }
+      // Create session token
+      const token = signJwt({ userId: user.id, username: user.username, role: user.role })
+      const decoded = jwt.decode(token)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      try { await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'session' } }) } catch (err) {}
+      return res.json({ access_token: token })
+    }
+    // Fallback in-memory users
+    let user = users.find(u => u.email === email)
+    if (!user) {
+      const id = users.length + 1
+      const preferred = sanitizeUsername(name) || sanitizeUsername((email || '').split('@')[0]) || `google_${providerId}`
+      const exists = users.find(u => u.username === preferred)
+      const username = exists ? `google_${providerId}` : preferred
+      user = { id, username, email, password: 'oauth', role: 'user' }
+      users.push(user)
+    }
+    const token = signJwt({ userId: user.id, username: user.username, role: user.role })
+    const decoded = jwt.decode(token)
+    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+    tokens.set(token, { userId: user.id, expiresAt, revoked: false, type: 'session' })
+    res.json({ access_token: token })
+  } catch (e) {
+    console.error('[auth][google] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// OAuth 2.0 Authorization Code flow (redirect-based)
+// Starts the Google OAuth flow by redirecting to Google's consent screen
+app.get('/api/auth/oauth/google', async (req, res) => {
+  try {
+    if (!googleOauthClient) return res.status(500).json({ message: 'OAuth not configured' })
+    const state = typeof req.query.state === 'string' ? req.query.state : undefined
+    const url = googleOauthClient.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: ['openid', 'email', 'profile'],
+      include_granted_scopes: true,
+      state
+    })
+    res.redirect(url)
+  } catch (e) {
+    console.error('[auth][oauth][google][start] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Handles the OAuth callback, exchanges the code for tokens, verifies id_token,
+// issues a local JWT, and redirects to the frontend with the token
+app.get('/api/auth/oauth/google/callback', async (req, res) => {
+  try {
+    if (!googleOauthClient) return res.status(500).json({ message: 'OAuth not configured' })
+    const code = String(req.query.code || '')
+    const state = typeof req.query.state === 'string' ? req.query.state : ''
+    if (!code) return res.status(400).json({ message: 'Missing code' })
+
+    const { tokens } = await googleOauthClient.getToken(code)
+    // tokens.id_token should be present for OIDC scopes
+    if (!tokens || !tokens.id_token) return res.status(401).json({ message: 'No id_token in response' })
+
+    const ticket = await googleOauthClient.verifyIdToken({ idToken: tokens.id_token, audience: GOOGLE_CLIENT_ID })
+    const info = ticket.getPayload()
+  const { email, sub: providerId, name } = info || {}
+    if (!email) return res.status(400).json({ message: 'email required from token' })
+
+    let accessToken
+    if (prisma) {
+      let user = await prisma.user.findUnique({ where: { email } })
+      if (!user) {
+        const preferred = sanitizeUsername(name) || sanitizeUsername((email || '').split('@')[0]) || `google_${providerId}`
+        const exists = await prisma.user.findUnique({ where: { username: preferred } })
+        const usernameToUse = exists ? `google_${providerId}` : preferred
+        user = await prisma.user.create({ data: { username: usernameToUse, email, password: 'oauth', role: 'user' } })
+      }
+      const jwtToken = signJwt({ userId: user.id, username: user.username, role: user.role })
+      const decoded = jwt.decode(jwtToken)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      try { await prisma.token.create({ data: { token: jwtToken, userId: user.id, expiresAt, type: 'session' } }) } catch {}
+      accessToken = jwtToken
+    } else {
+      let user = users.find(u => u.email === email)
+      if (!user) {
+        const id = users.length + 1
+        const preferred = sanitizeUsername(name) || sanitizeUsername((email || '').split('@')[0]) || `google_${providerId}`
+        const exists = users.find(u => u.username === preferred)
+        const username = exists ? `google_${providerId}` : preferred
+        user = { id, username, email, password: 'oauth', role: 'user' }
+        users.push(user)
+      }
+      const jwtToken = signJwt({ userId: user.id, username: user.username, role: user.role })
+      const decoded = jwt.decode(jwtToken)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      tokens.set(jwtToken, { userId: user.id, expiresAt, revoked: false, type: 'session' })
+      accessToken = jwtToken
+    }
+
+    // Redirect back to the frontend with the token. Prefer hash to avoid logs capturing query
+  const redirectBase = CLIENT_FRONTEND_URL || 'http://localhost:5173'
+    const dest = new URL(redirectBase)
+  // Ensure we land on the app route so the client shows the LockScreen immediately
+  dest.pathname = '/app'
+    // Preserve state by appending it
+    if (state) dest.searchParams.set('state', state)
+    // Use hash fragment for token
+    dest.hash = `access_token=${encodeURIComponent(accessToken)}`
+    return res.redirect(dest.toString())
+  } catch (e) {
+    console.error('[auth][oauth][google][callback] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
 app.get('/api/auth/me', async (req, res) => {
   const auth = req.headers['authorization'] || ''
   const token = String(auth).replace(/^Bearer\s+/i, '')
@@ -248,14 +412,22 @@ app.get('/api/auth/me', async (req, res) => {
       const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
       if (!tk || !tk.user || tk.revoked) return res.status(401).json({ message: 'Invalid token' })
       if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
-      return res.json({ id: tk.user.id, username: tk.user.username, is_admin: tk.user.role === 'admin' })
+      const user = tk.user
+      // Build a friendlier display name for OAuth-created users
+      const displayName = user.username && user.username.startsWith('google_')
+        ? (user.email ? user.email.split('@')[0] : user.username)
+        : user.username
+      return res.json({ id: user.id, username: user.username, display_name: displayName, is_admin: user.role === 'admin' })
     }
     const tk = tokens.get(token)
     if (!tk || tk.revoked) return res.status(401).json({ message: 'Invalid token' })
     if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
     const user = users.find(u => u.id === tk.userId)
     if (!user) return res.status(401).json({ message: 'Invalid token' })
-    res.json({ id: user.id, username: user.username, is_admin: user.role === 'admin' })
+    const displayName = user.username && user.username.startsWith('google_')
+      ? (user.email ? user.email.split('@')[0] : user.username)
+      : user.username
+    res.json({ id: user.id, username: user.username, display_name: displayName, is_admin: user.role === 'admin' })
   } catch (e) {
     console.error('[auth][me] error', e)
     res.status(500).json({ message: 'Server error' })

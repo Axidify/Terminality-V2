@@ -1,4 +1,5 @@
 import { apiRequest } from './api'
+import { isLoggedIn as hasToken } from './auth'
 
 export interface DesktopState {
   windowMemory?: Record<string, { x: number; y: number; width: number; height: number }>
@@ -53,6 +54,13 @@ let hydrationPromise: Promise<UnifiedState> | null = null
 export async function hydrateFromServer(): Promise<UnifiedState> {
   // Return cached state if available (avoids unnecessary fetch attempts)
   if (cachedState) return cachedState
+  // If not logged-in, avoid network call and return cached or default immediately
+  if (!hasToken()) {
+    if (cachedState) return cachedState
+    const s: UnifiedState = { version: 1, desktop: {}, story: {} }
+    cachedState = s
+    return s
+  }
   // If a hydration request is already in flight, return that promise
   if (hydrationPromise) return hydrationPromise
 
@@ -83,6 +91,12 @@ export async function hydrateFromServer(): Promise<UnifiedState> {
 export async function saveDesktopState(partial: Partial<DesktopState>): Promise<UnifiedState> {
   // Ensure cache
   if (!cachedState) {
+    // If the user is not logged in, update only the local cache and avoid network calls
+    if (!hasToken()) {
+      const base = cachedState || { version: 1, desktop: {}, story: {} }
+      cachedState = { version: base.version || 1, desktop: { ...(base.desktop || {}), ...partial }, story: base.story || {} }
+      return cachedState
+    }
     try { await hydrateFromServer() } catch { /* ignore to allow best-effort */ }
   }
   const base: UnifiedState = cachedState || { version: 1, desktop: {}, story: {} }

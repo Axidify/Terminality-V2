@@ -1,7 +1,7 @@
 import { apiRequest, setToken, getToken } from './api'
 
 export interface TokenOut { access_token: string }
-export interface MeOut { id: number; username: string; is_admin?: boolean }
+export interface MeOut { id: number; username: string; display_name?: string; is_admin?: boolean }
 
 export async function register(username: string, password: string): Promise<void> {
   const res = await apiRequest<TokenOut>('/api/auth/register', { method: 'POST', body: { username, password } })
@@ -19,6 +19,11 @@ export async function login(username: string, password: string): Promise<void> {
 
 export async function me(): Promise<MeOut> {
   return apiRequest<MeOut>('/api/auth/me', { auth: true })
+}
+
+export async function loginWithGoogle(idToken: string): Promise<void> {
+  const t = await apiRequest<TokenOut>('/api/auth/google', { method: 'POST', body: { id_token: idToken } })
+  setToken(t.access_token)
 }
 
 export function logout() {
