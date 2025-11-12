@@ -17,7 +17,7 @@ import { EmailApp } from '../programs/EmailApp'
 import { FileExplorerApp } from '../programs/FileExplorerApp'
 import { MiniBrowserApp } from '../programs/MiniBrowserApp'
 import { MusicPlayerApp } from '../programs/MusicPlayerApp'
-import { ModularAppsApp } from '../programs/ModularAppsApp'
+import { AppStoreApp } from '../programs/AppStoreApp'
 import { PluginHost } from '../programs/PluginHost'
 import { NotepadApp } from '../programs/NotepadApp'
 import { RecycleBinApp } from '../programs/RecycleBinApp'
@@ -87,7 +87,7 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
             {win.type === 'chat' && <ChatApp />}
             {win.type === 'music' && <MusicPlayerApp />}
             {win.type === 'modular-plugin' && <PluginHost pluginId={(win.payload as any)?.pluginId} />}
-            {win.type === 'modular' && <ModularAppsApp />}
+            {win.type === 'modular' && <AppStoreApp />}
             {win.type === 'settings' && <SystemSettingsApp payload={win.payload as any} />}
             {win.type === 'store' && <StoreApp />}
             {win.type === 'profile' && <ProfileApp />}

@@ -117,11 +117,11 @@ const baseIcons: DesktopIconDef[] = [
     ,
     { 
       type: 'modular',
-      name: 'Modular Apps',
+      name: 'App Store',
       icon: <StoreIcon size={50} />,
       x: 130,
       y: 520,
-      defaultOpts: { title: 'Modular Apps', width: 900, height: 650 }
+      defaultOpts: { title: 'App Store', width: 1200, height: 800 }
     }
 ]
 
