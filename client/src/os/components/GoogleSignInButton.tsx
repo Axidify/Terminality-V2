@@ -14,6 +14,12 @@ interface Props {
 
 const GoogleSignInButton: React.FC<Props> = ({ onSuccess, onError, disabled }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  // Keep latest callbacks without causing re-initialization
+  const onSuccessRef = useRef(onSuccess)
+  const onErrorRef = useRef(onError)
+  useEffect(() => { onSuccessRef.current = onSuccess }, [onSuccess])
+  useEffect(() => { onErrorRef.current = onError }, [onError])
+
   useEffect(() => {
     const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID
     if (!clientId) return
@@ -23,18 +29,25 @@ const GoogleSignInButton: React.FC<Props> = ({ onSuccess, onError, disabled }) =
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (res: any) => {
-            if (res && res.credential) {
-              onSuccess(res.credential)
-            } else {
-              onError && onError(new Error('No credential returned'))
+            try {
+              if (res && res.credential) {
+                onSuccessRef.current && onSuccessRef.current(res.credential)
+              } else {
+                onErrorRef.current && onErrorRef.current(new Error('No credential returned'))
+              }
+            } catch (e) {
+              onErrorRef.current && onErrorRef.current(e)
             }
-          }
+          },
+          auto_select: false
         })
         if (containerRef.current) {
+          // Ensure the container is empty before rendering the button once
+          containerRef.current.innerHTML = ''
           window.google.accounts.id.renderButton(containerRef.current, { theme: 'outline', size: 'large' })
         }
       } catch (e) {
-        onError && onError(e)
+        onErrorRef.current && onErrorRef.current(e)
       }
     }
     if (window.google && window.google.accounts && containerRef.current) {
@@ -46,12 +59,13 @@ const GoogleSignInButton: React.FC<Props> = ({ onSuccess, onError, disabled }) =
     s.async = true
     s.defer = true
     s.onload = () => render()
-    s.onerror = (e) => onError && onError(e)
+    s.onerror = (e) => onErrorRef.current && onErrorRef.current(e)
     document.head.appendChild(s)
     return () => {
       // remove script? keep it
     }
-  }, [onSuccess, onError])
+  // Run only once on mount; callbacks are kept fresh via refs above
+  }, [])
 
   return (
     <div ref={containerRef} aria-hidden={disabled}></div>
