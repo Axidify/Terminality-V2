@@ -50,6 +50,18 @@ npm test
 ```
 Add tests beside components with `*.test.tsx` or integration in `src/test/*integration.test.tsx`.
 
+## Updating Version & About Page
+
+When releasing a new version:
+
+1. **Update version number**: Edit `client/src/version.ts` and update `VERSION` and `BUILD_DATE`
+2. **Update changelogs**: Add new version entry to the top of both:
+   - `CHANGELOG.md` (root)
+   - `client/public/CHANGELOG.md`
+3. **Format**: Follow existing changelog format with Added/Changed/Fixed sections
+4. **Order**: Newest version should appear first (chronological: newest → oldest)
+5. **About page**: SystemSettingsApp will automatically pull from the public changelog
+
 ## Session Expiry Handling
 A global `SessionExpiredOverlay` listens for 401 responses and prompts a re-auth / refresh.
 

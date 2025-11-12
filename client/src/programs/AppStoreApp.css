@@ -208,29 +208,11 @@
   position: relative;
   z-index: 10;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 20px 30px;
-  overflow-x: auto;
+  overflow-x: visible;
   border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.15);
-  scrollbar-width: thin;
-  scrollbar-color: rgba(var(--color-primary-rgb), 0.3) transparent;
-}
-
-.appstore-categories::-webkit-scrollbar {
-  height: 4px;
-}
-
-.appstore-categories::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.appstore-categories::-webkit-scrollbar-thumb {
-  background: rgba(var(--color-primary-rgb), 0.3);
-  border-radius: 2px;
-}
-
-.appstore-categories::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--color-primary-rgb), 0.5);
 }
 
 .appstore-category-btn {
