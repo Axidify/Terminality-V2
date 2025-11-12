@@ -23,6 +23,12 @@ Open http://localhost:5173 in your browser.
 
 Terminality uses a consistent retro-futuristic aesthetic inspired by classic terminal UIs and cyberpunk media. When designing new components or apps, follow these principles:
 
+### System Color Palette
+- **Primary Color**: `#00b380` (Teal/Cyan Green) - RGB: `0, 179, 128`
+  - Used for: text highlights, borders, glows, interactive elements
+  - CSS Variables: `var(--color-primary)` and `var(--color-primary-rgb)`
+  - Hover/Active states: Slightly lighter tint (e.g., `#00d89f`)
+
 ### Visual Elements
 - **Grid Backgrounds**: Subtle grid patterns using `rgba(var(--color-primary-rgb), 0.05)` at 40-50px intervals
 - **Scanlines**: Horizontal repeating gradients for CRT effect with 8s infinite animation
