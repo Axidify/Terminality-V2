@@ -14,6 +14,15 @@ interface MiniBrowserAppProps {
   payload?: { initialUrl?: string }
 }
 
+const GlobeIcon: React.FC = () => (
+  <svg className="browser-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="35" stroke="currentColor" strokeWidth="3" fill="rgba(0, 255, 65, 0.05)"/>
+    <ellipse cx="50" cy="50" rx="15" ry="35" stroke="currentColor" strokeWidth="2"/>
+    <line x1="15" y1="50" x2="85" y2="50" stroke="currentColor" strokeWidth="2"/>
+    <path d="M50 15 Q65 30 50 50 Q35 70 50 85" stroke="currentColor" strokeWidth="2" fill="none"/>
+  </svg>
+)
+
 export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
   const initialUrlValue = payload?.initialUrl || 'https://home.axi'
   const [url, setUrl] = useState(initialUrlValue)
@@ -148,54 +157,82 @@ export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
   }
 
   return (
-    <div className="browser-container" onContextMenu={handleContextMenu}>
-      {/* Browser toolbar */}
-      <div className="browser-toolbar">
-        <button onClick={goBack} title="Back" className="browser-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-        </button>
-        <button onClick={goForward} title="Forward" className="browser-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
-        </button>
-        <button onClick={refresh} title="Refresh" className="browser-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-          </svg>
-        </button>
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Enter URL..."
-          className="url-input"
-        />
-        <button onClick={() => navigate()} className="browser-btn">
-          Go
-        </button>
-      </div>
+    <div className="browser-root">
+      {/* Background effects */}
+      <div className="browser-bg-grid" />
+      <div className="browser-scanlines" />
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div key={i} className="browser-particle" style={{
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 5}s`,
+          animationDuration: `${10 + Math.random() * 10}s`
+        }} />
+      ))}
 
-      {/* Bookmarks bar */}
-      <div className="bookmarks-bar">
-        {bookmarks.map((bookmark, idx) => (
-          <button
-            key={idx}
-            onClick={() => navigate(bookmark.url)}
-            className="bookmark-btn"
-            title={bookmark.url}
-          >
-            {bookmark.icon}
-            <span>{bookmark.name}</span>
+      <div className="browser-container" onContextMenu={handleContextMenu}>
+        {/* Header */}
+        <div className="browser-header">
+          <div className="browser-logo-container">
+            <GlobeIcon />
+          </div>
+          <div className="browser-title-group">
+            <h1 className="browser-title">
+              <span className="browser-bracket">[</span>
+              WEB BROWSER
+              <span className="browser-bracket">]</span>
+            </h1>
+            <div className="browser-subtitle">Secure Navigation</div>
+          </div>
+        </div>
+
+        {/* Browser toolbar */}
+        <div className="browser-toolbar">
+          <button onClick={goBack} title="Back" className="browser-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
           </button>
-        ))}
-      </div>
+          <button onClick={goForward} title="Forward" className="browser-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+          <button onClick={refresh} title="Refresh" className="browser-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+          </button>
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="ENTER URL..."
+            className="url-input"
+          />
+          <button onClick={() => navigate()} className="browser-btn browser-go-btn">
+            <span className="go-bracket">[</span>GO<span className="go-bracket">]</span>
+          </button>
+        </div>
 
-      {/* Browser viewport */}
-      <div className="browser-viewport" ref={viewportRef}>
+        {/* Bookmarks bar */}
+        <div className="bookmarks-bar">
+          {bookmarks.map((bookmark, idx) => (
+            <button
+              key={idx}
+              onClick={() => navigate(bookmark.url)}
+              className="bookmark-btn"
+              title={bookmark.url}
+            >
+              {bookmark.icon}
+              <span>{bookmark.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Browser viewport */}
+        <div className="browser-viewport" ref={viewportRef}>
         {currentUrl.includes('home.axi') ? (
           // Home page
           <HomeWebsite onNavigate={(url) => navigate(url)} />
@@ -239,39 +276,44 @@ export const MiniBrowserApp: React.FC<MiniBrowserAppProps> = ({ payload }) => {
             </div>
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Status bar */}
-      <div className="browser-status">
-        <span className="status-url">{currentUrl}</span>
-        <span className="status-info">
-          Local sites: Bank, Store, Threadit, Pictogram
-        </span>
-      </div>
+        {/* Status bar */}
+        <div className="browser-status">
+          <span className="status-url">
+            <span className="status-bracket">[</span>
+            URL: {currentUrl}
+            <span className="status-bracket">]</span>
+          </span>
+          <span className="status-info">
+            LOCAL SITES: BANK | STORE | THREADIT | PICTOGRAM
+          </span>
+        </div>
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <ContextMenuPortal>
-          <div
-            ref={menuRef}
-            className="browser-context-menu"
-            style={{
-              position: 'fixed',
-              left: menuPos.left,
-              top: menuPos.top,
-              zIndex: 10001
-            }}
-          >
-            <div className="browser-context-item" onClick={() => { goBack(); setContextMenu(null) }} style={{ opacity: canGoBack ? 1 : 0.5 }}><BackIcon size={14}/> Back</div>
-            <div className="browser-context-item" onClick={() => { goForward(); setContextMenu(null) }} style={{ opacity: canGoForward ? 1 : 0.5 }}><ForwardIcon size={14}/> Forward</div>
-            <div className="browser-context-item" onClick={() => { refresh(); setContextMenu(null) }}><RefreshIcon size={14}/> Refresh</div>
-            <div className="browser-context-divider" />
-            <div className="browser-context-item" onClick={() => { navigate('https://home.axi'); setContextMenu(null) }}><HomeIcon size={14}/> Home</div>
-            <div className="browser-context-divider" />
-            <div className="browser-context-item" onClick={() => { alert('Terminality Browser v1.0\nSecure browsing for local sites'); setContextMenu(null) }}><InfoIcon size={14}/> About</div>
-          </div>
-        </ContextMenuPortal>
-      )}
+        {/* Context Menu */}
+        {contextMenu && (
+          <ContextMenuPortal>
+            <div
+              ref={menuRef}
+              className="browser-context-menu"
+              style={{
+                position: 'fixed',
+                left: menuPos.left,
+                top: menuPos.top,
+                zIndex: 10001
+              }}
+            >
+              <div className="browser-context-item" onClick={() => { goBack(); setContextMenu(null) }} style={{ opacity: canGoBack ? 1 : 0.5 }}><BackIcon size={14}/> Back</div>
+              <div className="browser-context-item" onClick={() => { goForward(); setContextMenu(null) }} style={{ opacity: canGoForward ? 1 : 0.5 }}><ForwardIcon size={14}/> Forward</div>
+              <div className="browser-context-item" onClick={() => { refresh(); setContextMenu(null) }}><RefreshIcon size={14}/> Refresh</div>
+              <div className="browser-context-divider" />
+              <div className="browser-context-item" onClick={() => { navigate('https://home.axi'); setContextMenu(null) }}><HomeIcon size={14}/> Home</div>
+              <div className="browser-context-divider" />
+              <div className="browser-context-item" onClick={() => { alert('Terminality Browser v1.0\nSecure browsing for local sites'); setContextMenu(null) }}><InfoIcon size={14}/> About</div>
+            </div>
+          </ContextMenuPortal>
+        )}
+      </div>
     </div>
   )
 }

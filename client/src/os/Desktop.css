@@ -42,14 +42,69 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(0, 0, 0, 0.7) 0%,
-    rgba(0, 0, 0, 0.9) 50%,
-    #000000 100%
-  );
+  background: radial-gradient(ellipse at center, rgba(0, 255, 65, 0.02) 0%, rgba(0, 0, 0, 0.98) 100%),
+              linear-gradient(to bottom, #000000 0%, #0a0a0a 100%);
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+}
+
+/* Background Grid */
+.desktop-bg-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(0, 255, 65, 0.02) 0px, transparent 1px, transparent 60px),
+    repeating-linear-gradient(90deg, rgba(0, 255, 65, 0.02) 0px, transparent 1px, transparent 60px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Animated Scanlines */
+.desktop-scanlines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.1) 0px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 2;
+  animation: desktopScanlineMove 8s linear infinite;
+}
+
+@keyframes desktopScanlineMove {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(20px); }
+}
+
+/* Floating Particles */
+.desktop-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--color-primary, #00ff41);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.4;
+  animation: desktopParticleFloat 20s infinite ease-in-out;
+  box-shadow: 0 0 4px var(--color-primary, #00ff41);
+}
+
+@keyframes desktopParticleFloat {
+  0%, 100% { transform: translate(0, 0); opacity: 0.2; }
+  25% { transform: translate(100px, -150px); opacity: 0.6; }
+  50% { transform: translate(-50px, -300px); opacity: 0.4; }
+  75% { transform: translate(150px, -200px); opacity: 0.5; }
 }
 
 .desktop-clickable-bg {
@@ -72,18 +127,18 @@
   background: 
     repeating-linear-gradient(
       0deg,
-      rgba(0, 0, 0, 0.65) 0px,
-      rgba(0, 0, 0, 0.65) 1px,
+      rgba(0, 0, 0, 0.5) 0px,
+      rgba(0, 0, 0, 0.5) 1px,
       transparent 1px,
       transparent 3px
     );
   pointer-events: none;
-  animation: scanlines 8s linear infinite;
-  opacity: 0.6;
+  animation: globalScanlines 8s linear infinite;
+  opacity: 0.5;
   z-index: 999999;
 }
 
-@keyframes scanlines {
+@keyframes globalScanlines {
   0% { transform: translateY(0); }
   100% { transform: translateY(3px); }
 }
@@ -95,6 +150,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle, transparent 0%, rgba(0, 0, 0, 0.2) 100%);
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.4) 100%);
   pointer-events: none;
+  z-index: 3;
 }

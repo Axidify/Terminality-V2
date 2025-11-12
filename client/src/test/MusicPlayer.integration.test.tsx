@@ -22,7 +22,7 @@ describe('Music Player playback (integration)', () => {
   it('clicking a track updates audio src', async () => {
     render(<MusicPlayerApp />)
     // Wait for playlist to render
-    expect(await screen.findByText(/All Tracks \(15 tracks\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/All Tracks — 15 TRACKS/)).toBeInTheDocument()
     const neon = await screen.findByText('Neon Dreams')
     await userEvent.click(neon)
     const audio = document.querySelector('audio') as HTMLAudioElement | null

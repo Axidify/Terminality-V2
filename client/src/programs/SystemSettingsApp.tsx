@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
@@ -56,6 +56,20 @@ interface SystemSettingsAppProps {
   payload?: { tab?: Tab }
 }
 
+const SettingsIcon: React.FC = () => (
+  <svg className="settings-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="15" stroke="currentColor" strokeWidth="3" fill="rgba(0, 255, 65, 0.05)"/>
+    <circle cx="50" cy="20" r="4" fill="currentColor"/>
+    <circle cx="50" cy="80" r="4" fill="currentColor"/>
+    <circle cx="20" cy="50" r="4" fill="currentColor"/>
+    <circle cx="80" cy="50" r="4" fill="currentColor"/>
+    <circle cx="30" cy="30" r="4" fill="currentColor"/>
+    <circle cx="70" cy="70" r="4" fill="currentColor"/>
+    <circle cx="70" cy="30" r="4" fill="currentColor"/>
+    <circle cx="30" cy="70" r="4" fill="currentColor"/>
+  </svg>
+)
+
 export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload }) => {
   const [activeTab, setActiveTab] = useState<Tab>(payload?.tab || 'themes')
   const { currentTheme: _currentTheme, themeName, setTheme } = useTheme()
@@ -65,6 +79,40 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [specs, _setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
   const [changelog, setChangelog] = useState<ParsedChangelog>({ entries: [], latest: null })
   const [copyFeedback, setCopyFeedback] = useState<string>('')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const container = containerRef.current
+    if (container) {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left + container.scrollLeft
+      const y = e.clientY - rect.top + container.scrollTop
+      setContextMenu({ x, y })
+    } else {
+      setContextMenu({ x: e.clientX, y: e.clientY })
+    }
+  }
+
+  const closeContextMenu = () => setContextMenu(null)
+
+  React.useEffect(() => {
+    const handleClick = () => closeContextMenu()
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
+
+  // Generate particle positions once
+  const particles = React.useMemo(() => (
+    Array.from({ length: 12 }).map((_, i) => ({
+      key: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${10 + Math.random() * 10}s`
+    }))
+  ), [])
 
   useEffect(() => {
     saveDesktopState({ computerSpecs: specs }).catch(() => {})
@@ -121,8 +169,36 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   }
 
   return (
-    <div className="system-settings">
-      <div className="settings-tabs">
+  <div className="settings-root" ref={containerRef} onContextMenu={handleContextMenu}>
+      {/* Background effects */}
+      <div className="settings-bg-grid" />
+      <div className="settings-scanlines" />
+      {particles.map(p => (
+        <div key={p.key} className="settings-particle" style={{
+          left: p.left,
+          top: p.top,
+          animationDelay: p.animationDelay,
+          animationDuration: p.animationDuration
+        }} />
+      ))}
+
+      <div className="system-settings">
+        {/* Header */}
+        <div className="settings-header">
+          <div className="settings-logo-container">
+            <SettingsIcon />
+          </div>
+          <div className="settings-title-group">
+            <h1 className="settings-title">
+              <span className="settings-bracket">[</span>
+              SYSTEM SETTINGS
+              <span className="settings-bracket">]</span>
+            </h1>
+            <div className="settings-subtitle">System Configuration</div>
+          </div>
+        </div>
+
+        <div className="settings-tabs">
         <button 
           className={`tab ${activeTab === 'themes' ? 'active' : ''}`}
           onClick={() => setActiveTab('themes')}
@@ -238,7 +314,9 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             </div>
             
             <div className="theme-grid">
-              {Object.entries(themes).map(([key, theme]) => (
+              {Object.entries(themes)
+                .sort(([aKey], [bKey]) => (aKey === themeName ? -1 : bKey === themeName ? 1 : 0))
+                .map(([key, theme]) => (
                 <div
                   key={key}
                   className={`theme-card ${previewTheme === key ? 'selected' : ''}`}
@@ -248,6 +326,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     border: `2px solid ${previewTheme === key ? theme.colors.primary : theme.colors.border}`
                   }}
                 >
+                  {themeName === key && <div className="theme-badge">ACTIVE</div>}
                   <div className="theme-colors">
                     <div style={{ background: theme.colors.primary }} />
                     <div style={{ background: theme.colors.secondary }} />
@@ -257,7 +336,6 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   <div className="theme-name" style={{ color: theme.colors.text }}>
                     {theme.name}
                   </div>
-                  {themeName === key && <div className="theme-badge">ACTIVE</div>}
                 </div>
               ))}
             </div>
@@ -396,18 +474,6 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             </div>
 
             <div className="about-content-grid">
-              {/* Latest release highlight */}
-              {changelog.latest && (
-                <div className="about-section about-highlight" style={{ gridColumn: '1 / -1' }}>
-                  <h3>What’s New</h3>
-                  <p style={{ marginTop: 4 }}>{changelog.latest.summary || (changelog.latest.added[0] ?? '')}</p>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="small" onClick={() => { /* scroll to changelog */ document.querySelector('.changelog-section')?.scrollIntoView({ behavior: 'smooth' }) }}>View Changelog</button>
-                    <button className="small" onClick={checkForUpdates} title="Check for new updates">Check for updates</button>
-                    {updateFeedback && <span style={{ marginLeft: 8 }}>{updateFeedback}</span>}
-                  </div>
-                </div>
-              )}
               <div className="about-section about-description">
                 <h2>About Terminality</h2>
                 <p>
@@ -415,12 +481,6 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   deep online investigations, and narrative exploration within a retro terminal-based 
                   operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate 
                   through a mysterious digital world shrouded in intrigue.
-                </p>
-                <p>
-                  Why this game exists: Terminality was created to celebrate the charm of retro
-                  computing and to explore interactive storytelling in a simulated OS. It was built
-                  as a creative exercise to blend puzzles with a narrative that rewards curiosity and
-                  thoughtful investigation.
                 </p>
                 <p>
                   Experience a fully-functional desktop environment with authentic window management, 
@@ -444,16 +504,16 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     <span className="info-value">Web-Based (x64 Simulation)</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Kernel</span>
-                    <span className="info-value">React 18.3.1</span>
+                    <span className="info-label">Frontend</span>
+                    <span className="info-value">React 18 + TypeScript + Vite</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Runtime</span>
-                    <span className="info-value">Node.js Backend + Vite Frontend</span>
+                    <span className="info-label">Backend</span>
+                    <span className="info-value">Node.js + Express + Prisma</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Graphics Engine</span>
-                    <span className="info-value">CSS3 + SVG + Canvas</span>
+                    <span className="info-label">Database</span>
+                    <span className="info-value">SQLite with JWT Auth</span>
                   </div>
                   <div className="info-row">
                     <span className="info-label">License</span>
@@ -530,109 +590,72 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 </div>
               </div>
 
-              <div className="about-section about-tech">
-                <h2>Technology Stack</h2>
-                <div className="tech-stack">
-                  <div className="tech-category">
-                    <h3>Frontend</h3>
-                    <ul>
-                      <li>React 18 with TypeScript</li>
-                      <li>Vite for fast development</li>
-                      <li>CSS3 with CSS Variables</li>
-                      <li>Custom window management</li>
-                    </ul>
+              <div className="about-section about-resources" style={{ gridColumn: '1 / -1', marginTop: '32px' }}>
+                <h2>Resources & Support</h2>
+                <div className="resources-content">
+                  <div className="resource-group">
+                    <h3>Project Information</h3>
+                    <p>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      <strong>Created by:</strong> Axidify
+                    </p>
+                    <p>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                      </svg>
+                      <strong>Repository:</strong> github.com/Axidify/Terminality-V2
+                    </p>
+                    <p>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      <strong>License:</strong> MIT License - Open source and free to use
+                    </p>
+                    <p className="copyright">
+                      © 2025 Terminality OS. Designed with passion for retro computing.
+                    </p>
                   </div>
-                  <div className="tech-category">
-                    <h3>Backend</h3>
-                    <ul>
-                      <li>Node.js + Express</li>
-                      <li>Prisma ORM</li>
-                      <li>SQLite Database</li>
-                      <li>JWT Authentication</li>
-                    </ul>
-                  </div>
-                  <div className="tech-category">
-                    <h3>Features</h3>
-                    <ul>
-                      <li>Session persistence</li>
-                      <li>User management</li>
-                      <li>State synchronization</li>
-                      <li>OAuth integration</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="about-section about-credits">
-                <h2>Credits & License</h2>
-                <div className="credits-content">
-                  <p>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    <strong>Created by:</strong> Axidify
-                  </p>
-                  <p>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                    </svg>
-                    <strong>Repository:</strong> github.com/Axidify/Terminality-V2
-                  </p>
-                  <div className="contributors-scaffold">
-                    <h3>Contributors</h3>
-                    {contributors.length === 0 ? (
-                      <p style={{ color: 'var(--color-textDim)' }}>No contributors yet — this is a scaffold for contributor profiles.</p>
-                    ) : (
-                      <ul>
-                        {contributors.map(c => <li key={c}>{c}</li>)}
-                      </ul>
-                    )}
-                    <button className="small" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>Contribute on GitHub</button>
-                  </div>
-                  <p>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                    <strong>License:</strong> MIT License - Open source and free to use
-                  </p>
-                  <p className="copyright">
-                    © 2025 Terminality OS. All rights reserved.<br/>
-                    Designed and built with passion for retro computing and cyberpunk aesthetics.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="about-section about-support">
-              <h2>Need Help?</h2>
-              <div className="support-content">
-                <p>
-                  For documentation, updates, and support, visit our GitHub repository or check the in-app help system.
-                </p>
-                <div className="support-links">
-                  <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                    Documentation
-                  </button>
-                  <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="4 17 10 11 4 5"/>
-                      <line x1="12" y1="19" x2="20" y2="19"/>
-                    </svg>
-                    Open Terminal
-                  </button>
-                  <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
-                    Report an issue
-                  </button>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="support-btn" onClick={() => wm.open('browser', { title: 'Sponsor', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/sponsors/Axidify' } })}>Sponsor</button>
-                    <button className="support-btn" onClick={() => wm.open('browser', { title: 'Donate', width: 1000, height: 700, payload: { initialUrl: 'https://www.example.com/donate' } })}>Donate</button>
+                  
+                  <div className="resource-group">
+                    <h3>Get Help & Contribute</h3>
+                    <p style={{ marginBottom: '12px' }}>
+                      For documentation, updates, and support, visit our GitHub repository.
+                    </p>
+                    <div className="support-links">
+                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                          <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        Documentation
+                      </button>
+                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <line x1="12" y1="8" x2="12" y2="12"/>
+                          <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                        Report an Issue
+                      </button>
+                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                        Contribute
+                      </button>
+                      <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="4 17 10 11 4 5"/>
+                          <line x1="12" y1="19" x2="20" y2="19"/>
+                        </svg>
+                        Open Terminal
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -710,6 +733,31 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
           </div>
         )}
       </div>
+      </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="settings-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div className="context-menu-item" onClick={() => { window.location.reload(); closeContextMenu() }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+              <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+            </svg>
+            Refresh Settings
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={() => { alert(`System Settings v${VERSION}\nConfiguration Manager`); closeContextMenu() }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+              <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+            </svg>
+            About Settings
+          </div>
+        </div>
+      )}
     </div>
   )
 }

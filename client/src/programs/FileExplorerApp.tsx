@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 
 import { fs, FSNode } from './FileSystem'
 import { ContextMenu } from '../os/components/ContextMenu'
@@ -6,8 +6,16 @@ import { DesktopDialog } from '../os/components/DesktopDialog'
 import { DeleteIcon } from '../os/components/Icons'
 import { useUser } from '../os/UserContext'
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
+import './FileExplorerApp.css'
 
 interface Props { openNotepad: (path: string) => void }
+
+const FolderIcon: React.FC = () => (
+  <svg className="fileexplorer-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 25 L10 75 L90 75 L90 35 L50 35 L45 25 Z" stroke="currentColor" strokeWidth="4" fill="rgba(0, 255, 65, 0.1)"/>
+    <path d="M10 35 L90 35" stroke="currentColor" strokeWidth="2"/>
+  </svg>
+)
 
 interface DialogHelpers {
   close: () => void
@@ -46,6 +54,17 @@ export const FileExplorerApp: React.FC<Props> = ({ openNotepad }) => {
   const [dialogValue, setDialogValue] = React.useState('')
   const [dialogError, setDialogError] = React.useState<string | null>(null)
   const { isAdmin } = useUser()
+
+  // Generate particle positions once per mount to avoid jumping
+  const particles = useMemo(() => (
+    Array.from({ length: 10 }).map((_, i) => ({
+      key: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${10 + Math.random() * 10}s`
+    }))
+  ), [])
 
   const closeDialog = React.useCallback(() => {
     setDialog(null)
@@ -246,129 +265,86 @@ export const FileExplorerApp: React.FC<Props> = ({ openNotepad }) => {
   }
 
   return (
-    <div style={{ fontSize: 13, position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--color-bg)' }}>
+    <div className="fileexplorer-root">
+      {/* Background effects */}
+      <div className="fileexplorer-bg-grid" />
+      <div className="fileexplorer-scanlines" />
+      {particles.map(p => (
+        <div key={p.key} className="fileexplorer-particle" style={{
+          left: p.left,
+          top: p.top,
+          animationDelay: p.animationDelay,
+          animationDuration: p.animationDuration
+        }} />
+      ))}
+
+      {/* Header */}
+      <div className="fileexplorer-header">
+        <div className="fileexplorer-logo-container">
+          <FolderIcon />
+        </div>
+        <div className="fileexplorer-title-group">
+          <h1 className="fileexplorer-title">
+            <span className="fileexplorer-bracket">[</span>
+            FILE EXPLORER
+            <span className="fileexplorer-bracket">]</span>
+          </h1>
+          <div className="fileexplorer-subtitle">System Navigation</div>
+        </div>
+      </div>
+
       {/* Toolbar */}
-      <div style={{ 
-        padding: '8px 12px', 
-        display: 'flex', 
-        gap: 8, 
-        alignItems: 'center', 
-        borderBottom: '1px solid var(--color-border)',
-        background: 'var(--color-surface)',
-        flexShrink: 0
-      }}>
-        <button onClick={up} style={{ 
-          padding: '6px 12px', 
-          border: '1px solid var(--color-border)', 
-          background: 'var(--color-surface)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          color: 'var(--color-text)'
-        }}>
+      <div className="fileexplorer-toolbar">
+        <button onClick={up} className="fileexplorer-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
-          Back
+          BACK
         </button>
-        <button onClick={refresh} style={{ 
-          padding: '6px 12px', 
-          border: '1px solid var(--color-border)', 
-          background: 'var(--color-surface)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          color: 'var(--color-text)'
-        }}>
+        <button onClick={refresh} className="fileexplorer-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
           </svg>
-          Refresh
+          REFRESH
         </button>
-        <div style={{ 
-          flex: 1, 
-          marginLeft: 12,
-          padding: '6px 12px',
-          background: 'var(--color-bg)',
-          border: '1px solid var(--color-border)',
-          borderRadius: '2px',
-          color: 'var(--color-text)',
-          fontFamily: 'monospace'
-        }}>
-          {cwd}
+        <div className="fileexplorer-path">
+          <span className="path-label">PATH:</span>
+          <span className="path-value">{cwd}</span>
         </div>
       </div>
       
       {/* File Grid */}
-      <div style={{ 
-        flex: 1, 
-        padding: 12, 
-        overflow: 'auto',
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', 
-        gap: 12,
-        alignContent: 'start'
-      }} onContextMenu={handleBlankContextMenu}>
-        {items.map(n => (
-          <div 
-            key={n.path} 
-            onDoubleClick={() => enter(n)} 
-            onContextMenu={(e) => handleContextMenu(e, n)}
-            style={{ 
-              padding: '12px 8px',
-              cursor: 'pointer',
-              background: 'var(--color-surface)',
-              border: '1px solid transparent',
-              borderRadius: '4px',
-              transition: 'all 0.15s',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 8,
-              textAlign: 'center'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--color-bgHover)'
-              e.currentTarget.style.borderColor = 'var(--color-border)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'var(--color-surface)'
-              e.currentTarget.style.borderColor = 'transparent'
-            }}
-          >
-            {/* Icon */}
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              {n.type === 'dir' ? (
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              ) : (
-                <>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                </>
-              )}
-            </svg>
-            {/* Name */}
-            <div style={{ 
-              fontSize: 12, 
-              color: 'var(--color-text)',
-              wordBreak: 'break-word',
-              maxWidth: '100%'
-            }}>
-              {n.name}
+      <div className="fileexplorer-content" onContextMenu={handleBlankContextMenu}>
+        <div className="fileexplorer-grid">
+          {items.map(n => (
+            <div 
+              key={n.path} 
+              className="fileexplorer-item"
+              onDoubleClick={() => enter(n)} 
+              onContextMenu={(e) => handleContextMenu(e, n)}
+            >
+              <div className="item-border" />
+              <div className="item-content">
+                <svg className="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  {n.type === 'dir' ? (
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                  ) : (
+                    <>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </>
+                  )}
+                </svg>
+                <div className="item-name">{n.name}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
         {items.length === 0 && (
-          <div style={{ 
-            gridColumn: '1 / -1',
-            textAlign: 'center',
-            padding: 40,
-            opacity: 0.5,
-            color: 'var(--color-textDim)'
-          }}>
-            This folder is empty
+          <div className="fileexplorer-empty">
+            <div className="empty-bracket">[</div>
+            FOLDER IS EMPTY
+            <div className="empty-bracket">]</div>
           </div>
         )}
       </div>

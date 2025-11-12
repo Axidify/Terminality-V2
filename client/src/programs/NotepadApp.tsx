@@ -12,6 +12,16 @@ interface Props {
   onPathChange?: (newPath: string) => void
 }
 
+const DocumentIcon: React.FC = () => (
+  <svg className="notepad-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M25 10 L65 10 L75 20 L75 90 L25 90 Z" stroke="currentColor" strokeWidth="3" fill="rgba(0, 255, 65, 0.05)"/>
+    <path d="M65 10 L65 20 L75 20" stroke="currentColor" strokeWidth="3" fill="none"/>
+    <line x1="35" y1="35" x2="65" y2="35" stroke="currentColor" strokeWidth="2"/>
+    <line x1="35" y1="45" x2="65" y2="45" stroke="currentColor" strokeWidth="2"/>
+    <line x1="35" y1="55" x2="55" y2="55" stroke="currentColor" strokeWidth="2"/>
+  </svg>
+)
+
 export const NotepadApp: React.FC<Props> = ({ path: initialPath, onPathChange }) => {
   const [currentPath, setCurrentPath] = useState(initialPath || '')
   const [content, setContent] = useState('')
@@ -23,6 +33,17 @@ export const NotepadApp: React.FC<Props> = ({ path: initialPath, onPathChange })
   const [showFileDialog, setShowFileDialog] = useState(!initialPath)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const { ref: _menuRef, pos: menuPos } = useContextMenuPosition(contextMenu?.x ?? 0, contextMenu?.y ?? 0)
+
+  // Generate particle positions once to avoid jumping on re-render
+  const particles = React.useMemo(() => (
+    Array.from({ length: 8 }).map((_, i) => ({
+      key: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${10 + Math.random() * 10}s`
+    }))
+  ), [])
 
   useEffect(() => {
     if (!currentPath) return
@@ -164,66 +185,132 @@ export const NotepadApp: React.FC<Props> = ({ path: initialPath, onPathChange })
 
   if (showFileDialog && !currentPath) {
     return (
-      <div className="notepad-file-dialog">
-        <h3 className="notepad-dialog-title">[ NOTEPAD ]</h3>
-        
-        <div className="notepad-dialog-actions">
-          <button onClick={createNew} className="notepad-action-btn">
-            📄 Create New File
-          </button>
-          <button onClick={openFileDialog} className="notepad-action-btn">
-            📂 Open Existing File
-          </button>
-        </div>
+      <div className="notepad-root">
+        {/* Background effects */}
+        <div className="notepad-bg-grid" />
+        <div className="notepad-scanlines" />
+        {particles.map(p => (
+          <div key={p.key} className="notepad-particle" style={{
+            left: p.left,
+            top: p.top,
+            animationDelay: p.animationDelay,
+            animationDuration: p.animationDuration
+          }} />
+        ))}
 
-        {recentFiles.length > 0 && (
-          <div className="notepad-recent-files">
-            <div className="notepad-recent-title">Recent Files:</div>
-            <div className="notepad-recent-list">
-              {recentFiles.map(path => (
-                <div
-                  key={path}
-                  onClick={() => openFile(path)}
-                  className="notepad-recent-item"
-                >
-                  {path}
-                </div>
-              ))}
-            </div>
+        <div className="notepad-file-dialog">
+          <div className="notepad-logo-container">
+            <DocumentIcon />
           </div>
-        )}
+          <h3 className="notepad-dialog-title">
+            <span className="notepad-bracket">[</span>
+            NOTEPAD
+            <span className="notepad-bracket">]</span>
+          </h3>
+          
+          <div className="notepad-dialog-actions">
+            <button onClick={createNew} className="notepad-action-btn">
+              <span className="action-bracket">[</span>
+              CREATE NEW FILE
+              <span className="action-bracket">]</span>
+            </button>
+            <button onClick={openFileDialog} className="notepad-action-btn">
+              <span className="action-bracket">[</span>
+              OPEN EXISTING FILE
+              <span className="action-bracket">]</span>
+            </button>
+          </div>
+
+          {recentFiles.length > 0 && (
+            <div className="notepad-recent-files">
+              <div className="notepad-recent-title">RECENT FILES:</div>
+              <div className="notepad-recent-list">
+                {recentFiles.map(path => (
+                  <div
+                    key={path}
+                    onClick={() => openFile(path)}
+                    className="notepad-recent-item"
+                  >
+                    <div className="recent-item-border" />
+                    <span className="recent-path">{path}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="notepad-container" onContextMenu={handleContextMenu}>
-      {/* Menu bar */}
-      <div className="notepad-menubar">
-        <button onClick={createNew} className="notepad-menu-btn">New</button>
-        <button onClick={openFileDialog} className="notepad-menu-btn">Open</button>
-        <button onClick={save} disabled={!unsavedChanges} className="notepad-menu-btn">
-          Save {unsavedChanges && '*'}
-        </button>
-        <div className="notepad-menubar-spacer" />
-        <div className="notepad-filepath">
-          {currentPath || 'Untitled'}
+    <div className="notepad-root">
+      {/* Background effects */}
+      <div className="notepad-bg-grid" />
+      <div className="notepad-scanlines" />
+      {particles.map(p => (
+        <div key={p.key} className="notepad-particle" style={{
+          left: p.left,
+          top: p.top,
+          animationDelay: p.animationDelay,
+          animationDuration: p.animationDuration
+        }} />
+      ))}
+
+      <div className="notepad-container" onContextMenu={handleContextMenu}>
+        {/* Header */}
+        <div className="notepad-header">
+          <div className="notepad-logo-container-small">
+            <DocumentIcon />
+          </div>
+          <div className="notepad-title-group">
+            <h1 className="notepad-title">
+              <span className="notepad-bracket">[</span>
+              NOTEPAD
+              <span className="notepad-bracket">]</span>
+            </h1>
+            <div className="notepad-subtitle">Text Editor</div>
+          </div>
         </div>
-      </div>
 
-      {/* Editor */}
-      <textarea 
-        value={content} 
-        onChange={e => handleContentChange(e.target.value)} 
-        onContextMenu={handleContextMenu}
-        placeholder="Start typing..."
-        className="notepad-editor"
-      />
+        {/* Menu bar */}
+        <div className="notepad-menubar">
+          <button onClick={createNew} className="notepad-menu-btn">
+            <span className="btn-bracket">[</span>NEW<span className="btn-bracket">]</span>
+          </button>
+          <button onClick={openFileDialog} className="notepad-menu-btn">
+            <span className="btn-bracket">[</span>OPEN<span className="btn-bracket">]</span>
+          </button>
+          <button onClick={save} disabled={!unsavedChanges} className="notepad-menu-btn">
+            <span className="btn-bracket">[</span>SAVE{unsavedChanges && ' *'}<span className="btn-bracket">]</span>
+          </button>
+          <div className="notepad-menubar-spacer" />
+          <div className="notepad-filepath">
+            <span className="path-label">FILE:</span>
+            <span className="path-value">{currentPath || 'Untitled'}</span>
+          </div>
+        </div>
 
-      {/* Status bar */}
-      <div className="notepad-statusbar">
-        <span className="notepad-status-left">{unsavedChanges ? 'Modified' : 'Saved'}</span>
-        <span className="notepad-status-right">{content.length} characters | {content.split('\n').length} lines</span>
+        {/* Editor */}
+        <textarea 
+          value={content} 
+          onChange={e => handleContentChange(e.target.value)} 
+          onContextMenu={handleContextMenu}
+          placeholder="START TYPING..."
+          className="notepad-editor"
+        />
+
+        {/* Status bar */}
+        <div className="notepad-statusbar">
+          <span className="notepad-status-left">
+            <span className="status-bracket">[</span>
+            {unsavedChanges ? 'MODIFIED' : 'SAVED'}
+            <span className="status-bracket">]</span>
+          </span>
+          <span className="notepad-status-right">
+            {content.length} CHARS | {content.split('\n').length} LINES
+          </span>
+        </div>
       </div>
 
       {/* Context Menu */}

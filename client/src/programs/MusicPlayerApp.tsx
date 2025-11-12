@@ -5,6 +5,26 @@ import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, ShuffleIcon, Repeat
 import './MusicPlayerApp.css'
 import { getCachedDesktop, saveDesktopState } from '../services/saveService'
 
+// Floating Music Icon Component
+const MusicIcon: React.FC<{ size?: number }> = ({ size = 48 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ filter: 'drop-shadow(0 0 8px rgba(var(--color-primary-rgb, 0, 255, 65), 0.6))' }}
+  >
+    <path
+      d="M9 18V5L21 3V16M9 18C9 19.6569 7.65685 21 6 21C4.34315 21 3 19.6569 3 18C3 16.3431 4.34315 15 6 15C7.65685 15 9 16.3431 9 18ZM21 16C21 17.6569 19.6569 19 18 19C16.3431 19 15 17.6569 15 16C15 14.3431 16.3431 13 18 13C19.6569 13 21 14.3431 21 16Z"
+      stroke="var(--color-primary, #00ff41)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 interface Track {
   id: number
   title: string
@@ -165,6 +185,8 @@ export const MusicPlayerApp: React.FC = () => {
   const [playQueue, setPlayQueue] = useState<Track[]>([])
   const [showPlaylistManager, setShowPlaylistManager] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track?: Track } | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   // Ensure initial restore only happens once and never overrides user actions later
   const didRestoreRef = useRef(false)
 
@@ -494,152 +516,268 @@ export const MusicPlayerApp: React.FC = () => {
     setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')
   }
 
+  const handleContextMenu = (e: React.MouseEvent, track?: Track) => {
+    e.preventDefault()
+    const container = containerRef.current
+    if (container) {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left + container.scrollLeft
+      const y = e.clientY - rect.top + container.scrollTop
+      setContextMenu({ x, y, track })
+    } else {
+      setContextMenu({ x: e.clientX, y: e.clientY, track })
+    }
+  }
+
+  const closeContextMenu = () => {
+    setContextMenu(null)
+  }
+
+  // Close context menu when clicking anywhere
+  useEffect(() => {
+    if (contextMenu) {
+      const handleClick = () => closeContextMenu()
+      document.addEventListener('click', handleClick)
+      return () => document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu])
+
+  // Memoized particles for background effects
+  const particles = React.useMemo(() => (
+    Array.from({ length: 12 }).map((_, i) => ({
+      key: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${15 + Math.random() * 10}s`
+    }))
+  ), [])
+
   return (
-    <div className="music-player-container">
-      {/* Hidden global audio lives outside; we only show UI here */}
-      {/* Playback persists when minimized because audio element is not unmounted */}
+  <div className="music-player-root" ref={containerRef} onContextMenu={handleContextMenu}>
+      {/* Background Effects */}
+      <div className="music-bg-grid" />
+      <div className="music-scanlines" />
+      {particles.map(particle => (
+        <div
+          key={particle.key}
+          className="music-particle"
+          style={{
+            left: particle.left,
+            top: particle.top,
+            animationDelay: particle.animationDelay,
+            animationDuration: particle.animationDuration
+          }}
+        />
+      ))}
 
-      {/* Now Playing */}
-      <div className="music-player-header">
-        <div className="now-playing">
-          <div className="album-art">
-            <NoteIcon size={32} />
-          </div>
-          <div className="track-info">
-            <div className="track-title">
-              {currentTrack?.title || 'No track selected'}
+      {/* Main Container */}
+      <div className="music-player-container">
+        {/* Hidden global audio lives outside; we only show UI here */}
+        {/* Playback persists when minimized because audio element is not unmounted */}
+
+        {/* Header Section */}
+        <div className="music-player-header">
+          <div className="header-top">
+            {/* Floating logo */}
+            <div className="music-logo">
+              <MusicIcon size={48} />
             </div>
-            <div className="track-artist">
-              {currentTrack?.artist || 'Select a track to play'}
+            
+            <div className="title-group">
+              <h1 className="header-title">
+                <span className="bracket">[</span>MUSIC PLAYER<span className="bracket">]</span>
+              </h1>
+              <div className="header-subtitle">AUDIO PLAYBACK SYSTEM v2.0</div>
             </div>
           </div>
-        </div>
 
-        {/* Progress bar */}
-        {currentTrack && (
-          <div className="progress-section">
-            <input
-              type="range"
-              min="0"
-              max={duration || 100}
-              value={currentTime}
-              onChange={handleSeek}
-              className="progress-bar"
-            />
-            <div className="progress-time">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
+          <div className="now-playing">
+            <div className="album-art">
+              <NoteIcon size={32} />
+            </div>
+            <div className="track-info">
+              <div className="track-title">
+                {currentTrack?.title || 'No track selected'}
+              </div>
+              <div className="track-artist">
+                {currentTrack?.artist || 'Select a track to play'}
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Controls */}
-        <div className="player-controls">
-          <button 
-            onClick={() => setShuffle(!shuffle)}
-            className="control-btn"
-            style={{ opacity: shuffle ? 1 : 0.5 }}
-            title="Shuffle"
-          >
-            <ShuffleIcon size={20} />
-          </button>
-          <button onClick={playPrev} disabled={!currentTrack} className="control-btn">
-            <SkipBackIcon size={20} />
-          </button>
-          <button onClick={togglePlay} disabled={!currentTrack} className="control-btn play-btn" title={isPlaying ? 'Pause' : 'Play'}>
-            {isPlaying ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
-          </button>
-          <button onClick={playNext} disabled={!currentTrack} className="control-btn">
-            <SkipForwardIcon size={20} />
-          </button>
-          <button 
-            onClick={cycleRepeat}
-            className="control-btn"
-            style={{ opacity: repeat !== 'off' ? 1 : 0.5 }}
-            title={repeat === 'off' ? 'Repeat Off' : repeat === 'all' ? 'Repeat All' : 'Repeat One'}
-          >
-            {repeat === 'one' ? <RepeatOneIcon size={20} /> : <RepeatIcon size={20} />}
-          </button>
-          <div className="volume-control">
-            <VolumeIcon size={20} />
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={volume}
-              onChange={(e) => setVolume(parseFloat(e.target.value))}
-              style={{ width: 100 }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Playlist Selector & Manager */}
-      <div className="playlist-section">
-        <div className="playlist-controls">
-          <select 
-            value={currentPlaylistId}
-            onChange={(e) => setCurrentPlaylistId(e.target.value)}
-            className="playlist-select"
-          >
-            {playlists.map(p => (
-              <option key={p.id} value={p.id}>{p.name} ({p.tracks.length})</option>
-            ))}
-          </select>
-          <button onClick={() => setShowPlaylistManager(!showPlaylistManager)}>
-            {showPlaylistManager ? '❌' : '➕'}
-          </button>
-        </div>
-        
-        {showPlaylistManager && (
-          <div className="playlist-manager">
-            <div className="playlist-manager-title">Create New Playlist</div>
-            <div className="playlist-create-row">
+          {/* Progress bar */}
+          {currentTrack && (
+            <div className="progress-section">
               <input
-                type="text"
-                value={newPlaylistName}
-                onChange={(e) => setNewPlaylistName(e.target.value)}
-                placeholder="Playlist name..."
-                className="playlist-name-input"
-                onKeyPress={(e) => e.key === 'Enter' && createPlaylist()}
+                type="range"
+                min="0"
+                max={duration || 100}
+                value={currentTime}
+                onChange={handleSeek}
+                className="progress-bar"
               />
-              <button onClick={createPlaylist} className="playlist-create-btn">Create</button>
+              <div className="progress-time">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
             </div>
-            {currentPlaylistId !== 'default' && (
+          )}
+
+          {/* Controls */}
+          <div className="player-controls">
+            <div className="controls-left">
               <button 
-                onClick={() => deletePlaylist(currentPlaylistId)}
-                className="delete-playlist-btn"
+                onClick={() => setShuffle(!shuffle)}
+                className={`control-btn ${shuffle ? 'active' : ''}`}
+                title="Shuffle"
               >
-                <RecycleBinIcon size={14} /> Delete Current Playlist
+                <ShuffleIcon size={14} />
               </button>
-            )}
+              <button 
+                onClick={cycleRepeat}
+                className={`control-btn ${repeat !== 'off' ? 'active' : ''}`}
+                title={repeat === 'off' ? 'Repeat Off' : repeat === 'all' ? 'Repeat All' : 'Repeat One'}
+              >
+                {repeat === 'one' ? <RepeatOneIcon size={14} /> : <RepeatIcon size={14} />}
+              </button>
+            </div>
+
+            <div className="controls-center">
+              <button onClick={playPrev} disabled={!currentTrack} className="control-btn">
+                <SkipBackIcon size={16} />
+              </button>
+              <button onClick={togglePlay} disabled={!currentTrack} className="control-btn play-btn" title={isPlaying ? 'Pause' : 'Play'}>
+                {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+              </button>
+              <button onClick={playNext} disabled={!currentTrack} className="control-btn">
+                <SkipForwardIcon size={16} />
+              </button>
+            </div>
+
+            <div className="controls-right">
+              <VolumeIcon size={14} />
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="volume-slider"
+              />
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Playlist Selector & Manager */}
+        <div className="playlist-section">
+          <div className="playlist-controls">
+            <select 
+              value={currentPlaylistId}
+              onChange={(e) => setCurrentPlaylistId(e.target.value)}
+              className="playlist-select"
+            >
+              {playlists.map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.tracks.length})</option>
+              ))}
+            </select>
+            <button 
+              onClick={() => setShowPlaylistManager(!showPlaylistManager)}
+              className="playlist-toggle-btn"
+            >
+              <span className="bracket">[</span>
+              {showPlaylistManager ? '✕' : '+'}
+              <span className="bracket">]</span>
+            </button>
+          </div>
+          
+          {showPlaylistManager && (
+            <div className="playlist-manager">
+              <div className="playlist-manager-title">
+                <span className="bracket">[</span>CREATE NEW PLAYLIST<span className="bracket">]</span>
+              </div>
+              <div className="playlist-create-row">
+                <input
+                  type="text"
+                  value={newPlaylistName}
+                  onChange={(e) => setNewPlaylistName(e.target.value)}
+                  placeholder="Enter playlist name..."
+                  className="playlist-name-input"
+                  onKeyPress={(e) => e.key === 'Enter' && createPlaylist()}
+                />
+                <button onClick={createPlaylist} className="playlist-create-btn">
+                  <span className="bracket">[</span>CREATE<span className="bracket">]</span>
+                </button>
+              </div>
+              {currentPlaylistId !== 'default' && (
+                <button 
+                  onClick={() => deletePlaylist(currentPlaylistId)}
+                  className="delete-playlist-btn"
+                >
+                  <RecycleBinIcon size={14} /> 
+                  <span className="bracket">[</span>DELETE CURRENT<span className="bracket">]</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Playlist */}
+        <div className="track-list-container">
+          <div className="track-list-header">
+            <span className="bracket">[</span>
+            {currentPlaylist?.name || 'Playlist'} — {tracks.length} TRACKS
+            <span className="bracket">]</span>
+          </div>
+          {tracks.map(track => (
+            <div
+              key={track.id}
+              onClick={() => playTrack(track)}
+              onContextMenu={(e) => handleContextMenu(e, track)}
+              className={`track-item ${currentTrack?.id === track.id ? 'active' : ''}`}
+            >
+              <div className="track-icon">
+                {currentTrack?.id === track.id && isPlaying ? <VolumeIcon size={16} /> : <NoteIcon size={16} />}
+              </div>
+              <div className="track-details">
+                <div className="track-details-title">{track.title}</div>
+                <div className="track-details-artist">{track.artist}</div>
+              </div>
+              <div className="track-duration">
+                <span className="bracket">[</span>{track.duration}<span className="bracket">]</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Playlist */}
-      <div className="track-list-container">
-        <div className="track-list-header">
-          📀 {currentPlaylist?.name || 'Playlist'} ({tracks.length} tracks)
-        </div>
-        {tracks.map(track => (
-          <div
-            key={track.id}
-            onClick={() => playTrack(track)}
-            className={`track-item ${currentTrack?.id === track.id ? 'active' : ''}`}
-          >
-            <div className="track-icon">
-              {currentTrack?.id === track.id && isPlaying ? <VolumeIcon size={16} /> : <NoteIcon size={16} />}
-            </div>
-            <div className="track-details">
-              <div className="track-details-title">{track.title}</div>
-              <div className="track-details-artist">{track.artist}</div>
-            </div>
-            <div className="track-duration">{track.duration}</div>
+      {/* Custom Context Menu */}
+      {contextMenu && (
+        <div 
+          className="music-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {contextMenu.track && (
+            <>
+              <div className="context-menu-item" onClick={() => { playTrack(contextMenu.track!); closeContextMenu(); }}>
+                <PlayIcon size={14} /> Play Track
+              </div>
+              <div className="context-menu-divider" />
+            </>
+          )}
+          <div className="context-menu-item" onClick={() => { setShuffle(!shuffle); closeContextMenu(); }}>
+            <ShuffleIcon size={14} /> {shuffle ? 'Disable' : 'Enable'} Shuffle
           </div>
-        ))}
-      </div>
+          <div className="context-menu-item" onClick={() => { cycleRepeat(); closeContextMenu(); }}>
+            {repeat === 'one' ? <RepeatOneIcon size={14} /> : <RepeatIcon size={14} />} Repeat: {repeat === 'off' ? 'Off' : repeat === 'all' ? 'All' : 'One'}
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={() => { setShowPlaylistManager(!showPlaylistManager); closeContextMenu(); }}>
+            + Manage Playlists
+          </div>
+        </div>
+      )}
     </div>
   )
 }

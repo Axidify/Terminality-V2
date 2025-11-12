@@ -6,7 +6,7 @@
   font-family: 'Courier New', monospace;
   font-size: 10px;
   color: var(--color-primary);
-  z-index: 5;
+  z-index: 1; /* Keep system monitor behind app windows; windows use zCounter > 100 */
   backdrop-filter: blur(8px);
   letter-spacing: 0.5px;
   text-transform: uppercase;

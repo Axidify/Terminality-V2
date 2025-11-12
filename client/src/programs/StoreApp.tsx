@@ -18,11 +18,45 @@ const getInstalledTools = (): string[] => cached?.installedTools ?? []
 const getCurrency = (): number => cached?.playerCurrency ?? 1000
 const setCurrency = (amount: number) => { saveDesktopState({ playerCurrency: amount }).catch(() => {}) }
 
+const CartIcon: React.FC = () => (
+  <svg className="store-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 30 L25 60 L75 60 L80 30 Z" stroke="currentColor" strokeWidth="3" fill="none"/>
+    <circle cx="35" cy="75" r="5" fill="currentColor"/>
+    <circle cx="65" cy="75" r="5" fill="currentColor"/>
+    <path d="M10 20 L20 20 L25 40" stroke="currentColor" strokeWidth="3" fill="none"/>
+    <line x1="30" y1="45" x2="70" y2="45" stroke="currentColor" strokeWidth="2"/>
+    <line x1="32" y1="52" x2="68" y2="52" stroke="currentColor" strokeWidth="2"/>
+  </svg>
+)
+
 export const StoreApp: React.FC = () => {
   const [query, setQuery] = React.useState('')
   const [currency, setCurrencyState] = React.useState(getCurrency())
   const [installedTools, setInstalledTools] = React.useState<string[]>(getInstalledTools())
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all')
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null)
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const container = containerRef.current
+    if (container) {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left + container.scrollLeft
+      const y = e.clientY - rect.top + container.scrollTop
+      setContextMenu({ x, y })
+    } else {
+      setContextMenu({ x: e.clientX, y: e.clientY })
+    }
+  }
+
+  const closeContextMenu = () => setContextMenu(null)
+
+  React.useEffect(() => {
+    const handleClick = () => closeContextMenu()
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [])
 
   const tools: Tool[] = [
     { 
@@ -92,7 +126,7 @@ export const StoreApp: React.FC = () => {
       id: 'proxy-chain', 
       name: 'Proxy Chain', 
       desc: 'Route traffic through multiple proxies for anonymity', 
-      icon: '[NET]', 
+      icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/><path d="M8 12h.01M14 12h.01"/></svg>, 
       price: 350,
       installed: installedTools.includes('proxy-chain'),
       category: 'stealth'
@@ -123,77 +157,136 @@ export const StoreApp: React.FC = () => {
   })
 
   return (
-    <div className="store">
+  <div className="store-root" ref={containerRef} onContextMenu={handleContextMenu}>
+      {/* Background effects */}
+      <div className="store-bg-grid" />
+      <div className="store-scanlines" />
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={i} className="store-particle" style={{
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 5}s`,
+          animationDuration: `${10 + Math.random() * 10}s`
+        }} />
+      ))}
+
+      {/* Header */}
       <div className="store-header">
-        <div className="store-title-section">
-          <div className="store-title">Terminality Store</div>
-          <div className="store-currency">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
-              <line x1="12" y1="1" x2="12" y2="23"/>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-            Credits: {currency}
-          </div>
+        <div className="store-logo-container">
+          <CartIcon />
         </div>
-        <div className="store-controls">
-          <input
-            className="store-search"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search tools..."
-          />
+        <div className="store-title-group">
+          <h1 className="store-title">
+            <span className="store-bracket">[</span>
+            TOOL STORE
+            <span className="store-bracket">]</span>
+          </h1>
+          <div className="store-subtitle">Advanced Security Tools</div>
+        </div>
+        <div className="store-currency">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="12" y1="1" x2="12" y2="23"/>
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+          <span className="currency-label">CREDITS:</span>
+          <span className="currency-amount">{currency}</span>
         </div>
       </div>
 
+      {/* Search bar */}
+      <div className="store-search-container">
+        <input
+          className="store-search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="SEARCH TOOLS..."
+        />
+      </div>
+
+      {/* Categories */}
       <div className="store-categories">
         {['all', 'forensics', 'hacking', 'stealth', 'analysis'].map(cat => (
           <button
             key={cat}
-            className={`category-btn ${selectedCategory === cat ? 'active' : ''}`}
+            className={`store-category-btn ${selectedCategory === cat ? 'active' : ''}`}
             onClick={() => setSelectedCategory(cat)}
           >
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            <span className="category-bracket">[</span>
+            {cat.toUpperCase()}
+            <span className="category-bracket">]</span>
           </button>
         ))}
       </div>
 
+      {/* Content */}
       <div className="store-content">
         <div className="store-grid">
           {filtered.map(tool => (
             <div key={tool.id} className={`store-card ${tool.installed ? 'installed' : ''}`}>
-              <div className="store-icon">{tool.icon}</div>
-              <div className="store-name">{tool.name}</div>
-              <div className="store-desc">{tool.desc}</div>
-              <div className="store-footer">
-                <div className="store-price">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
-                    <line x1="12" y1="1" x2="12" y2="23"/>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                  </svg>
-                  {tool.price}
+              <div className="store-card-border" />
+              <div className="store-card-content">
+                <div className="store-icon">{tool.icon}</div>
+                <div className="store-name">{tool.name}</div>
+                <div className="store-desc">{tool.desc}</div>
+                <div className="store-footer">
+                  <div className="store-price">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="1" x2="12" y2="23"/>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    {tool.price}
+                  </div>
+                  <button 
+                    className="store-btn" 
+                    onClick={() => handleInstall(tool)}
+                    disabled={tool.installed || currency < tool.price}
+                  >
+                    {tool.installed ? (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        INSTALLED
+                      </>
+                    ) : 'INSTALL'}
+                  </button>
                 </div>
-                <button 
-                  className="store-btn" 
-                  onClick={() => handleInstall(tool)}
-                  disabled={tool.installed || currency < tool.price}
-                >
-                  {tool.installed ? (
-                    <>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                      Installed
-                    </>
-                  ) : 'Install'}
-                </button>
               </div>
             </div>
           ))}
         </div>
         {filtered.length === 0 && (
-          <div className="store-empty">No tools found</div>
+          <div className="store-empty">
+            <div className="empty-bracket">[</div>
+            NO TOOLS FOUND
+            <div className="empty-bracket">]</div>
+          </div>
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="store-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div className="context-menu-item" onClick={() => { setQuery(''); setSelectedCategory('all'); closeContextMenu() }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path fillRule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+              <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+            </svg>
+            Refresh Store
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={() => { alert(`Terminality Store\nCurrency: ${currency}¤\nTools: ${tools.length}`); closeContextMenu() }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+              <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+            </svg>
+            About Store
+          </div>
+        </div>
+      )}
     </div>
   )
 }

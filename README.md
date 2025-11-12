@@ -19,6 +19,121 @@ Open http://localhost:5173 in your browser.
 - `src/services` – API/auth/state persistence services
 - `src/test` – Integration and component tests (Vitest + Testing Library)
 
+## Cyberpunk Terminal Design Language
+
+Terminality uses a consistent retro-futuristic aesthetic inspired by classic terminal UIs and cyberpunk media. When designing new components or apps, follow these principles:
+
+### System Color Palette
+- **Primary Color**: `#00b380` (Teal/Cyan Green) - RGB: `0, 179, 128`
+  - Used for: text highlights, borders, glows, interactive elements
+  - CSS Variables: `var(--color-primary)` and `var(--color-primary-rgb)`
+  - Hover/Active states: Slightly lighter tint (e.g., `#00d89f`)
+
+### Visual Elements
+- **Grid Backgrounds**: Subtle grid patterns using `rgba(var(--color-primary-rgb), 0.05)` at 40-50px intervals
+- **Scanlines**: Horizontal repeating gradients for CRT effect with 8s infinite animation
+- **Particles**: Small floating 2px dots with glow effects (`box-shadow: 0 0 6px var(--color-primary)`)
+- **Radial Gradients**: Elliptical gradients from primary color (5-8% opacity) to background
+
+### Typography
+- **Font**: `'Courier New', monospace` exclusively
+- **Sizing**: Use `clamp()` for responsive text (e.g., `clamp(18px, 2vw, 24px)`)
+- **Letter Spacing**: 4-8px for titles, 1-2px for body text, all uppercase for UI labels
+- **Text Shadow**: Multi-layer glows using `text-shadow: 0 0 10px rgba(...), 0 0 20px rgba(...), 0 0 30px rgba(...)`
+- **Brackets**: Use `[` `]` as decorative elements with pulsing animations (0.5-1 opacity cycle)
+
+### Colors & Theming
+- **Always use CSS variables**: `var(--color-primary)`, `var(--color-text)`, `var(--color-background)`
+- **RGBA patterns**: `rgba(var(--color-primary-rgb), opacity)` for transparency
+- **Opacity levels**: 
+  - Borders: 0.3-0.4 (hover: 0.6-1.0)
+  - Backgrounds: 0.4-0.7 for panels, 0.85+ for focused inputs
+  - Text dim: 0.5-0.7
+
+### Component Styling
+- **Borders**: 2px solid borders using `rgba(var(--color-primary-rgb), 0.4)`
+- **Border Radius**: 4-6px for modern feel within retro aesthetic
+- **Box Shadows**: 
+  - Outer: `0 0 20px rgba(var(--color-primary-rgb), 0.4)` for glow
+  - Inner: `inset 0 0 20px rgba(0, 0, 0, 0.3)` for depth
+- **Backdrop Blur**: `backdrop-filter: blur(4-8px)` for glassmorphism
+- **Transitions**: `all 0.3s ease` for smooth interactions
+
+### Context Menu Guidelines
+
+Context menus across programs should follow the system's context menu design language for a consistent look and behavior. Use `client/src/os/ContextMenu.tsx` as the canonical reference implementation and the CSS variables listed above for theming.
+
+- Files to edit:
+  - CSS: `client/src/programs/*App.css` (e.g., `MusicPlayerApp.css`, `RecycleBinApp.css`)
+  - TSX: `client/src/programs/*App.tsx` for event wiring and `client/src/os/ContextMenu.tsx` for keyboard/accessibility reference
+- Styling tokens (CSS variables):
+  - Use `var(--color-surface)`, `var(--color-border)`, `var(--color-background)`, `var(--color-shadow)`, `var(--color-glow)`, `var(--color-primary-rgb)`, and `var(--color-text)` for all color work.
+  - Container: `border: 2px solid var(--color-border); background: var(--color-surface); box-shadow: 0 0 20px var(--color-shadow), inset 0 0 2px var(--color-glow); padding: 4px 0;`
+  - Items: `padding: 8px 16px; font-size: 14px; gap: 12px; color: var(--color-text);` — No `text-transform: uppercase` for menu items (we preserve normal case and use consistent font sizes in menus).
+  - Hover: `background: var(--color-background); box-shadow: inset 0 0 12px rgba(var(--color-primary-rgb), 0.2), 0 0 12px rgba(var(--color-primary-rgb), 0.3); text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);`
+  - Divider: `height: 1px; background: var(--color-border); margin: 4px 8px; opacity: 0.5;`
+
+- Icons:
+  - Use inline SVG with `width`/`height` 14 and `stroke` or `fill` set to `currentColor`. Keep icons monotone so they inherit the menu's text color.
+  - Example:
+  ```tsx
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9 12l-4-4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+  ```
+
+- Positioning (container-relative):
+  - Context menus should be positioned absolutely inside the app window container (not fixed to the viewport). Use a `containerRef` in the app, compute the mouse coordinates relative to the container using `getBoundingClientRect()` (plus scroll offsets), and set the menu `top`/`left` while clamping to container bounds.
+  - Example positioning logic (TSX):
+  ```tsx
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+
+  const openContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const bounds = containerRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const x = e.clientX - bounds.left + (containerRef.current?.scrollLeft || 0);
+    const y = e.clientY - bounds.top + (containerRef.current?.scrollTop || 0);
+    const MENU_W = 180; const MENU_H = 180; // estimate or measure
+    const clampX = Math.max(8, Math.min(x, bounds.width - MENU_W - 8));
+    const clampY = Math.max(8, Math.min(y, bounds.height - MENU_H - 8));
+    setMenuPos({ x: clampX, y: clampY });
+  };
+  ```
+
+- Accessibility & Keyboard Navigation:
+  - Follow `ContextMenu.tsx` for `role="menu"`, `role="menuitem"`, and keyboard handlers (ArrowUp/ArrowDown to move focus, Enter to activate, Escape to close).
+  - Ensure focus trapping and proper ARIA attributes if the menu is modal or overlays interactive content.
+
+- Testing & Validation:
+  1. Run `npm run dev` from `client/` to view in the browser.
+  2. Right-click or trigger the menu in several scenarios (near edges, top-left, scrolled containers) and verify the menu doesn't overflow the container.
+  3. Test keyboard navigation (Arrow Up/Down/Enter/Escape) and screen-reader accessibility if applicable.
+  4. Verify color themes (dark, light, and any custom themes) pick up CSS variables properly.
+
+If you update or add a new context menu component, replicate the above pattern and use `client/src/os/ContextMenu.tsx` as a reference for markup and keyboard behavior.
+
+### Interactive States
+- **Hover**: Increase border opacity to 1.0, add transform: `translateY(-2px)`, enhance glow
+- **Active/Focus**: Darker background (0.85+), stronger shadows, animated text-shadow glow
+- **Disabled**: Reduce opacity to 0.5, remove pointer events
+- **Shine Effect**: Use `::before` pseudo-element with gradient sweep on hover
+
+### Animations
+- **Scanlines**: `translateY(0)` to `translateY(4px)` over 8s
+- **Particles**: Float with opacity fade (0 → 0.5 → 0) over 8-15s
+- **Brackets/Logo**: Gentle pulse or float with 2-4s ease-in-out
+- **Buttons**: Quick transform and glow on hover (<0.3s)
+
+### Layout Patterns
+- **Headers**: Dark background (rgba 0.6), strong borders (2px), 20-24px padding
+- **Toolbars**: Medium background (rgba 0.5), 12-20px padding, flex with gap: 10-12px
+- **Content**: Minimal background or transparent, focus on border definition
+- **Status Bars**: Match headers but inverted (border-top instead of border-bottom)
+
+Reference implementations: `HomePage.css` (lock screen), `AppStoreApp.css`, `MiniBrowserApp.css`
+
 ## Scripts
 
 ```powershell
@@ -49,6 +164,18 @@ Vitest 2.x with jsdom:
 npm test
 ```
 Add tests beside components with `*.test.tsx` or integration in `src/test/*integration.test.tsx`.
+
+## Updating Version & About Page
+
+When releasing a new version:
+
+1. **Update version number**: Edit `client/src/version.ts` and update `VERSION` and `BUILD_DATE`
+2. **Update changelogs**: Add new version entry to the top of both:
+   - `CHANGELOG.md` (root)
+   - `client/public/CHANGELOG.md`
+3. **Format**: Follow existing changelog format with Added/Changed/Fixed sections
+4. **Order**: Newest version should appear first (chronological: newest → oldest)
+5. **About page**: SystemSettingsApp will automatically pull from the public changelog
 
 ## Session Expiry Handling
 A global `SessionExpiredOverlay` listens for 401 responses and prompts a re-auth / refresh.

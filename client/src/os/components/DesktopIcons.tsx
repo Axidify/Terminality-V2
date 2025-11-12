@@ -80,7 +80,7 @@ const baseIcons: DesktopIconDef[] = [
     icon: <MusicIcon size={50} />, 
     x: 130, 
     y: 20,
-    defaultOpts: { title: 'Music Player', width: 450, height: 520 } 
+    defaultOpts: { title: 'Music Player', width: 427, height: 800 } 
   },
   { 
     type: 'settings', 
@@ -96,7 +96,7 @@ const baseIcons: DesktopIconDef[] = [
     icon: <ChatIcon size={50} />, 
     x: 130, 
     y: 220,
-    defaultOpts: { title: 'Chat', width: 400, height: 500 } 
+    defaultOpts: { title: 'Chat', width: 400, height: 800 } 
   },
   { 
     type: 'store', 
@@ -113,6 +113,15 @@ const baseIcons: DesktopIconDef[] = [
       x: 130,
       y: 420,
       defaultOpts: { title: 'Profile', width: 460, height: 700 }
+    }
+    ,
+    { 
+      type: 'modular',
+      name: 'App Store',
+      icon: <StoreIcon size={50} />,
+      x: 130,
+      y: 520,
+      defaultOpts: { title: 'App Store', width: 1200, height: 800 }
     }
 ]
 

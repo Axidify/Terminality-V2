@@ -17,6 +17,8 @@ import { EmailApp } from '../programs/EmailApp'
 import { FileExplorerApp } from '../programs/FileExplorerApp'
 import { MiniBrowserApp } from '../programs/MiniBrowserApp'
 import { MusicPlayerApp } from '../programs/MusicPlayerApp'
+import { AppStoreApp } from '../programs/AppStoreApp'
+import { PluginHost } from '../programs/PluginHost'
 import { NotepadApp } from '../programs/NotepadApp'
 import { RecycleBinApp } from '../programs/RecycleBinApp'
 import { StoreApp } from '../programs/StoreApp'
@@ -27,6 +29,15 @@ import './Desktop.css'
 interface DesktopProps {
   onLock: () => void
 }
+
+// Generate particles once outside component to prevent regeneration on re-render
+const particles = Array.from({ length: 15 }).map((_, i) => ({
+  key: i,
+  left: `${Math.random() * 100}%`,
+  top: `${Math.random() * 100}%`,
+  animationDelay: `${Math.random() * 5}s`,
+  animationDuration: `${10 + Math.random() * 15}s`
+}))
 
 export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
   const wm = useWindowManager()
@@ -59,7 +70,18 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
     <DesktopContainer onAutoArrange={handleAutoArrange}>
       <div className={`desktop ${isExiting ? 'exiting' : ''}`}>
         {/* Desktop Background - visual only */}
-        <div className="desktop-bg" />
+        <div className="desktop-bg">
+          <div className="desktop-bg-grid" />
+          <div className="desktop-scanlines" />
+          {particles.map(p => (
+            <div key={p.key} className="desktop-particle" style={{
+              left: p.left,
+              top: p.top,
+              animationDelay: p.animationDelay,
+              animationDuration: p.animationDuration
+            }} />
+          ))}
+        </div>
         
         {/* Clickable background layer for context menu */}
         <div className="desktop-clickable-bg" />
@@ -84,6 +106,8 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
             {win.type === 'email' && <EmailApp />}
             {win.type === 'chat' && <ChatApp />}
             {win.type === 'music' && <MusicPlayerApp />}
+            {win.type === 'modular-plugin' && <PluginHost pluginId={(win.payload as any)?.pluginId} />}
+            {win.type === 'modular' && <AppStoreApp />}
             {win.type === 'settings' && <SystemSettingsApp payload={win.payload as any} />}
             {win.type === 'store' && <StoreApp />}
             {win.type === 'profile' && <ProfileApp />}

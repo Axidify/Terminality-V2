@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react'
 import { sounds } from './SoundEffects'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 
-export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt'
+export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt' | 'modular' | 'modular-plugin'
 
 export interface WindowInstance {
   id: string
@@ -38,7 +38,7 @@ interface WMContextValue {
 
 const WindowManagerContext = createContext<WMContextValue | undefined>(undefined)
 
-let zCounter = 1
+let zCounter = 100
 
 interface WindowMemory {
   [key: string]: { x: number; y: number; width: number; height: number }

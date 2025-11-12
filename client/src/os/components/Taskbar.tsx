@@ -21,11 +21,11 @@ const apps: AppDefinition[] = [
   { type: 'notepad', name: 'Notepad', icon: <NotepadIcon size={20} />, defaultOpts: { title: 'Notepad', width: 1200, height: 800 } },
   { type: 'browser', name: 'Browser', icon: <BrowserIcon size={20} />, defaultOpts: { title: 'Browser', width: 1200, height: 800 } },
   { type: 'store', name: 'Store', icon: <StoreIcon size={20} />, defaultOpts: { title: 'Terminality Store', width: 1200, height: 800 } },
-  { type: 'music', name: 'Music', icon: <MusicIcon size={20} />, defaultOpts: { title: 'Music Player', width: 550, height: 620 } },
+  { type: 'music', name: 'Music', icon: <MusicIcon size={20} />, defaultOpts: { title: 'Music Player', width: 427, height: 800 } },
   { type: 'settings', name: 'Settings', icon: <SettingsIcon size={20} />, defaultOpts: { title: 'System Settings', width: 1200, height: 800 } },
   { type: 'recycle', name: 'Recycle Bin', icon: <RecycleBinIcon size={20} />, defaultOpts: { title: 'Recycle Bin', width: 1000, height: 760 } },
   { type: 'email', name: 'Mail', icon: <MailIcon size={20} />, defaultOpts: { title: 'Mail', width: 1200, height: 800 } },
-  { type: 'chat', name: 'Chat', icon: <ChatIcon size={20} />, defaultOpts: { title: 'Chat', width: 500, height: 600 } },
+  { type: 'chat', name: 'Chat', icon: <ChatIcon size={20} />, defaultOpts: { title: 'Chat', width: 400, height: 800 } },
   { type: 'profile', name: 'Profile', icon: <Icon name="user" size={20} />, defaultOpts: { title: 'Profile', width: 460, height: 700 } },
 ]
 

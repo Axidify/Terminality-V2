@@ -36,7 +36,7 @@ describe('UserManagementApp user deletion integration', () => {
   it('deletes a user and removes from UI list', async () => {
     render(<UserManagementApp />)
     // Wait for users to load
-    await waitFor(() => expect(screen.getByText('User Management')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('USER MANAGEMENT')).toBeInTheDocument())
     // Ensure target user present
     expect(screen.getByText('deleteme')).toBeInTheDocument()
     // Find the delete button for the non-self user
@@ -47,7 +47,7 @@ describe('UserManagementApp user deletion integration', () => {
 
   it('cannot delete self (button disabled)', async () => {
     render(<UserManagementApp />)
-    await waitFor(() => expect(screen.getByText('User Management')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('USER MANAGEMENT')).toBeInTheDocument())
     // Get all DELETE buttons
     const allDeleteButtons = screen.getAllByText('DELETE')
     // First one should be disabled (for self/admin)
