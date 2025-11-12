@@ -501,6 +501,29 @@ body {
   margin-top: 6px;
 }
 
+.home-forgot-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: clamp(10px, 1vw, 12px);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+  margin-top: 4px;
+}
+
+.home-forgot-link:hover {
+  opacity: 1;
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);
+}
+
+/* Center Google Sign-in button */
+.home-button-group > div {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 /* Status Bar */
 .home-status-bar {
   position: fixed;
