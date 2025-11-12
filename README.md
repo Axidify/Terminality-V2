@@ -250,6 +250,17 @@ SQLite quick demo (not recommended for production):
    - Root Directory: `client`
   - Build Command: use the one-liner above
   - Publish Directory: `dist`
+  
+#### SPA routing (rewrite rule)
+Single Page Apps need a rewrite so deep links like `/app` and `/reset` serve `index.html`.
+
+In your Render Static Site (frontend) service:
+- Settings → Redirects/Rewrites → Add Rule
+  - Source: `/*`
+  - Destination: `/index.html`
+  - Action: `Rewrite`
+
+Save and redeploy the static site. Without this rule, navigating directly to `/app` returns a 404 from the static host.
    
 ### Common pitfalls
 - If Render detects Python and asks for `requirements.txt`, the service was created with the wrong runtime. Delete it and re-create as a Node service with Root Directory set to `server`.
@@ -269,6 +280,7 @@ SQLite quick demo (not recommended for production):
 ### Post-deploy checklist
 - Verify API health: `GET https://your-api.onrender.com/api/state` returns JSON (requires auth for protected routes).
 - In the client, set `VITE_API_BASE` to the API origin and redeploy if changed.
+- Confirm SPA rewrite on the static site: `/* → /index.html (Rewrite)` so `/app` loads the SPA rather than 404.
 - If using Google sign-in:
   - Add your frontend origin to the Google OAuth client (Authorized JavaScript origins).
   - Set the authorized redirect URI to your server callback route.
