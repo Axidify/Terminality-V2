@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
+import { VERSION, BUILD_DATE } from '../version'
 import './SystemSettingsApp.css'
 
 type Tab = 'themes' | 'wallpapers' | 'specs' | 'about'
@@ -50,8 +51,12 @@ const getSpecValue = (component: string, level: number): string => {
   return values[component]?.[level - 1] || ''
 }
 
-export const SystemSettingsApp: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('themes')
+interface SystemSettingsAppProps {
+  payload?: { tab?: Tab }
+}
+
+export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload }) => {
+  const [activeTab, setActiveTab] = useState<Tab>(payload?.tab || 'themes')
   const { currentTheme: _currentTheme, themeName, setTheme } = useTheme()
   const wm = useWindowManager()
   const [previewTheme, setPreviewTheme] = useState<string>(themeName)
@@ -328,8 +333,8 @@ export const SystemSettingsApp: React.FC = () => {
                 <line x1="12" y1="17" x2="12" y2="21"/>
               </svg>
               <h1>Terminality OS</h1>
-              <p className="version">Version 0.5.3</p>
-              <p className="release-date">Released November 10, 2025</p>
+              <p className="version">Version {VERSION}</p>
+              <p className="release-date">Released {BUILD_DATE}</p>
             </div>
 
             <div className="changelog-section">

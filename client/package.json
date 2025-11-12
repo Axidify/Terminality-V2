@@ -9,9 +9,10 @@
     "preview": "vite preview --port 5173",
     "test": "vitest run",
     "test:ui": "vitest",
-  "lint": "eslint src --ext .ts,.tsx",
-  "lint:ci": "eslint src --ext .ts,.tsx --max-warnings=0",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:ci": "eslint src --ext .ts,.tsx --max-warnings=0",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "version:bump": "node scripts/bump-version.js"
   },
   "dependencies": {
     "react": "18.3.1",

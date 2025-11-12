@@ -19,7 +19,6 @@ export const DesktopContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, 
   const menuRef = useRef<HTMLDivElement>(null)
   const wm = useWindowManager()
   const [soundsEnabled, setSoundsEnabled] = useState(sounds.isEnabled())
-  const [showAbout, setShowAbout] = useState(false)
   const { ref: _posRef, pos: position } = useContextMenuPosition(x, y)
 
   useEffect(() => { /* positioning handled by hook */ }, [x, y])
@@ -70,12 +69,8 @@ export const DesktopContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, 
   }
 
   const handleAbout = () => {
-    setShowAbout(true)
+    wm.open('settings', { title: 'System Settings', width: 1200, height: 800, payload: { tab: 'about' } })
     sounds.click()
-  }
-
-  const handleCloseAbout = () => {
-    setShowAbout(false)
     onClose()
   }
 
@@ -96,94 +91,6 @@ export const DesktopContextMenu: React.FC<ContextMenuProps> = ({ x, y, onClose, 
           { label: 'Reset Window Sizes', icon: <ResetIcon size={14}/>, onClick: handleResetWindowSizes },
         ]}
       />
-
-    {showAbout && (
-      <div className="about-modal-overlay" onClick={handleCloseAbout}>
-        <div className="about-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="about-header">
-            <svg className="about-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-              <polygon 
-                points="50,5 90,25 90,65 50,85 10,65 10,25" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2"
-              />
-              <circle cx="50" cy="30" r="3" fill="currentColor" />
-              <circle cx="70" cy="45" r="3" fill="currentColor" />
-              <circle cx="50" cy="60" r="3" fill="currentColor" />
-              <circle cx="30" cy="45" r="3" fill="currentColor" />
-              <line x1="50" y1="30" x2="70" y2="45" stroke="currentColor" strokeWidth="1.5" />
-              <line x1="70" y1="45" x2="50" y2="60" stroke="currentColor" strokeWidth="1.5" />
-              <line x1="50" y1="60" x2="30" y2="45" stroke="currentColor" strokeWidth="1.5" />
-              <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
-              <circle cx="50" cy="45" r="8" fill="currentColor" />
-            </svg>
-            <h2>TERMINALITY OS</h2>
-            <div className="about-version">Version 1.0.0-alpha</div>
-          </div>
-          
-          <div className="about-content">
-            <div className="about-section">
-              <h3>About</h3>
-              <p>
-                Terminality is an immersive single-player mystery game that blends puzzle solving, 
-                deep online investigations, and narrative exploration within a retro terminal-based 
-                operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate 
-                through a mysterious digital world shrouded in intrigue.
-              </p>
-            </div>
-
-            <div className="about-section">
-              <h3>Features</h3>
-              <ul>
-                <li>Multi-window management with drag, resize, and minimize</li>
-                <li>File explorer with virtual filesystem</li>
-                <li>Terminal emulator with command execution</li>
-                <li>Music player with playlist support</li>
-                <li>Web browser for local sites</li>
-                <li>Email, chat, and social apps</li>
-                <li>Customizable themes and settings</li>
-              </ul>
-            </div>
-
-            <div className="about-section">
-              <h3>System Information</h3>
-              <div className="about-info-grid">
-                <div className="about-info-item">
-                  <span className="about-info-label">Architecture:</span>
-                  <span className="about-info-value">x64</span>
-                </div>
-                <div className="about-info-item">
-                  <span className="about-info-label">Kernel:</span>
-                  <span className="about-info-value">React 18</span>
-                </div>
-                <div className="about-info-item">
-                  <span className="about-info-label">Build:</span>
-                  <span className="about-info-value">2025.11.10</span>
-                </div>
-                <div className="about-info-item">
-                  <span className="about-info-label">License:</span>
-                  <span className="about-info-value">MIT</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="about-section">
-              <h3>Credits</h3>
-              <p>
-                Created by <strong>Axidrain</strong><br />
-                Developed by the Terminality Team<br />
-                © 2025 Terminality. All rights reserved.
-              </p>
-            </div>
-          </div>
-
-          <button className="about-close-btn" onClick={handleCloseAbout}>
-            CLOSE
-          </button>
-        </div>
-      </div>
-    )}
     </>
   )
 }

@@ -85,7 +85,7 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
             {win.type === 'email' && <EmailApp />}
             {win.type === 'chat' && <ChatApp />}
             {win.type === 'music' && <MusicPlayerApp />}
-            {win.type === 'settings' && <SystemSettingsApp />}
+            {win.type === 'settings' && <SystemSettingsApp payload={win.payload as any} />}
             {win.type === 'store' && <StoreApp />}
             {win.type === 'profile' && <ProfileApp />}
             {win.type === 'usermgmt' && <UserManagementApp />}
