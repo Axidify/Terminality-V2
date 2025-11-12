@@ -42,66 +42,104 @@ export const ProfileApp: React.FC = () => {
 
   return (
     <div className="profile-app">
+      {/* Background effects */}
+      <div className="profile-bg-grid" />
+      <div className="profile-scanlines" />
+      <div className="profile-particles">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div
+            key={i}
+            className="profile-particle"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 8}s`,
+              animationDuration: `${6 + Math.random() * 4}s`
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Header */}
       <div className="profile-header">
-        <svg className="profile-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
-        </svg>
-        <div className="profile-info">
-          <div className="profile-label">USER ACCOUNT</div>
-          <div className="profile-title">{user?.username || 'Unknown'}</div>
+        <div className="profile-header-content">
+          <svg className="profile-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" />
+          </svg>
+          <div className="profile-header-text">
+            <h1 className="profile-title">USER PROFILE</h1>
+            <p className="profile-subtitle">ACCOUNT MANAGEMENT</p>
+          </div>
+        </div>
+        <div className="profile-header-divider" />
+      </div>
+
+      {/* User Info */}
+      <div className="profile-user-info">
+        <div className="profile-info-card">
+          <div className="profile-info-border" />
+          <div className="profile-info-content">
+            <span className="profile-info-label">{'>'} USERNAME</span>
+            <span className="profile-info-value">{user?.username || 'Unknown'}</span>
+          </div>
         </div>
       </div>
-      
-      <div className="profile-section">
-        <h4 className="profile-section-title">CHANGE PASSWORD</h4>
+
+      {/* Password Section */}
+      <div className="profile-content">
+        <h2 className="profile-section-title">
+          <span className="title-bracket">{'>'}</span> CHANGE PASSWORD
+        </h2>
         <div className="profile-form">
           <div className="profile-field">
-            <label className="profile-label-small">Current Password</label>
+            <label className="profile-label">CURRENT PASSWORD</label>
             <input 
               type="password" 
               className="profile-input"
               value={oldPassword} 
               onChange={e => setOldPassword(e.target.value)}
-              placeholder="Enter current password"
+              placeholder="ENTER CURRENT PASSWORD"
               disabled={busy}
             />
           </div>
           <div className="profile-field">
-            <label className="profile-label-small">New Password</label>
+            <label className="profile-label">NEW PASSWORD</label>
             <input 
               type="password" 
               className="profile-input"
               value={newPassword} 
               onChange={e => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
+              placeholder="ENTER NEW PASSWORD"
               disabled={busy}
             />
           </div>
           <div className="profile-field">
-            <label className="profile-label-small">Confirm Password</label>
+            <label className="profile-label">CONFIRM PASSWORD</label>
             <input 
               type="password" 
               className="profile-input"
               value={confirmPassword} 
               onChange={e => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
+              placeholder="CONFIRM NEW PASSWORD"
               disabled={busy}
             />
           </div>
           <button 
-            className="profile-btn profile-btn-primary profile-btn-inline" 
+            className="profile-btn primary" 
             onClick={save} 
             disabled={busy || !oldPassword || !newPassword || !confirmPassword}
           >
-            {busy ? 'UPDATING...' : 'UPDATE'}
+            {busy ? 'UPDATING...' : 'UPDATE PASSWORD'}
           </button>
         </div>
       </div>
 
+      {/* Message */}
       {msg && (
-        <div className={`profile-message profile-message-${msg.type}`}>
-          {msg.type === 'success' ? '✓' : '✗'} {msg.text}
+        <div className={`profile-message ${msg.type}`}>
+          <span className="message-icon">{msg.type === 'success' ? '✓' : '✗'}</span>
+          <span className="message-text">{msg.text}</span>
         </div>
       )}
     </div>

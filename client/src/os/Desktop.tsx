@@ -30,6 +30,15 @@ interface DesktopProps {
   onLock: () => void
 }
 
+// Generate particles once outside component to prevent regeneration on re-render
+const particles = Array.from({ length: 15 }).map((_, i) => ({
+  key: i,
+  left: `${Math.random() * 100}%`,
+  top: `${Math.random() * 100}%`,
+  animationDelay: `${Math.random() * 5}s`,
+  animationDuration: `${10 + Math.random() * 15}s`
+}))
+
 export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
   const wm = useWindowManager()
   const desktopIconsRef = useRef<DesktopIconsRef>(null)
@@ -61,7 +70,18 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
     <DesktopContainer onAutoArrange={handleAutoArrange}>
       <div className={`desktop ${isExiting ? 'exiting' : ''}`}>
         {/* Desktop Background - visual only */}
-        <div className="desktop-bg" />
+        <div className="desktop-bg">
+          <div className="desktop-bg-grid" />
+          <div className="desktop-scanlines" />
+          {particles.map(p => (
+            <div key={p.key} className="desktop-particle" style={{
+              left: p.left,
+              top: p.top,
+              animationDelay: p.animationDelay,
+              animationDuration: p.animationDuration
+            }} />
+          ))}
+        </div>
         
         {/* Clickable background layer for context menu */}
         <div className="desktop-clickable-bg" />

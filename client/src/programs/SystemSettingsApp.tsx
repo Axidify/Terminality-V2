@@ -56,6 +56,20 @@ interface SystemSettingsAppProps {
   payload?: { tab?: Tab }
 }
 
+const SettingsIcon: React.FC = () => (
+  <svg className="settings-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="15" stroke="currentColor" strokeWidth="3" fill="rgba(0, 255, 65, 0.05)"/>
+    <circle cx="50" cy="20" r="4" fill="currentColor"/>
+    <circle cx="50" cy="80" r="4" fill="currentColor"/>
+    <circle cx="20" cy="50" r="4" fill="currentColor"/>
+    <circle cx="80" cy="50" r="4" fill="currentColor"/>
+    <circle cx="30" cy="30" r="4" fill="currentColor"/>
+    <circle cx="70" cy="70" r="4" fill="currentColor"/>
+    <circle cx="70" cy="30" r="4" fill="currentColor"/>
+    <circle cx="30" cy="70" r="4" fill="currentColor"/>
+  </svg>
+)
+
 export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload }) => {
   const [activeTab, setActiveTab] = useState<Tab>(payload?.tab || 'themes')
   const { currentTheme: _currentTheme, themeName, setTheme } = useTheme()
@@ -65,6 +79,17 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [specs, _setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
   const [changelog, setChangelog] = useState<ParsedChangelog>({ entries: [], latest: null })
   const [copyFeedback, setCopyFeedback] = useState<string>('')
+
+  // Generate particle positions once
+  const particles = React.useMemo(() => (
+    Array.from({ length: 12 }).map((_, i) => ({
+      key: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${10 + Math.random() * 10}s`
+    }))
+  ), [])
 
   useEffect(() => {
     saveDesktopState({ computerSpecs: specs }).catch(() => {})
@@ -121,8 +146,36 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   }
 
   return (
-    <div className="system-settings">
-      <div className="settings-tabs">
+    <div className="settings-root">
+      {/* Background effects */}
+      <div className="settings-bg-grid" />
+      <div className="settings-scanlines" />
+      {particles.map(p => (
+        <div key={p.key} className="settings-particle" style={{
+          left: p.left,
+          top: p.top,
+          animationDelay: p.animationDelay,
+          animationDuration: p.animationDuration
+        }} />
+      ))}
+
+      <div className="system-settings">
+        {/* Header */}
+        <div className="settings-header">
+          <div className="settings-logo-container">
+            <SettingsIcon />
+          </div>
+          <div className="settings-title-group">
+            <h1 className="settings-title">
+              <span className="settings-bracket">[</span>
+              SYSTEM SETTINGS
+              <span className="settings-bracket">]</span>
+            </h1>
+            <div className="settings-subtitle">System Configuration</div>
+          </div>
+        </div>
+
+        <div className="settings-tabs">
         <button 
           className={`tab ${activeTab === 'themes' ? 'active' : ''}`}
           onClick={() => setActiveTab('themes')}
@@ -238,7 +291,9 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             </div>
             
             <div className="theme-grid">
-              {Object.entries(themes).map(([key, theme]) => (
+              {Object.entries(themes)
+                .sort(([aKey], [bKey]) => (aKey === themeName ? -1 : bKey === themeName ? 1 : 0))
+                .map(([key, theme]) => (
                 <div
                   key={key}
                   className={`theme-card ${previewTheme === key ? 'selected' : ''}`}
@@ -709,6 +764,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   )

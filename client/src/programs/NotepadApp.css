@@ -1,106 +1,375 @@
-/* Notepad App - Theme-aware styles using CSS variables */
+/* ===== NOTEPAD APP - CYBERPUNK DESIGN ===== */
 
-.notepad-container {
+.notepad-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-background);
+  width: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, 
+    rgba(var(--color-primary-rgb), 0.03) 0%, 
+    var(--color-background) 70%);
+  color: var(--color-text);
+  font-family: 'Courier New', monospace;
+}
+
+/* Background Effects */
+.notepad-bg-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    linear-gradient(rgba(var(--color-primary-rgb), 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.notepad-scanlines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(0, 0, 0, 0.1) 51%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 1;
+  animation: scanlines 8s linear infinite;
+}
+
+@keyframes scanlines {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(4px); }
+}
+
+.notepad-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  animation: particleFloat linear infinite;
+  box-shadow: 0 0 4px var(--color-primary);
+}
+
+@keyframes particleFloat {
+  0%, 100% { 
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10%, 90% {
+    opacity: 0.6;
+  }
+  50% { 
+    transform: translate(calc(var(--tx, 20px)), calc(var(--ty, -30px)));
+    opacity: 0.8;
+  }
+}
+
+.notepad-container {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: transparent;
+}
+
+/* Header */
+.notepad-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: rgba(0, 0, 0, 0.4);
+  border-bottom: 2px solid rgba(var(--color-primary-rgb), 0.3);
+  backdrop-filter: blur(4px);
+  flex-shrink: 0;
+}
+
+.notepad-logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.notepad-logo-container-small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notepad-logo {
+  width: 48px;
+  height: 48px;
+  color: var(--color-primary);
+  filter: drop-shadow(0 0 12px var(--color-primary));
+  animation: logoFloat 3s ease-in-out infinite;
+}
+
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.notepad-title-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notepad-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--color-primary);
+  letter-spacing: 6px;
+  text-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.8);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notepad-bracket {
+  color: rgba(var(--color-primary-rgb), 0.5);
+  font-size: 24px;
+  animation: pulseBracket 2s ease-in-out infinite;
+}
+
+@keyframes pulseBracket {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.notepad-subtitle {
+  font-size: 10px;
+  color: rgba(var(--color-primary-rgb), 0.7);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-left: 4px;
 }
 
 /* File Dialog */
 .notepad-file-dialog {
-  padding: 20px;
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  gap: 24px;
+  padding: 60px 40px;
+  max-width: 600px;
+  margin: auto;
 }
 
 .notepad-dialog-title {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--color-primary);
+  letter-spacing: 8px;
+  text-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.8);
   margin: 0;
-  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .notepad-dialog-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  width: 100%;
 }
 
 .notepad-action-btn {
+  position: relative;
   width: 100%;
-  padding: 10px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
+  padding: 14px 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(var(--color-primary-rgb), 0.3);
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.2s;
+  border-radius: 4px;
+  transition: all 0.3s;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.notepad-action-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(var(--color-primary-rgb), 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.notepad-action-btn:hover::before {
+  left: 100%;
 }
 
 .notepad-action-btn:hover {
-  background: var(--color-primary);
   border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.15);
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.4), inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.action-bracket {
+  color: rgba(var(--color-primary-rgb), 0.4);
+  font-size: 16px;
 }
 
 .notepad-recent-files {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .notepad-recent-title {
-  font-size: 14px;
-  margin-bottom: 8px;
-  opacity: 0.7;
-  color: var(--color-textDim);
+  font-size: 13px;
+  color: rgba(var(--color-primary-rgb), 0.7);
+  letter-spacing: 3px;
+  font-weight: bold;
 }
 
 .notepad-recent-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .notepad-recent-item {
-  padding: 8px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  position: relative;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(var(--color-primary-rgb), 0.3);
   cursor: pointer;
   font-size: 12px;
-  color: var(--color-text);
-  transition: background 0.15s;
+  color: rgba(var(--color-primary-rgb), 0.8);
+  border-radius: 4px;
+  transition: all 0.3s;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.notepad-recent-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(var(--color-primary-rgb), 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.notepad-recent-item:hover::before {
+  left: 100%;
 }
 
 .notepad-recent-item:hover {
-  background: var(--color-shadow);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 16px rgba(var(--color-primary-rgb), 0.3), inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.recent-item-border {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.recent-path {
+  position: relative;
+  z-index: 1;
 }
 
 /* Menu Bar */
 .notepad-menubar {
-  padding: 6px 8px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  position: relative;
+  z-index: 2;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.2);
   display: flex;
-  gap: 8px;
-  font-size: 13px;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .notepad-menu-btn {
-  padding: 4px 8px;
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
+  position: relative;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(var(--color-primary-rgb), 0.3);
+  color: rgba(var(--color-primary-rgb), 0.8);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
   cursor: pointer;
-  transition: all 0.2s;
+  border-radius: 4px;
+  transition: all 0.3s;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.notepad-menu-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(var(--color-primary-rgb), 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.notepad-menu-btn:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .notepad-menu-btn:hover:not(:disabled) {
-  background: var(--color-primary);
   border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 16px rgba(var(--color-primary-rgb), 0.3), inset 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
 .notepad-menu-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.3;
   cursor: not-allowed;
+  border-color: rgba(var(--color-primary-rgb), 0.15);
+  color: rgba(var(--color-primary-rgb), 0.3);
+}
+
+.btn-bracket {
+  color: rgba(var(--color-primary-rgb), 0.4);
+  font-size: 12px;
 }
 
 .notepad-menubar-spacer {
@@ -108,48 +377,88 @@
 }
 
 .notepad-filepath {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 2px solid rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 4px;
   font-size: 11px;
-  opacity: 0.6;
-  align-self: center;
-  color: var(--color-textDim);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.path-label {
+  color: rgba(var(--color-primary-rgb), 0.6);
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+.path-value {
+  color: var(--color-primary);
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.5);
 }
 
 /* Editor */
 .notepad-editor {
+  position: relative;
+  z-index: 2;
   flex: 1;
-  background: transparent;
+  background: rgba(0, 0, 0, 0.4);
   border: none;
-  color: var(--color-text);
-  font-family: monospace;
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
   font-size: 14px;
-  padding: 12px;
+  padding: 20px;
   resize: none;
   outline: none;
+  letter-spacing: 0.5px;
+  line-height: 1.6;
+  text-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.3);
 }
 
 .notepad-editor::placeholder {
-  color: var(--color-textDim);
-  opacity: 0.5;
+  color: rgba(var(--color-primary-rgb), 0.3);
+  letter-spacing: 2px;
+}
+
+.notepad-editor::selection {
+  background: rgba(var(--color-primary-rgb), 0.3);
+  color: var(--color-primary);
 }
 
 /* Status Bar */
 .notepad-statusbar {
-  padding: 4px 8px;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  position: relative;
+  z-index: 2;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.4);
+  border-top: 2px solid rgba(var(--color-primary-rgb), 0.3);
   font-size: 11px;
-  opacity: 0.7;
   display: flex;
   justify-content: space-between;
-  color: var(--color-textDim);
+  flex-shrink: 0;
+  backdrop-filter: blur(4px);
 }
 
 .notepad-status-left {
-  color: var(--color-textDim);
+  color: rgba(var(--color-primary-rgb), 0.8);
+  letter-spacing: 1px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .notepad-status-right {
-  color: var(--color-textDim);
+  color: rgba(var(--color-primary-rgb), 0.6);
+  letter-spacing: 1px;
+}
+
+.status-bracket {
+  color: rgba(var(--color-primary-rgb), 0.4);
+  font-size: 12px;
 }
 
 /* Context Menu */

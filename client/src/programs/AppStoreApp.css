@@ -1,417 +1,688 @@
-/* App Store Root */
+/* App Store Root - Inspired by HomePage/LockScreen */
 .appstore-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
-  background: var(--color-background);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(var(--color-primary-rgb), 0.08) 0%,
+    rgba(var(--color-secondary-rgb), 0.03) 40%,
+    var(--color-background) 70%,
+    var(--color-background) 100%
+  );
   color: var(--color-text);
+  font-family: 'Courier New', monospace;
+}
+
+/* Background Grid */
+.appstore-bg-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    linear-gradient(rgba(var(--color-primary-rgb), 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.3;
+}
+
+/* Scanlines */
+.appstore-scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.6) 0px,
+    transparent 2px,
+    transparent 4px
+  );
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 1;
+  animation: scanlines 8s linear infinite;
+}
+
+@keyframes scanlines {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(4px); }
+}
+
+/* Particles */
+.appstore-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.appstore-particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: particleFloat 8s linear infinite;
+}
+
+@keyframes particleFloat {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.4;
+  }
+  90% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(100vh) translateX(20px);
+    opacity: 0;
+  }
 }
 
 /* Header */
 .appstore-header {
-  padding: 32px 28px;
-  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
-  border-bottom: 1px solid var(--color-border);
+  position: relative;
+  z-index: 10;
+  padding: 40px 30px 30px 30px;
+  border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.2);
 }
 
-.appstore-header h1 {
-  margin: 0 0 10px 0;
-  font-size: 36px;
-  font-weight: 600;
+.appstore-header-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.appstore-logo {
+  width: 60px;
+  height: 60px;
   color: var(--color-primary);
-  letter-spacing: -0.5px;
+  filter: drop-shadow(0 0 15px rgba(var(--color-primary-rgb), 0.5));
+  animation: logoFloat 3s ease-in-out infinite;
 }
 
-.appstore-header p {
+@keyframes logoFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+.appstore-header-text {
+  flex: 1;
+}
+
+.appstore-title {
   margin: 0;
-  font-size: 15px;
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--color-primary);
+  text-shadow: 0 0 30px rgba(var(--color-primary-rgb), 0.6),
+               0 0 60px rgba(var(--color-primary-rgb), 0.3);
+  letter-spacing: 12px;
+  font-family: 'Courier New', monospace;
+  line-height: 1.2;
+}
+
+.appstore-subtitle {
+  margin: 5px 0 0 0;
+  font-size: 10px;
   color: var(--color-textDim);
+  letter-spacing: 4px;
+  opacity: 0.7;
+  font-weight: 300;
+  text-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.3);
 }
 
-/* Search Bar */
-.appstore-search-bar {
-  padding: 20px 28px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
-}
-
-.search-input {
+.appstore-header-divider {
   width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-background);
+  height: 1px;
+  background: linear-gradient(
+    90deg, 
+    transparent, 
+    var(--color-primary) 20%, 
+    var(--color-primary) 80%, 
+    transparent
+  );
+  box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.4),
+              0 0 16px rgba(var(--color-primary-rgb), 0.2);
+  opacity: 0.6;
+}
+
+/* Search */
+.appstore-search {
+  position: relative;
+  z-index: 10;
+  padding: 20px 30px;
+  border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.15);
+}
+
+.appstore-search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 0;
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
   color: var(--color-text);
-  font-size: 14px;
-  font-family: inherit;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
 }
 
-.search-input:focus {
+.appstore-search-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.2);
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.8);
 }
 
-.search-input::placeholder {
+.appstore-search-input::placeholder {
   color: var(--color-textDim);
+  opacity: 0.6;
+  letter-spacing: 2px;
 }
 
 /* Categories */
 .appstore-categories {
+  position: relative;
+  z-index: 10;
   display: flex;
-  gap: 10px;
-  padding: 18px 28px;
-  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+  padding: 20px 30px;
   overflow-x: auto;
-  background: var(--color-surface);
+  border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.15);
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) var(--color-surface);
+  scrollbar-color: rgba(var(--color-primary-rgb), 0.3) transparent;
 }
 
 .appstore-categories::-webkit-scrollbar {
-  height: 6px;
+  height: 4px;
 }
 
 .appstore-categories::-webkit-scrollbar-track {
-  background: var(--color-surface);
+  background: transparent;
 }
 
 .appstore-categories::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 3px;
+  background: rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 2px;
 }
 
 .appstore-categories::-webkit-scrollbar-thumb:hover {
-  background: var(--color-textDim);
+  background: rgba(var(--color-primary-rgb), 0.5);
 }
 
-.category-btn {
-  padding: 10px 20px;
-  border: 1px solid var(--color-border);
-  background: var(--color-background);
-  color: var(--color-text);
-  border-radius: 6px;
-  font-size: 13px;
+.appstore-category-btn {
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--color-textDim);
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
-  font-weight: 500;
-  min-width: fit-content;
+  transition: all 0.3s;
+  position: relative;
   flex-shrink: 0;
 }
 
-.category-btn:hover {
-  background: var(--color-surfaceHover, var(--color-surface));
-  border-color: var(--color-primary);
-  transform: translateY(-1px);
+.category-bracket {
+  color: var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.3s;
 }
 
-.category-btn.active {
-  background: var(--color-primary);
-  color: var(--color-background);
-  border-color: var(--color-primary);
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
+.appstore-category-btn:hover {
+  color: var(--color-text);
+}
+
+.appstore-category-btn:hover .category-bracket {
+  opacity: 0.6;
+}
+
+.appstore-category-btn.active {
+  color: var(--color-primary);
+  text-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.6);
+}
+
+.appstore-category-btn.active .category-bracket {
+  opacity: 1;
+}
+
+/* Content */
+.appstore-content {
+  position: relative;
+  z-index: 2;
+  padding: 30px;
+  flex: 1;
+}
+
+/* Section Titles */
+.appstore-section-title {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--color-primary);
+  letter-spacing: 6px;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.5);
+}
+
+.title-bracket {
+  font-size: 20px;
+  margin-right: 8px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Featured Section */
 .appstore-featured {
-  padding: 32px 28px;
-  border-bottom: 2px solid var(--color-border);
+  margin-bottom: 40px;
 }
 
-.appstore-featured h2 {
-  margin: 0 0 20px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-primary);
-  letter-spacing: -0.3px;
-}
-
-.featured-apps {
+.appstore-featured-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
 }
 
-.featured-card {
+.appstore-featured-card {
+  position: relative;
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
   padding: 24px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: all 0.2s;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
 }
 
-.featured-card:hover {
+.featured-card-border {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 1px solid var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  box-shadow: 
+    0 0 20px rgba(var(--color-primary-rgb), 0.3),
+    inset 0 0 20px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.appstore-featured-card:hover {
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.8);
   border-color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.15);
+  box-shadow: 
+    inset 0 0 40px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(var(--color-primary-rgb), 0.2);
 }
 
-.featured-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.appstore-featured-card:hover .featured-card-border {
+  opacity: 1;
 }
 
-.featured-card h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.featured-desc {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-textDim);
-  line-height: 1.5;
-}
-
-.featured-author {
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-textDim);
-}
-
-.featured-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.download-count {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--color-textDim);
-}
-
-.featured-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-install,
-.btn-small,
-.btn-primary,
-.btn-secondary {
-  padding: 10px 18px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  outline: none;
-}
-
-.btn-primary,
-.btn-install {
-  background: var(--color-primary);
-  color: var(--color-background);
-  border-color: var(--color-primary);
-}
-
-.btn-primary:hover,
-.btn-install:hover {
-  opacity: 0.9;
-  box-shadow: 0 2px 6px rgba(var(--color-primary-rgb), 0.3);
-}
-
-.btn-small.open,
-.btn-secondary.open {
-  background: var(--color-primary);
-  color: var(--color-background);
-  border-color: var(--color-primary);
-  padding: 8px 14px;
-  font-size: 12px;
-}
-
-.btn-small.uninstall,
-.btn-secondary.uninstall {
-  background: transparent;
-  color: var(--color-text);
-  border-color: var(--color-border);
-  padding: 8px 14px;
-  font-size: 12px;
-}
-
-.btn-small.uninstall:hover,
-.btn-secondary.uninstall:hover {
-  background: var(--color-surface);
-  border-color: var(--color-textDim);
-}
-
-/* Apps Section */
-.appstore-section {
-  padding: 32px 28px;
-  flex: 1;
-}
-
-.appstore-section h2 {
-  margin: 0 0 24px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-primary);
-  letter-spacing: -0.3px;
-}
-
-/* Apps Grid */
-.apps-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 18px;
-}
-
-.app-card {
-  padding: 20px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+.featured-card-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: all 0.2s;
 }
 
-.app-card:hover {
+.featured-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.featured-card-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--color-primary);
+  letter-spacing: 3px;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.4);
+}
+
+.featured-card-version {
+  font-size: 10px;
+  color: var(--color-textDim);
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+
+.featured-card-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text);
+  line-height: 1.6;
+  opacity: 0.8;
+}
+
+.featured-card-meta {
+  display: flex;
+  gap: 15px;
+  font-size: 11px;
+  color: var(--color-textDim);
+  letter-spacing: 1px;
+  opacity: 0.7;
+  flex-wrap: wrap;
+}
+
+.featured-card-author,
+.featured-card-rating,
+.featured-card-downloads {
+  white-space: nowrap;
+}
+
+.featured-card-rating {
+  color: var(--color-primary);
+}
+
+.featured-card-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* All Apps */
+.appstore-all-apps {
+  position: relative;
+}
+
+.appstore-apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.appstore-app-card {
+  position: relative;
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.4);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+  padding: 20px;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.4);
+}
+
+.app-card-border {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 1px solid var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  box-shadow: 
+    0 0 15px rgba(var(--color-primary-rgb), 0.2),
+    inset 0 0 15px rgba(var(--color-primary-rgb), 0.05);
+}
+
+.appstore-app-card:hover {
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
   border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.1);
+  box-shadow: 
+    inset 0 0 30px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(var(--color-primary-rgb), 0.15);
+}
+
+.appstore-app-card:hover .app-card-border {
+  opacity: 1;
+}
+
+.app-card-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .app-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  margin-bottom: 6px;
 }
 
-.app-card h3 {
+.app-card-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--color-primary);
+  letter-spacing: 2px;
+  font-family: 'Courier New', monospace;
+  text-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.3);
 }
 
-.app-version {
+.app-card-version {
+  font-size: 9px;
+  color: var(--color-textDim);
+  letter-spacing: 1px;
+  opacity: 0.6;
+}
+
+.app-card-desc {
+  margin: 0;
   font-size: 11px;
-  color: var(--color-textDim);
-  background: var(--color-background);
-  padding: 4px 8px;
-  border-radius: 4px;
+  color: var(--color-text);
+  line-height: 1.6;
+  opacity: 0.7;
+  min-height: 35px;
 }
 
-.app-description {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-textDim);
-  line-height: 1.5;
-  flex: 1;
-  min-height: 40px;
-}
-
-.app-meta {
+.app-card-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
-}
-
-.app-author {
+  font-size: 10px;
   color: var(--color-textDim);
+  letter-spacing: 1px;
+  opacity: 0.6;
 }
 
-.app-rating {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--color-primary);
-}
-
-.star {
-  display: inline-flex;
-  align-items: center;
-}
-
-.rating-text {
-  font-size: 12px;
-  margin-left: 3px;
-  font-weight: 500;
-}
-
-.app-downloads {
-  font-size: 12px;
-  color: var(--color-textDim);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.app-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.app-actions button {
+.app-card-author {
   flex: 1;
 }
 
+.app-card-rating {
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.app-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  gap: 10px;
+}
+
+.app-card-downloads {
+  font-size: 10px;
+  color: var(--color-textDim);
+  letter-spacing: 1px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.app-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* No Results */
-.no-results {
+.appstore-no-results {
   padding: 60px 20px;
   text-align: center;
   color: var(--color-textDim);
-  font-size: 14px;
+  font-size: 13px;
+  letter-spacing: 3px;
+  opacity: 0.6;
 }
 
-/* Scrollbar styling */
+/* Buttons */
+.appstore-btn,
+.appstore-btn-small {
+  padding: 10px 20px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.5);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.appstore-btn-small {
+  padding: 8px 16px;
+  font-size: 10px;
+}
+
+.appstore-btn::before,
+.appstore-btn-small::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--color-primary);
+  transition: left 0.3s;
+  z-index: -1;
+}
+
+.appstore-btn:hover::before,
+.appstore-btn-small:hover::before {
+  left: 0;
+}
+
+.appstore-btn.primary,
+.appstore-btn-small.primary {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.2);
+}
+
+.appstore-btn.primary:hover,
+.appstore-btn-small.primary:hover {
+  color: var(--color-background);
+  box-shadow: 0 0 25px rgba(var(--color-primary-rgb), 0.4);
+  text-shadow: none;
+}
+
+.appstore-btn.secondary,
+.appstore-btn-small.secondary {
+  border-color: rgba(var(--color-primary-rgb), 0.3);
+  color: var(--color-textDim);
+}
+
+.appstore-btn.secondary:hover,
+.appstore-btn-small.secondary:hover {
+  color: var(--color-background);
+  border-color: var(--color-primary);
+}
+
+/* Scrollbar */
 .appstore-root::-webkit-scrollbar {
   width: 8px;
 }
 
 .appstore-root::-webkit-scrollbar-track {
-  background: var(--color-background);
+  background: rgba(0, 0, 0, 0.3);
 }
 
 .appstore-root::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
+  background: rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 0;
 }
 
 .appstore-root::-webkit-scrollbar-thumb:hover {
-  background: var(--color-textDim);
+  background: rgba(var(--color-primary-rgb), 0.5);
 }
 
 /* Responsive */
 @media (max-width: 900px) {
-  .featured-apps {
+  .appstore-featured-grid {
     grid-template-columns: 1fr;
   }
-  .apps-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  .appstore-apps-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
 }
 
 @media (max-width: 600px) {
   .appstore-header {
-    padding: 24px 20px;
+    padding: 30px 20px 25px 20px;
   }
-  .appstore-header h1 {
-    font-size: 28px;
+  
+  .appstore-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
   }
-  .appstore-section {
-    padding: 24px 20px;
+  
+  .appstore-logo {
+    width: 50px;
+    height: 50px;
   }
-  .apps-grid {
+  
+  .appstore-title {
+    font-size: 24px;
+    letter-spacing: 8px;
+  }
+  
+  .appstore-subtitle {
+    font-size: 9px;
+    letter-spacing: 3px;
+  }
+  
+  .appstore-search,
+  .appstore-categories,
+  .appstore-content {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  
+  .appstore-apps-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .appstore-category-btn {
+    font-size: 11px;
   }
 }

@@ -18,6 +18,17 @@ const getInstalledTools = (): string[] => cached?.installedTools ?? []
 const getCurrency = (): number => cached?.playerCurrency ?? 1000
 const setCurrency = (amount: number) => { saveDesktopState({ playerCurrency: amount }).catch(() => {}) }
 
+const CartIcon: React.FC = () => (
+  <svg className="store-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 30 L25 60 L75 60 L80 30 Z" stroke="currentColor" strokeWidth="3" fill="none"/>
+    <circle cx="35" cy="75" r="5" fill="currentColor"/>
+    <circle cx="65" cy="75" r="5" fill="currentColor"/>
+    <path d="M10 20 L20 20 L25 40" stroke="currentColor" strokeWidth="3" fill="none"/>
+    <line x1="30" y1="45" x2="70" y2="45" stroke="currentColor" strokeWidth="2"/>
+    <line x1="32" y1="52" x2="68" y2="52" stroke="currentColor" strokeWidth="2"/>
+  </svg>
+)
+
 export const StoreApp: React.FC = () => {
   const [query, setQuery] = React.useState('')
   const [currency, setCurrencyState] = React.useState(getCurrency())
@@ -123,75 +134,110 @@ export const StoreApp: React.FC = () => {
   })
 
   return (
-    <div className="store">
+    <div className="store-root">
+      {/* Background effects */}
+      <div className="store-bg-grid" />
+      <div className="store-scanlines" />
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div key={i} className="store-particle" style={{
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 5}s`,
+          animationDuration: `${10 + Math.random() * 10}s`
+        }} />
+      ))}
+
+      {/* Header */}
       <div className="store-header">
-        <div className="store-title-section">
-          <div className="store-title">Terminality Store</div>
-          <div className="store-currency">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
-              <line x1="12" y1="1" x2="12" y2="23"/>
-              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-            Credits: {currency}
-          </div>
+        <div className="store-logo-container">
+          <CartIcon />
         </div>
-        <div className="store-controls">
-          <input
-            className="store-search"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search tools..."
-          />
+        <div className="store-title-group">
+          <h1 className="store-title">
+            <span className="store-bracket">[</span>
+            TOOL STORE
+            <span className="store-bracket">]</span>
+          </h1>
+          <div className="store-subtitle">Advanced Security Tools</div>
+        </div>
+        <div className="store-currency">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="12" y1="1" x2="12" y2="23"/>
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+          <span className="currency-label">CREDITS:</span>
+          <span className="currency-amount">{currency}</span>
         </div>
       </div>
 
+      {/* Search bar */}
+      <div className="store-search-container">
+        <input
+          className="store-search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="SEARCH TOOLS..."
+        />
+      </div>
+
+      {/* Categories */}
       <div className="store-categories">
         {['all', 'forensics', 'hacking', 'stealth', 'analysis'].map(cat => (
           <button
             key={cat}
-            className={`category-btn ${selectedCategory === cat ? 'active' : ''}`}
+            className={`store-category-btn ${selectedCategory === cat ? 'active' : ''}`}
             onClick={() => setSelectedCategory(cat)}
           >
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+            <span className="category-bracket">[</span>
+            {cat.toUpperCase()}
+            <span className="category-bracket">]</span>
           </button>
         ))}
       </div>
 
+      {/* Content */}
       <div className="store-content">
         <div className="store-grid">
           {filtered.map(tool => (
             <div key={tool.id} className={`store-card ${tool.installed ? 'installed' : ''}`}>
-              <div className="store-icon">{tool.icon}</div>
-              <div className="store-name">{tool.name}</div>
-              <div className="store-desc">{tool.desc}</div>
-              <div className="store-footer">
-                <div className="store-price">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
-                    <line x1="12" y1="1" x2="12" y2="23"/>
-                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                  </svg>
-                  {tool.price}
+              <div className="store-card-border" />
+              <div className="store-card-content">
+                <div className="store-icon">{tool.icon}</div>
+                <div className="store-name">{tool.name}</div>
+                <div className="store-desc">{tool.desc}</div>
+                <div className="store-footer">
+                  <div className="store-price">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="1" x2="12" y2="23"/>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                    {tool.price}
+                  </div>
+                  <button 
+                    className="store-btn" 
+                    onClick={() => handleInstall(tool)}
+                    disabled={tool.installed || currency < tool.price}
+                  >
+                    {tool.installed ? (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        INSTALLED
+                      </>
+                    ) : 'INSTALL'}
+                  </button>
                 </div>
-                <button 
-                  className="store-btn" 
-                  onClick={() => handleInstall(tool)}
-                  disabled={tool.installed || currency < tool.price}
-                >
-                  {tool.installed ? (
-                    <>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                      Installed
-                    </>
-                  ) : 'Install'}
-                </button>
               </div>
             </div>
           ))}
         </div>
         {filtered.length === 0 && (
-          <div className="store-empty">No tools found</div>
+          <div className="store-empty">
+            <div className="empty-bracket">[</div>
+            NO TOOLS FOUND
+            <div className="empty-bracket">]</div>
+          </div>
         )}
       </div>
     </div>
