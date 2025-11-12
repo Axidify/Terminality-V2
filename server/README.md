@@ -47,6 +47,14 @@ If you used the default seed, the admin user already exists and you can login wi
 
 Note: `PATCH` is protected and requires an admin token to be present in the `Authorization` header.
 
+Google SSO (dev scaffold)
+-------------------------
+This repository includes a small, developer-friendly scaffold for Google SSO:
+- The server exposes POST `/api/auth/google` which you can POST a Google ID token (`id_token`) to.
+- The server will verify the token with Google's `tokeninfo` endpoint and then create/lookup a local user and return an `access_token` (JWT) that the client can use for authenticated requests.
+
+This is intended as a minimal dev scaffold; for production, replace this flow with a proper OIDC/OAuth2 client and secure token validation.
+
 Password reset and profile updates
 ----------------------------------
 - Password reset: POST `/api/auth/reset/request` with body { username } returns a `reset_token` (dev-only to simulate email).
