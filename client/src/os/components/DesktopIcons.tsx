@@ -80,7 +80,7 @@ const baseIcons: DesktopIconDef[] = [
     icon: <MusicIcon size={50} />, 
     x: 130, 
     y: 20,
-    defaultOpts: { title: 'Music Player', width: 450, height: 520 } 
+    defaultOpts: { title: 'Music Player', width: 427, height: 800 } 
   },
   { 
     type: 'settings', 
@@ -96,7 +96,7 @@ const baseIcons: DesktopIconDef[] = [
     icon: <ChatIcon size={50} />, 
     x: 130, 
     y: 220,
-    defaultOpts: { title: 'Chat', width: 400, height: 500 } 
+    defaultOpts: { title: 'Chat', width: 400, height: 800 } 
   },
   { 
     type: 'store', 

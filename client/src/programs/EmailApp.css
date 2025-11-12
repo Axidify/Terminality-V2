@@ -85,6 +85,13 @@
   background: transparent;
 }
 
+/* Main Content Area - Horizontal Layout */
+.email-main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
 /* Header */
 .email-header {
   position: relative;
@@ -164,10 +171,13 @@
 
 /* Inbox List */
 .email-inbox-panel {
-  width: 40%;
+  width: 360px;
+  min-width: 320px;
+  max-width: 450px;
   border-right: 2px solid rgba(var(--color-primary-rgb), 0.3);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .email-inbox-header {
@@ -351,6 +361,9 @@
 
 .status-indicator {
   color: rgba(var(--color-primary-rgb), 0.5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .email-list-item-date {

@@ -180,24 +180,26 @@ export const EmailApp: React.FC = () => {
           </div>
         </div>
 
-        {/* Inbox List */}
-        <div className="email-inbox-panel">
-          <div className="email-inbox-header">
-            <span className="inbox-title">
-              <span className="inbox-bracket">[</span>
-              INBOX ({emails.filter(e => !e.read).length})
-              <span className="inbox-bracket">]</span>
-            </span>
-            <button 
-              onClick={() => { setComposing(true); setSelected(null) }}
-              className="email-compose-button"
-            >
-              <span className="btn-bracket">[</span>+ COMPOSE<span className="btn-bracket">]</span>
-            </button>
-          </div>
-          <div className="email-list">
-            {emails.map(email => (
-              <div
+        {/* Main Layout - Horizontal Split */}
+        <div className="email-main-layout">
+          {/* Inbox List */}
+          <div className="email-inbox-panel">
+            <div className="email-inbox-header">
+              <span className="inbox-title">
+                <span className="inbox-bracket">[</span>
+                INBOX ({emails.filter(e => !e.read).length})
+                <span className="inbox-bracket">]</span>
+              </span>
+              <button 
+                onClick={() => { setComposing(true); setSelected(null) }}
+                className="email-compose-button"
+              >
+                <span className="btn-bracket">[</span>+ COMPOSE<span className="btn-bracket">]</span>
+              </button>
+            </div>
+            <div className="email-list">
+              {emails.map(email => (
+                <div
                 key={email.id}
                 onClick={() => { setSelected(email); markAsRead(email); setComposing(false) }}
                 className={`email-list-item ${selected?.id === email.id ? 'selected' : ''} ${email.read ? '' : 'unread'}`}
@@ -296,6 +298,7 @@ export const EmailApp: React.FC = () => {
             </div>
           )}
         </div>
+        </div> {/* Close email-main-layout */}
       </div>
 
       {menu && (

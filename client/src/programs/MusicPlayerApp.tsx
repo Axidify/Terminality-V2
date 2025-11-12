@@ -185,6 +185,8 @@ export const MusicPlayerApp: React.FC = () => {
   const [playQueue, setPlayQueue] = useState<Track[]>([])
   const [showPlaylistManager, setShowPlaylistManager] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track?: Track } | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   // Ensure initial restore only happens once and never overrides user actions later
   const didRestoreRef = useRef(false)
 
@@ -514,6 +516,32 @@ export const MusicPlayerApp: React.FC = () => {
     setRepeat(r => r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')
   }
 
+  const handleContextMenu = (e: React.MouseEvent, track?: Track) => {
+    e.preventDefault()
+    const container = containerRef.current
+    if (container) {
+      const rect = container.getBoundingClientRect()
+      const x = e.clientX - rect.left + container.scrollLeft
+      const y = e.clientY - rect.top + container.scrollTop
+      setContextMenu({ x, y, track })
+    } else {
+      setContextMenu({ x: e.clientX, y: e.clientY, track })
+    }
+  }
+
+  const closeContextMenu = () => {
+    setContextMenu(null)
+  }
+
+  // Close context menu when clicking anywhere
+  useEffect(() => {
+    if (contextMenu) {
+      const handleClick = () => closeContextMenu()
+      document.addEventListener('click', handleClick)
+      return () => document.removeEventListener('click', handleClick)
+    }
+  }, [contextMenu])
+
   // Memoized particles for background effects
   const particles = React.useMemo(() => (
     Array.from({ length: 12 }).map((_, i) => ({
@@ -526,7 +554,7 @@ export const MusicPlayerApp: React.FC = () => {
   ), [])
 
   return (
-    <div className="music-player-root" onContextMenu={(e) => e.preventDefault()}>
+  <div className="music-player-root" ref={containerRef} onContextMenu={handleContextMenu}>
       {/* Background Effects */}
       <div className="music-bg-grid" />
       <div className="music-scanlines" />
@@ -706,6 +734,7 @@ export const MusicPlayerApp: React.FC = () => {
             <div
               key={track.id}
               onClick={() => playTrack(track)}
+              onContextMenu={(e) => handleContextMenu(e, track)}
               className={`track-item ${currentTrack?.id === track.id ? 'active' : ''}`}
             >
               <div className="track-icon">
@@ -722,6 +751,33 @@ export const MusicPlayerApp: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Custom Context Menu */}
+      {contextMenu && (
+        <div 
+          className="music-context-menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {contextMenu.track && (
+            <>
+              <div className="context-menu-item" onClick={() => { playTrack(contextMenu.track!); closeContextMenu(); }}>
+                <PlayIcon size={14} /> Play Track
+              </div>
+              <div className="context-menu-divider" />
+            </>
+          )}
+          <div className="context-menu-item" onClick={() => { setShuffle(!shuffle); closeContextMenu(); }}>
+            <ShuffleIcon size={14} /> {shuffle ? 'Disable' : 'Enable'} Shuffle
+          </div>
+          <div className="context-menu-item" onClick={() => { cycleRepeat(); closeContextMenu(); }}>
+            {repeat === 'one' ? <RepeatOneIcon size={14} /> : <RepeatIcon size={14} />} Repeat: {repeat === 'off' ? 'Off' : repeat === 'all' ? 'All' : 'One'}
+          </div>
+          <div className="context-menu-divider" />
+          <div className="context-menu-item" onClick={() => { setShowPlaylistManager(!showPlaylistManager); closeContextMenu(); }}>
+            + Manage Playlists
+          </div>
+        </div>
+      )}
     </div>
   )
 }
