@@ -1,3 +1,4 @@
+// ...existing code... (file header)
 import React, { useState, useRef, useEffect } from 'react'
 
 import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, ShuffleIcon, RepeatIcon, RepeatOneIcon, VolumeIcon, NoteIcon, RecycleBinIcon } from '../os/components/Icons'
@@ -25,105 +26,105 @@ const demoTracks: Track[] = [
     id: 1, 
     title: 'Neon Dreams', 
     artist: 'Cyber Synth', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', 
+    url: '/audio/SoundHelix-Song-1.mp3', 
     duration: '3:42' 
   },
   { 
     id: 2, 
     title: 'Digital Rain', 
     artist: 'Matrix Beats', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', 
+    url: '/audio/SoundHelix-Song-2.mp3', 
     duration: '4:15' 
   },
   { 
     id: 3, 
     title: 'Terminal Vibes', 
     artist: 'Code Warriors', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', 
+    url: '/audio/SoundHelix-Song-3.mp3', 
     duration: '3:28' 
   },
   { 
     id: 4, 
     title: 'Retro Wave', 
     artist: 'Synth Masters', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', 
+    url: '/audio/SoundHelix-Song-4.mp3', 
     duration: '5:03' 
   },
   { 
     id: 5, 
     title: 'Cyber City', 
     artist: 'Future Sound', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', 
+    url: '/audio/SoundHelix-Song-5.mp3', 
     duration: '4:35' 
   },
   { 
     id: 6, 
     title: 'Data Stream', 
     artist: 'Binary Flow', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3', 
+    url: '/audio/SoundHelix-Song-6.mp3', 
     duration: '4:20' 
   },
   { 
     id: 7, 
     title: 'Code Rhythm', 
     artist: 'Tech Pulse', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3', 
+    url: '/audio/SoundHelix-Song-7.mp3', 
     duration: '3:55' 
   },
   { 
     id: 8, 
     title: 'Glitch Hop', 
     artist: 'System Error', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3', 
+    url: '/audio/SoundHelix-Song-8.mp3', 
     duration: '4:08' 
   },
   { 
     id: 9, 
     title: 'Pixel Paradise', 
     artist: '8-Bit Heroes', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3', 
+    url: '/audio/SoundHelix-Song-9.mp3', 
     duration: '3:47' 
   },
   { 
     id: 10, 
     title: 'Quantum Beats', 
     artist: 'Neon Nights', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3', 
+    url: '/audio/SoundHelix-Song-10.mp3', 
     duration: '4:52' 
   },
   { 
     id: 11, 
     title: 'Electric Dreams', 
     artist: 'Voltage Drive', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3', 
+    url: '/audio/SoundHelix-Song-11.mp3', 
     duration: '3:33' 
   },
   { 
     id: 12, 
     title: 'Matrix Protocol', 
     artist: 'Grid Runner', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3', 
+    url: '/audio/SoundHelix-Song-12.mp3', 
     duration: '4:25' 
   },
   { 
     id: 13, 
     title: 'Synthwave Sunset', 
     artist: 'Chrome Waves', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3', 
+    url: '/audio/SoundHelix-Song-13.mp3', 
     duration: '5:10' 
   },
   { 
     id: 14, 
     title: 'Neon Highway', 
     artist: 'Retro Riders', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3', 
+    url: '/audio/SoundHelix-Song-14.mp3', 
     duration: '3:58' 
   },
   { 
     id: 15, 
     title: 'Digital Horizon', 
     artist: 'Future Echoes', 
-    url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3', 
+    url: '/audio/SoundHelix-Song-15.mp3', 
     duration: '4:40' 
   },
 ]
@@ -164,6 +165,8 @@ export const MusicPlayerApp: React.FC = () => {
   const [playQueue, setPlayQueue] = useState<Track[]>([])
   const [showPlaylistManager, setShowPlaylistManager] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState('')
+  // Ensure initial restore only happens once and never overrides user actions later
+  const didRestoreRef = useRef(false)
 
   // Initialize / reuse a single hidden audio element attached to document body.
   if (typeof window !== 'undefined' && !sharedAudio) {
@@ -172,6 +175,8 @@ export const MusicPlayerApp: React.FC = () => {
     sharedAudio.style.left = '-9999px'
     sharedAudio.style.width = '0'
     sharedAudio.setAttribute('aria-hidden', 'true')
+    sharedAudio.preload = 'auto'
+    sharedAudio.crossOrigin = 'anonymous'
     document.body.appendChild(sharedAudio)
   }
 
@@ -183,57 +188,66 @@ export const MusicPlayerApp: React.FC = () => {
     }
   }, [volume])
 
-  // Restore track and settings after re-mount (e.g., after login)
+  // Restore track and settings once after mount (e.g., after login)
   useEffect(() => {
+    if (didRestoreRef.current) return
     const a = audioRef.current
     if (!a) return
     const allTracks = playlists.flatMap(p => p.tracks)
 
-    let restored = false
-    if (!currentTrack && a.src) {
-      const found = allTracks.find(t => a.src.includes(t.url))
-      if (found) {
-        setCurrentTrack(found)
-        setIsPlaying(!a.paused)
-        setDuration(isFinite(a.duration) ? a.duration : 0)
-        setCurrentTime(a.currentTime)
-        setPlayQueue(prev => prev.length ? prev : allTracks)
-        restored = true
+    try {
+      // If an audio src already exists (e.g., persisted element), sync UI to it
+      if (!currentTrack && a.src) {
+        const found = allTracks.find(t => a.src.includes(t.url))
+        if (found) {
+          setCurrentTrack(found)
+          setIsPlaying(!a.paused)
+          setDuration(isFinite(a.duration) ? a.duration : 0)
+          setCurrentTime(a.currentTime)
+          setPlayQueue(prev => prev.length ? prev : allTracks)
+          didRestoreRef.current = true
+          return
+        }
       }
-    }
 
-    if (!restored) {
-      try {
-        const saved: MusicPersistState | undefined = getCachedDesktop()?.musicState
-        if (saved) {
-          if (saved.volume != null) setVolume(saved.volume)
-          if (saved.shuffle != null) setShuffle(saved.shuffle)
-          if (saved.repeat) setRepeat(saved.repeat)
-          if (saved.playlistId) setCurrentPlaylistId(saved.playlistId)
+      const saved: MusicPersistState | undefined = getCachedDesktop()?.musicState
+      if (saved) {
+        if (saved.volume != null) setVolume(saved.volume)
+        if (saved.shuffle != null) setShuffle(saved.shuffle)
+        if (saved.repeat) setRepeat(saved.repeat)
+        if (saved.playlistId) setCurrentPlaylistId(saved.playlistId)
 
-          if (saved.queueIds && saved.queueIds.length) {
-            const queue = saved.queueIds
-              .map(id => allTracks.find(t => t.id === id))
-              .filter((t): t is Track => Boolean(t))
-            if (queue.length) setPlayQueue(queue)
-          }
+        if (saved.queueIds && saved.queueIds.length) {
+          const queue = saved.queueIds
+            .map(id => allTracks.find(t => t.id === id))
+            .filter((t): t is Track => Boolean(t))
+          if (queue.length) setPlayQueue(queue)
+        }
 
-          if (saved.trackId) {
-            const t = allTracks.find(x => x.id === saved.trackId)
-            if (t) {
-              setCurrentTrack(t)
-              // Don't auto-play after login; user can resume manually
-              if (a.src !== t.url) a.src = t.url
-              a.currentTime = 0
-              setIsPlaying(false)
-              setCurrentTime(0)
-              setDuration(isFinite(a.duration) ? a.duration : 0)
+        if (saved.trackId) {
+          const t = allTracks.find(x => x.id === saved.trackId)
+          if (t) {
+            setCurrentTrack(t)
+            // Don't auto-play after login; user can resume manually
+            const fullUrl = new URL(t.url, window.location.origin).href
+            if (a.src !== fullUrl) {
+              try { a.pause() } catch { /* ignore */ }
+              a.src = fullUrl
+              try { a.load() } catch { /* ignore */ }
             }
+            a.currentTime = 0
+            setIsPlaying(false)
+            setCurrentTime(0)
+            setDuration(isFinite(a.duration) ? a.duration : 0)
           }
         }
-  } catch { /* ignore */ }
-    }
-  }, [playlists, currentTrack])
+      }
+    } catch { /* ignore */ }
+
+    didRestoreRef.current = true
+  // run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Persist state when key values change
   useEffect(() => {
@@ -273,10 +287,44 @@ export const MusicPlayerApp: React.FC = () => {
     setCurrentTrack(track)
     setIsPlaying(true)
     if (audioRef.current && track.url) {
-      if (audioRef.current.src !== track.url) {
-        audioRef.current.src = track.url
+      const fullUrl = new URL(track.url, window.location.origin).href
+      console.log('Playing track:', track.title, 'URL:', fullUrl)
+
+      const playAudio = () => {
+        audioRef.current?.play().then(() => {
+          console.log('Audio started playing successfully')
+        }).catch((error) => {
+          console.log('Audio play failed:', error)
+          setIsPlaying(false)
+        })
       }
-      audioRef.current.play().catch(() => {/* autoplay block ignored */})
+
+      if (audioRef.current.src !== fullUrl) {
+        // Stop any current playback, set src, and force reload to ensure new file is fetched
+        try { audioRef.current.pause() } catch { /* ignore */ }
+        audioRef.current.src = fullUrl
+        try { audioRef.current.load() } catch { /* ignore */ }
+        try { audioRef.current.currentTime = 0 } catch { /* ignore */ }
+        console.log('Set audio src to:', fullUrl)
+
+        // Wait for audio to be ready before playing
+        const onCanPlay = () => {
+          audioRef.current?.removeEventListener('canplay', onCanPlay)
+      playAudio()
+      console.log('playTrack attempt - after play call; audio.src:', audioRef.current?.src, 'audio.currentSrc:', audioRef.current?.currentSrc)
+        }
+        audioRef.current.addEventListener('canplay', onCanPlay)
+
+        // Fallback timeout in case canplay doesn't fire
+        setTimeout(() => {
+          if (audioRef.current && !audioRef.current.paused) return // Already playing
+          audioRef.current?.removeEventListener('canplay', onCanPlay)
+          playAudio()
+        }, 1000)
+      } else {
+        // Same track, just play
+        playAudio()
+      }
     }
   }, [buildPlayQueue, audioRef])
 
@@ -303,7 +351,10 @@ export const MusicPlayerApp: React.FC = () => {
     const a = audioRef.current
     if (!a) return
 
-    const onPlay = () => setIsPlaying(true)
+    const onPlay = () => {
+      setIsPlaying(true)
+      console.log('Audio onPlay event - src:', a.src, 'currentSrc:', a.currentSrc, 'currentTime:', a.currentTime, 'duration:', a.duration)
+    }
     const onPause = () => setIsPlaying(false)
     const onTime = () => {
       setCurrentTime(a.currentTime)
@@ -321,10 +372,38 @@ export const MusicPlayerApp: React.FC = () => {
       }
     }
 
-    a.addEventListener('play', onPlay)
+    const onError = (e: Event) => {
+      console.log('Audio error:', e, 'Error code:', (e.target as HTMLAudioElement).error?.code, 'Message:', (e.target as HTMLAudioElement).error?.message)
+      setIsPlaying(false)
+    }
+
+  a.addEventListener('play', onPlay)
     a.addEventListener('pause', onPause)
     a.addEventListener('timeupdate', onTime)
     a.addEventListener('ended', onEnd)
+    a.addEventListener('error', onError)
+    const resolveTrackFromSrc = (src: string): Track | undefined => {
+      if (!src) return undefined
+      // Strip origin and query/hash
+      try {
+        const urlObj = new URL(src)
+        src = urlObj.pathname
+      } catch { /* relative already */ }
+      // Match by endsWith of track.url (which is /audio/filename)
+      return playlists
+        .flatMap(p => p.tracks)
+        .find(t => src.endsWith(t.url) || src.endsWith(t.url.replace(/^\//, '')))
+    }
+
+    const onLoadedMetadata = () => {
+      console.log('loadedmetadata - src:', a.src, 'currentSrc:', a.currentSrc, 'duration:', a.duration)
+      const found = resolveTrackFromSrc(a.currentSrc || a.src)
+      if (found && (!currentTrack || currentTrack.id !== found.id)) {
+        // Update currentTrack without rebuilding queue (user may be mid-queue from MusicPlayer)
+        setCurrentTrack(found)
+      }
+    }
+    a.addEventListener('loadedmetadata', onLoadedMetadata)
 
     // Sync initial state
     setIsPlaying(!a.paused)
@@ -334,6 +413,8 @@ export const MusicPlayerApp: React.FC = () => {
       a.removeEventListener('pause', onPause)
       a.removeEventListener('timeupdate', onTime)
       a.removeEventListener('ended', onEnd)
+  a.removeEventListener('error', onError)
+  a.removeEventListener('loadedmetadata', onLoadedMetadata)
     }
   // We intentionally omit playNext from deps because it's stable via callback; adding it may cause early re-runs
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -37,12 +37,16 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
 
   const initialMuted = getCachedDesktop()?.soundEffectsEnabled === false
   const [muted, setMuted] = useState<boolean>(initialMuted)
+  const [audioInitialized, setAudioInitialized] = useState(false)
 
-  // Initialize ambient music - changes based on currentPreview
-  useEffect(() => {
-  // Respect server-backed sound effects setting and runtime mute state
-  const enabled = getCachedDesktop()?.soundEffectsEnabled
-  if (enabled === false || muted === true) return
+  // Initialize audio context only after user gesture
+  const initializeAudio = () => {
+    if (audioInitialized) return
+    setAudioInitialized(true)
+
+    // Respect server-backed sound effects setting and runtime mute state
+    const enabled = getCachedDesktop()?.soundEffectsEnabled
+    if (enabled === false || muted === true) return
 
     // Clean up previous context
     if (intervalRef.current) { clearInterval(intervalRef.current) }
@@ -116,7 +120,12 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
     bellSeq()
     padIntervalRef.current = setInterval(bellSeq, 18000)
 
-  return () => {
+  }
+
+  // Initialize ambient music - changes based on currentPreview
+  useEffect(() => {
+    // Clean up on unmount or mute change
+    return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (padIntervalRef.current) clearInterval(padIntervalRef.current)
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
@@ -124,6 +133,13 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
       }
     }
   }, [muted])
+
+  // Handle user gestures to initialize audio
+  const handleUserGesture = () => {
+    if (!audioInitialized) {
+      initializeAudio()
+    }
+  }
 
   useEffect(() => {
     const updateTime = () => {
@@ -144,10 +160,12 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
   }, [])
 
   const handleButtonHover = () => {
+    handleUserGesture()
     sounds.hover()
   }
 
   const handleUnlock = () => {
+    handleUserGesture()
     sounds.click()
     sounds.login()
     setIsExiting(true)
@@ -177,6 +195,7 @@ export const LockScreen: React.FC<Props> = ({ onUnlock, onRegister: _onRegister 
   }
 
   const toggleMute = async () => {
+    handleUserGesture()
     const nextMuted = !muted
     setMuted(nextMuted)
     try { await saveDesktopState({ soundEffectsEnabled: !nextMuted }) } catch { /* ignore */ }

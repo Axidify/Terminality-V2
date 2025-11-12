@@ -93,7 +93,13 @@ export const NowPlayingBar: React.FC = () => {
     const track = queue.find(t => t.id === id) || queue[0]
     const audio = document.querySelector('audio') as HTMLAudioElement | null
     if (!audio || !track || !track.url) return
-    if (audio.src !== track.url) audio.src = track.url
+    const fullUrl = new URL(track.url, window.location.origin).href
+    try { audio.pause() } catch { /* ignore */ }
+    if (audio.src !== fullUrl) {
+      audio.src = fullUrl
+      try { audio.load() } catch { /* ignore */ }
+      console.log('NowPlayingBar set audio src to:', fullUrl)
+    }
     audio.play().catch(() => {})
     setIsPlaying(true)
     setCurrentTrackId(track.id)

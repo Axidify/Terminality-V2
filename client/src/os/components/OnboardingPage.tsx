@@ -21,6 +21,7 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [audioInitialized, setAudioInitialized] = useState(false)
   
   // Audio context refs for ambient music
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -40,8 +41,11 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
     }))
   )
 
-  // Initialize ambient music
-  useEffect(() => {
+  // Initialize ambient music only after user gesture
+  const initializeAudio = () => {
+    if (audioInitialized) return
+    setAudioInitialized(true)
+
     // Respect server-backed sound effects setting
     const enabled = getCachedDesktop()?.soundEffectsEnabled
     if (enabled === false) return
@@ -117,7 +121,10 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
     const bellSeq = () => { bell(659.25, 0); bell(783.99, 3000); bell(987.77, 6000) }
     bellSeq()
     padIntervalRef.current = setInterval(bellSeq, 18000)
+  }
 
+  // Clean up audio on unmount
+  useEffect(() => {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       if (padIntervalRef.current) clearInterval(padIntervalRef.current)
@@ -126,6 +133,13 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
       }
     }
   }, [])
+
+  // Handle user gestures to initialize audio
+  const handleUserGesture = () => {
+    if (!audioInitialized) {
+      initializeAudio()
+    }
+  }
 
   // Disable right-click on onboarding
   useEffect(() => {
@@ -147,6 +161,7 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
   }, [])
 
   const handleNext = () => {
+    handleUserGesture()
     sounds.click()
     if (step === 'welcome') setStep('terms')
     else if (step === 'terms') {
@@ -160,6 +175,7 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
   }
 
   const handleCreateAccount = async () => {
+    handleUserGesture()
     setError(null)
     
     if (!username || !password) {
@@ -199,6 +215,7 @@ export const OnboardingPage: React.FC<Props> = ({ onComplete, onBack }) => {
   }
 
   const handleBack = () => {
+    handleUserGesture()
     sounds.click()
     if (step === 'terms') setStep('welcome')
     else if (step === 'account') setStep('terms')
