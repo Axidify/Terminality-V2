@@ -5,6 +5,20 @@ All notable changes to Terminality OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2025-11-12
+
+### Added
+- **Proxy Chain Icon**: Replaced placeholder network symbol with a system-style SVG to match the UI iconography.
+
+### Changed
+- **Store Search**: Centered the search input horizontally and vertically; constrained input width on large viewports and restored left-aligned placeholder text for readability.
+- **App Store**: Background effects (grid, scanlines, particles) are now confined to the app window (position: absolute) to avoid overlapping other windows and desktop widgets; categories wrap to avoid a scrollbar; featured section margin adjusted to prevent overlap with categories.
+- **About Page**: Updated to reflect the latest release and show an updated 'What's New' highlight that pulls from the changelog.
+
+### Fixed
+- **Layout Overlap**: Fixed featured items overlapping the categories row and the appstore background bleeding outside the app window.
+- **System Monitor stacking**: Ensured System Monitor stays behind other windows and uses a lower z-index.
+
 ## [0.5.4] - 2025-11-12
 
 ### Added
@@ -105,20 +119,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings panel
 
 ---
-
-## [0.5.5] - 2025-11-12
-
-### Added
-- **Proxy Chain Icon**: Replaced placeholder network symbol with a system-style SVG to match the UI iconography.
-
-### Changed
-- **Store Search**: Centered the search input horizontally and vertically; constrained input width on large viewports and restored left-aligned placeholder text for readability.
-- **App Store**: Background effects (grid, scanlines, particles) are now confined to the app window (position: absolute) to avoid overlapping other windows and desktop widgets; categories wrap to avoid a scrollbar; featured section margin adjusted to prevent overlap with categories.
-- **About Page**: Updated to reflect the latest release and show an updated 'What's New' highlight that pulls from the changelog.
-
-### Fixed
-- **Layout Overlap**: Fixed featured items overlapping the categories row and the appstore background bleeding outside the app window.
-- **System Monitor stacking**: Ensured System Monitor stays behind other windows and uses a lower z-index.
 
 ## Version History Quick Reference
 

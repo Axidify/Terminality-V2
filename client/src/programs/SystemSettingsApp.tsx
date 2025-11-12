@@ -447,26 +447,10 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   <span>{copyFeedback || 'Copy'}</span>
                 </button>
               </div>
-              <div className="release-info">
-                <p className="release-latest">Latest release: v{changelog.latest?.version || VERSION}</p>
-                <button className="small" onClick={() => document.querySelector('.changelog-section')?.scrollIntoView({ behavior: 'smooth' })}>View changelog</button>
-              </div>
               <p className="tagline">A Retro-Futuristic Operating System Simulation</p>
             </div>
 
             <div className="about-content-grid">
-              {/* Latest release highlight */}
-              {changelog.latest && (
-                <div className="about-section about-highlight" style={{ gridColumn: '1 / -1' }}>
-                  <h3>What’s New</h3>
-                  <p style={{ marginTop: 4 }}>{changelog.latest.summary || (changelog.latest.added[0] ?? '')}</p>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="small" onClick={() => { /* scroll to changelog */ document.querySelector('.changelog-section')?.scrollIntoView({ behavior: 'smooth' }) }}>View Changelog</button>
-                    <button className="small" onClick={checkForUpdates} title="Check for new updates">Check for updates</button>
-                    {updateFeedback && <span style={{ marginLeft: 8 }}>{updateFeedback}</span>}
-                  </div>
-                </div>
-              )}
               <div className="about-section about-description">
                 <h2>About Terminality</h2>
                 <p>
