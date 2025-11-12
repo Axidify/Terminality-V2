@@ -181,7 +181,7 @@ Below are step-by-step instructions and the required environment variables.
 #### Render UI one-liners
 - Backend Build Command (paste as a single line):
   ```sh
-  npm ci && npm run prisma:generate && (npx prisma migrate deploy || npm run prisma:dbpush)
+  npm ci && npm run prisma:generate && npx prisma migrate deploy && npx prisma db push
   ```
 - Backend Start Command:
   ```sh
@@ -205,7 +205,7 @@ Recommended setup (production): use a managed Postgres database on Render and Pr
    - Repository: this repo
    - Root Directory: `server`
    - Runtime: Node
-  - Build Command: use the one-liner above (includes a migrate→db push fallback)
+  - Build Command: use the one-liner above (runs migrate deploy, then db push to create tables if none exist)
    - Start Command: `node index.js`
    - Instance type/region: as needed
 3. Environment Variables (Server):
