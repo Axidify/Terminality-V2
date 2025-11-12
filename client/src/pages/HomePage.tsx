@@ -192,21 +192,15 @@ export const HomePage: React.FC = () => {
                 <span className="home-btn-arrow"><Icon name="arrow-right" size={14} /></span>
               </button>
               <a href="/reset" className="home-forgot-link">Forgot password?</a>
-              {/* NEW AGENT button intentionally removed */}
-              <button type="button" className="home-btn home-btn-secondary" onClick={submitHomeLoginWithGoogle}>
-                <span className="home-btn-text">SIGN IN WITH GOOGLE</span>
-                <span className="home-btn-arrow">
-                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-                    <path d="M12 2l2.6 5.4L20 9l-4 3.1L17 19l-5-2.8L7 19l1-6.9L4 9l5.4-1.6L12 2z" fill="currentColor" />
-                  </svg>
-                </span>
-              </button>
+              {/* Google Sign-in */}
+              <GoogleSignInButton
+                onSuccess={async (idToken: string) => { await loginWithGoogle(idToken); await saveDesktopState({ isLocked: true }); window.location.href = '/app' }}
+                onError={(e: unknown) => setHpGoogleError(String(e))}
+                disabled={hpGoogleBusy}
+              />
             </div>
           </div>
-          <div style={{ marginTop: 8 }}>
-            <GoogleSignInButton onSuccess={async (idToken: string) => { await loginWithGoogle(idToken); await saveDesktopState({ isLocked: true }); window.location.href = '/app' }} onError={(e: unknown) => setHpGoogleError(String(e))} disabled={hpGoogleBusy} />
-            {hpGoogleError && <div className="home-auth-error">{hpGoogleError}</div>}
-          </div>
+          {hpGoogleError && <div className="home-auth-error">{hpGoogleError}</div>}
         </div>
       </section>
 
