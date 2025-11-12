@@ -526,7 +526,7 @@ export const MusicPlayerApp: React.FC = () => {
   ), [])
 
   return (
-    <div className="music-player-root">
+    <div className="music-player-root" onContextMenu={(e) => e.preventDefault()}>
       {/* Background Effects */}
       <div className="music-bg-grid" />
       <div className="music-scanlines" />
