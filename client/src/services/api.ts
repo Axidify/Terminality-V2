@@ -23,7 +23,8 @@ function resolveApiBase(): string {
       // default to the known backend domain to avoid localhost in production.
       const host = window.location.hostname
       const hostFallbacks: Record<string, string> = {
-        'terminality.onrender.com': 'https://terminality-backend.onrender.com',
+        // Production host → API host mapping (safety net when VITE_API_BASE/overrides are absent)
+        'terminality.onrender.com': 'https://terminality-api.onrender.com',
       }
       const fallback = hostFallbacks[host]
       const chosen = ls || global || baked || fallback || DEFAULT_BASE
