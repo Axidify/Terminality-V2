@@ -79,7 +79,8 @@ export async function apiRequest<T>(path: string, options: { method?: HttpMethod
   }
   let res: Response
   try {
-    res = await fetch(`${getApiBase()}${path}`, { method, headers, body, credentials: 'include' })
+    // We use Authorization header tokens instead of cookies, so omit credentials to simplify CORS.
+    res = await fetch(`${getApiBase()}${path}`, { method, headers, body, credentials: 'omit' })
   } catch (_err) {
     // Mark API as offline for a short duration to prevent repeated retries
     ;(apiRequest as any)._offlineUntil = Date.now() + 5000
