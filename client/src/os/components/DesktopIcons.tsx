@@ -114,6 +114,15 @@ const baseIcons: DesktopIconDef[] = [
       y: 420,
       defaultOpts: { title: 'Profile', width: 460, height: 700 }
     }
+    ,
+    { 
+      type: 'modular',
+      name: 'Modular Apps',
+      icon: <StoreIcon size={50} />,
+      x: 130,
+      y: 520,
+      defaultOpts: { title: 'Modular Apps', width: 900, height: 650 }
+    }
 ]
 
 export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {

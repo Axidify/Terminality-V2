@@ -8,6 +8,7 @@ import { NotificationProvider } from './os/NotificationContext'
 import { ThemeProvider } from './os/ThemeContext'
 import { UserProvider } from './os/UserContext'
 import { WindowManagerProvider } from './os/WindowManager'
+import { PluginManagerProvider } from './modular-apps/PluginManager'
 import { HomePage } from './pages/HomePage'
 import ResetPage from './pages/ResetPage'
 import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
@@ -52,7 +53,8 @@ function OSApp() {
     <ThemeProvider>
       <NotificationProvider>
         <UserProvider>
-        <WindowManagerProvider>
+  <PluginManagerProvider>
+  <WindowManagerProvider>
           {/* Global session expiry UI */}
           <SessionExpiredOverlay />
           {view === 'lock' && (
@@ -70,7 +72,8 @@ function OSApp() {
           {view === 'desktop' && (
             <Desktop onLock={() => setView('lock')} />
           )}
-        </WindowManagerProvider>
+  </WindowManagerProvider>
+  </PluginManagerProvider>
         </UserProvider>
       </NotificationProvider>
     </ThemeProvider>

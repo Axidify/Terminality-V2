@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 import { ModularAppManifest } from './types'
+import registerAllBuiltin from './registerPlugins'
 
 interface PluginManagerContextValue {
   register: (manifest: ModularAppManifest) => void
@@ -36,6 +37,13 @@ export const PluginManagerProvider: React.FC<{ children: React.ReactNode }> = ({
       return next
     })
   }, [])
+
+  useEffect(() => {
+    // Register built-in plugins present in the bundle
+    try {
+      registerAllBuiltin().forEach(m => register(m))
+    } catch { /* no-op */ }
+  }, [register])
 
   const install = useCallback(async (id: string) => {
     setInstalledIds(prev => {
