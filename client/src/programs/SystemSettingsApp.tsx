@@ -127,7 +127,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             <line x1="12" y1="16" x2="12" y2="12"/>
             <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
-          What&apos;s New
+          About
         </button>
       </div>
 
@@ -327,14 +327,233 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
         {activeTab === 'about' && (
           <div className="about-panel">
             <div className="about-header">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <line x1="8" y1="21" x2="16" y2="21"/>
-                <line x1="12" y1="17" x2="12" y2="21"/>
+              <svg className="about-logo" width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <polygon 
+                  points="50,5 90,25 90,65 50,85 10,65 10,25" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2"
+                />
+                <circle cx="50" cy="30" r="3" fill="currentColor" />
+                <circle cx="70" cy="45" r="3" fill="currentColor" />
+                <circle cx="50" cy="60" r="3" fill="currentColor" />
+                <circle cx="30" cy="45" r="3" fill="currentColor" />
+                <line x1="50" y1="30" x2="70" y2="45" stroke="currentColor" strokeWidth="1.5" />
+                <line x1="70" y1="45" x2="50" y2="60" stroke="currentColor" strokeWidth="1.5" />
+                <line x1="50" y1="60" x2="30" y2="45" stroke="currentColor" strokeWidth="1.5" />
+                <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="50" cy="45" r="8" fill="currentColor" />
               </svg>
               <h1>Terminality OS</h1>
               <p className="version">Version {VERSION}</p>
-              <p className="release-date">Released {BUILD_DATE}</p>
+              <p className="tagline">A Retro-Futuristic Operating System Simulation</p>
+            </div>
+
+            <div className="about-content-grid">
+              <div className="about-section about-description">
+                <h2>About Terminality</h2>
+                <p>
+                  Terminality is an immersive single-player mystery game that blends puzzle solving, 
+                  deep online investigations, and narrative exploration within a retro terminal-based 
+                  operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate 
+                  through a mysterious digital world shrouded in intrigue.
+                </p>
+                <p>
+                  Experience a fully-functional desktop environment with authentic window management, 
+                  file systems, applications, and network simulations—all running in your browser.
+                </p>
+              </div>
+
+              <div className="about-section about-system-info">
+                <h2>System Information</h2>
+                <div className="info-table">
+                  <div className="info-row">
+                    <span className="info-label">Version</span>
+                    <span className="info-value">{VERSION}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Build Date</span>
+                    <span className="info-value">{BUILD_DATE}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Architecture</span>
+                    <span className="info-value">Web-Based (x64 Simulation)</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Kernel</span>
+                    <span className="info-value">React 18.3.1</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Runtime</span>
+                    <span className="info-value">Node.js Backend + Vite Frontend</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Graphics Engine</span>
+                    <span className="info-value">CSS3 + SVG + Canvas</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">License</span>
+                    <span className="info-value">MIT License</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="about-section about-features">
+                <h2>Key Features</h2>
+                <div className="features-grid">
+                  <div className="feature-item">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <path d="M9 3v18"/>
+                    </svg>
+                    <div>
+                      <strong>Multi-Window System</strong>
+                      <p>Drag, resize, minimize, and maximize windows with full desktop management</p>
+                    </div>
+                  </div>
+                  <div className="feature-item">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                      <polyline points="13 2 13 9 20 9"/>
+                    </svg>
+                    <div>
+                      <strong>Virtual Filesystem</strong>
+                      <p>Navigate folders, create files, and manage your virtual storage</p>
+                    </div>
+                  </div>
+                  <div className="feature-item">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="4 17 10 11 4 5"/>
+                      <line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                    <div>
+                      <strong>Terminal Emulator</strong>
+                      <p>Execute commands, run scripts, and explore the command-line interface</p>
+                    </div>
+                  </div>
+                  <div className="feature-item">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="3" width="20" height="14" rx="2"/>
+                      <line x1="8" y1="21" x2="16" y2="21"/>
+                      <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <div>
+                      <strong>Web Browser</strong>
+                      <p>Browse simulated websites with realistic social media and news platforms</p>
+                    </div>
+                  </div>
+                  <div className="feature-item">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 18V5l12-2v13"/>
+                      <circle cx="6" cy="18" r="3"/>
+                      <circle cx="18" cy="16" r="3"/>
+                    </svg>
+                    <div>
+                      <strong>Music Player</strong>
+                      <p>Play tracks, create playlists, and control playback across the desktop</p>
+                    </div>
+                  </div>
+                  <div className="feature-item">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="3"/>
+                      <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2"/>
+                    </svg>
+                    <div>
+                      <strong>17 Color Themes</strong>
+                      <p>Customize your experience with classic green, cyber blue, neon pink, and more</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="about-section about-tech">
+                <h2>Technology Stack</h2>
+                <div className="tech-stack">
+                  <div className="tech-category">
+                    <h3>Frontend</h3>
+                    <ul>
+                      <li>React 18 with TypeScript</li>
+                      <li>Vite for fast development</li>
+                      <li>CSS3 with CSS Variables</li>
+                      <li>Custom window management</li>
+                    </ul>
+                  </div>
+                  <div className="tech-category">
+                    <h3>Backend</h3>
+                    <ul>
+                      <li>Node.js + Express</li>
+                      <li>Prisma ORM</li>
+                      <li>SQLite Database</li>
+                      <li>JWT Authentication</li>
+                    </ul>
+                  </div>
+                  <div className="tech-category">
+                    <h3>Features</h3>
+                    <ul>
+                      <li>Session persistence</li>
+                      <li>User management</li>
+                      <li>State synchronization</li>
+                      <li>OAuth integration</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="about-section about-credits">
+                <h2>Credits & License</h2>
+                <div className="credits-content">
+                  <p>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <strong>Created by:</strong> Axidify
+                  </p>
+                  <p>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                    </svg>
+                    <strong>Repository:</strong> github.com/Axidify/Terminality-V2
+                  </p>
+                  <p>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <strong>License:</strong> MIT License - Open source and free to use
+                  </p>
+                  <p className="copyright">
+                    © 2025 Terminality OS. All rights reserved.<br/>
+                    Designed and built with passion for retro computing and cyberpunk aesthetics.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="about-section about-support">
+              <h2>Need Help?</h2>
+              <div className="support-content">
+                <p>
+                  For documentation, updates, and support, visit our GitHub repository or check the in-app help system.
+                </p>
+                <div className="support-links">
+                  <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                      <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    Documentation
+                  </button>
+                  <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="4 17 10 11 4 5"/>
+                      <line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                    Open Terminal
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="changelog-section">
