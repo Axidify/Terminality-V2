@@ -237,6 +237,52 @@ app.post('/api/auth/login', async (req, res) => {
   }
 })
 
+// Google ID token authentication helper
+// POST /api/auth/google expects { id_token }
+app.post('/api/auth/google', async (req, res) => {
+  const { id_token } = req.body || {}
+  if (!id_token) return res.status(400).json({ message: 'id_token required' })
+  try {
+    // Verify the ID token with Google's tokeninfo endpoint (simple dev approach)
+    const verifyUrl = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`
+    const resp = await fetch(verifyUrl)
+    if (!resp.ok) return res.status(401).json({ message: 'Invalid id_token' })
+    const info = await resp.json()
+    const { email, sub: providerId } = info
+    if (!email) return res.status(400).json({ message: 'email required from token' })
+
+    // Find or create a local user record
+    if (prisma) {
+      let user = await prisma.user.findUnique({ where: { email } })
+      if (!user) {
+        user = await prisma.user.create({ data: { username: `google_${providerId}`, email, password: 'oauth', role: 'user' } })
+      }
+      // Create session token
+      const token = signJwt({ userId: user.id, username: user.username, role: user.role })
+      const decoded = jwt.decode(token)
+      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+      try { await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'session' } }) } catch (err) {}
+      return res.json({ access_token: token })
+    }
+    // Fallback in-memory users
+    let user = users.find(u => u.email === email)
+    if (!user) {
+      const id = users.length + 1
+      const username = `google_${providerId}`
+      user = { id, username, email, password: 'oauth', role: 'user' }
+      users.push(user)
+    }
+    const token = signJwt({ userId: user.id, username: user.username, role: user.role })
+    const decoded = jwt.decode(token)
+    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+    tokens.set(token, { userId: user.id, expiresAt, revoked: false, type: 'session' })
+    res.json({ access_token: token })
+  } catch (e) {
+    console.error('[auth][google] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
 app.get('/api/auth/me', async (req, res) => {
   const auth = req.headers['authorization'] || ''
   const token = String(auth).replace(/^Bearer\s+/i, '')

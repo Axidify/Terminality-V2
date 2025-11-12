@@ -21,6 +21,11 @@ export async function me(): Promise<MeOut> {
   return apiRequest<MeOut>('/api/auth/me', { auth: true })
 }
 
+export async function loginWithGoogle(idToken: string): Promise<void> {
+  const t = await apiRequest<TokenOut>('/api/auth/google', { method: 'POST', body: { id_token: idToken } })
+  setToken(t.access_token)
+}
+
 export function logout() {
   setToken(null)
 }

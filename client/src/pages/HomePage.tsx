@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 
 import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
+import { loginWithGoogle } from '../services/auth'
 import { hydrateFromServer, saveDesktopState } from '../services/saveService'
 
 import './HomePage.css'
@@ -38,6 +39,8 @@ export const HomePage: React.FC = () => {
   const [hpPassword, setHpPassword] = useState('')
   const [hpBusy, setHpBusy] = useState(false)
   const [hpError, setHpError] = useState<string | null>(null)
+  const [hpGoogleBusy, setHpGoogleBusy] = useState(false)
+  const [hpGoogleError, setHpGoogleError] = useState<string | null>(null)
 
   const submitHomeLogin = async () => {
     setHpError(null)
@@ -52,6 +55,23 @@ export const HomePage: React.FC = () => {
       setHpError(e?.message || 'Authentication failed')
     } finally {
       setHpBusy(false)
+    }
+  }
+
+  const submitHomeLoginWithGoogle = async () => {
+    setHpGoogleError(null)
+    setHpGoogleBusy(true)
+    try {
+      // For a minimal scaffold we prompt for an id_token; replace with proper Google Identity flow for production
+      const idToken = window.prompt('Paste a Google ID token (id_token) to sign in')
+      if (!idToken) throw new Error('No token provided')
+      await loginWithGoogle(idToken)
+      await saveDesktopState({ isLocked: true })
+      window.location.href = '/app'
+    } catch (e: any) {
+      setHpGoogleError(e?.message || 'Google sign-in failed')
+    } finally {
+      setHpGoogleBusy(false)
     }
   }
 
@@ -170,6 +190,12 @@ export const HomePage: React.FC = () => {
                 </span>
               </a>
             </div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <button onClick={submitHomeLoginWithGoogle} className="home-btn home-btn-google" disabled={hpGoogleBusy}>
+              <span className="home-btn-text">Sign in with Google</span>
+            </button>
+            {hpGoogleError && <div className="home-auth-error">{hpGoogleError}</div>}
           </div>
         </div>
       </section>
