@@ -152,6 +152,9 @@ Provided in `.vscode/tasks.json` for convenient access:
 Configure via `.env` (create in `client/`):
 - `VITE_API_BASE` – Base URL for backend API
 
+Optional (OAuth):
+- `VITE_GOOGLE_CLIENT_ID` – Google OAuth client ID for the client button (if enabling Google sign-in)
+
 Example `.env`:
 ```env
 VITE_API_BASE=http://localhost:3000
@@ -164,6 +167,86 @@ Vitest 2.x with jsdom:
 npm test
 ```
 Add tests beside components with `*.test.tsx` or integration in `src/test/*integration.test.tsx`.
+
+## Deploying to Render
+
+This project has two deployables:
+- Backend API: `server/` (Node.js Web Service)
+- Frontend app: `client/` (Vite Static Site)
+
+Below are step-by-step instructions and the required environment variables.
+
+### 1) Backend (server/) — Render Web Service
+
+Recommended setup (production): use a managed Postgres database on Render and Prisma migrations.
+
+1. Create a Render PostgreSQL instance (Dashboard → New → PostgreSQL) and copy the Internal Database URL.
+2. In Render, create a new Web Service:
+   - Repository: this repo
+   - Root Directory: `server`
+   - Runtime: Node
+   - Build Command (Postgres):
+     - `npm ci && npx prisma generate && npx prisma migrate deploy`
+     - If you haven’t created migrations yet, use `npx prisma db push` as a temporary measure.
+   - Start Command: `node index.js`
+   - Instance type/region: as needed
+3. Environment Variables (Server):
+   - REQUIRED
+     - `JWT_SECRET` — A strong random secret for signing JWTs.
+     - `CLIENT_FRONTEND_URL` — Public URL of the frontend (e.g., `https://your-site.onrender.com`). Used for OAuth redirects.
+   - DATABASE (Postgres recommended)
+     - `DATABASE_URL` — From Render Postgres. Example: `postgresql://...`
+       - Prisma: also update Prisma datasource to Postgres (see note below).
+   - OPTIONAL
+     - `PORT` — Render provides `$PORT` automatically; you usually don’t need to set this.
+     - `JWT_EXPIRES_IN` — Defaults to `7d`.
+     - Google OAuth (if enabling full OAuth flow):
+       - `GOOGLE_CLIENT_ID`
+       - `GOOGLE_CLIENT_SECRET`
+       - `GOOGLE_REDIRECT_URI` — e.g., `https://your-api.onrender.com/api/auth/oauth/google/callback`
+     - `DEV_ADMIN_SECRET` — If using protected dev/admin endpoints in production.
+
+Prisma + Database Notes:
+- This repo ships with `server/prisma/schema.prisma` configured for SQLite (dev). For production on Render, switch to Postgres:
+  1. Change datasource:
+     ```prisma
+     datasource db {
+       provider = "postgresql"
+       url      = env("DATABASE_URL")
+     }
+     ```
+  2. Create migrations locally (recommended): `npx prisma migrate dev -n init`
+  3. Commit migrations and push.
+  4. On Render, use `npx prisma migrate deploy` in the Build Command.
+
+SQLite quick demo (not recommended for production):
+- You can deploy with the current SQLite setup by using `npx prisma db push` in the Build Command. However, Render’s ephemeral filesystem means data will be lost on redeploys or restarts. Prefer Postgres for persistence.
+
+### 2) Frontend (client/) — Render Static Site
+
+1. In Render, create a Static Site:
+   - Repository: this repo
+   - Root Directory: `client`
+   - Build Command: `npm ci && npm run build`
+   - Publish Directory: `dist`
+2. Environment Variables (Client):
+   - REQUIRED
+     - `VITE_API_BASE` — The base URL of the backend API (e.g., `https://your-api.onrender.com`)
+   - OPTIONAL
+     - `VITE_GOOGLE_CLIENT_ID` — Needed if using the Google sign-in button.
+
+### CORS & Redirects
+- The server uses permissive CORS in dev. Set `CLIENT_FRONTEND_URL` to your static site URL so OAuth redirects return to the correct frontend location.
+- OAuth callback route (server): `/api/auth/oauth/google/callback`
+- Client retrieves the access token from the URL hash on redirect.
+
+### Post-deploy checklist
+- Verify API health: `GET https://your-api.onrender.com/api/state` returns JSON (requires auth for protected routes).
+- In the client, set `VITE_API_BASE` to the API origin and redeploy if changed.
+- If using Google sign-in:
+  - Add your frontend origin to the Google OAuth client (Authorized JavaScript origins).
+  - Set the authorized redirect URI to your server callback route.
+  - Provide `VITE_GOOGLE_CLIENT_ID` to the client and `GOOGLE_*` vars to the server.
 
 ## Updating Version & About Page
 
