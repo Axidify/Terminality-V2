@@ -89,6 +89,21 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
     }
   }
 
+  const [updateFeedback, setUpdateFeedback] = useState<string>('')
+  const [contributors, setContributors] = useState<string[]>([]) // scaffold for contributors list
+
+  const checkForUpdates = async () => {
+    setUpdateFeedback('Checking...')
+    try {
+      const data = await fetchAndParseChangelog()
+      setChangelog(data)
+      setUpdateFeedback(data.latest ? `Latest: v${data.latest.version}` : 'No updates found')
+    } catch (err) {
+      setUpdateFeedback('Failed to check updates')
+    }
+    setTimeout(() => setUpdateFeedback(''), 2000)
+  }
+
   const applyTheme = () => {
     setTheme(previewTheme as keyof typeof themes)
   }
@@ -381,6 +396,18 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             </div>
 
             <div className="about-content-grid">
+              {/* Latest release highlight */}
+              {changelog.latest && (
+                <div className="about-section about-highlight" style={{ gridColumn: '1 / -1' }}>
+                  <h3>What’s New</h3>
+                  <p style={{ marginTop: 4 }}>{changelog.latest.summary || (changelog.latest.added[0] ?? '')}</p>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="small" onClick={() => { /* scroll to changelog */ document.querySelector('.changelog-section')?.scrollIntoView({ behavior: 'smooth' }) }}>View Changelog</button>
+                    <button className="small" onClick={checkForUpdates} title="Check for new updates">Check for updates</button>
+                    {updateFeedback && <span style={{ marginLeft: 8 }}>{updateFeedback}</span>}
+                  </div>
+                </div>
+              )}
               <div className="about-section about-description">
                 <h2>About Terminality</h2>
                 <p>
@@ -388,6 +415,12 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   deep online investigations, and narrative exploration within a retro terminal-based 
                   operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate 
                   through a mysterious digital world shrouded in intrigue.
+                </p>
+                <p>
+                  Why this game exists: Terminality was created to celebrate the charm of retro
+                  computing and to explore interactive storytelling in a simulated OS. It was built
+                  as a creative exercise to blend puzzles with a narrative that rewards curiosity and
+                  thoughtful investigation.
                 </p>
                 <p>
                   Experience a fully-functional desktop environment with authentic window management, 
@@ -546,6 +579,17 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     </svg>
                     <strong>Repository:</strong> github.com/Axidify/Terminality-V2
                   </p>
+                  <div className="contributors-scaffold">
+                    <h3>Contributors</h3>
+                    {contributors.length === 0 ? (
+                      <p style={{ color: 'var(--color-textDim)' }}>No contributors yet — this is a scaffold for contributor profiles.</p>
+                    ) : (
+                      <ul>
+                        {contributors.map(c => <li key={c}>{c}</li>)}
+                      </ul>
+                    )}
+                    <button className="small" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>Contribute on GitHub</button>
+                  </div>
                   <p>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -583,6 +627,13 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     </svg>
                     Open Terminal
                   </button>
+                  <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
+                    Report an issue
+                  </button>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="support-btn" onClick={() => wm.open('browser', { title: 'Sponsor', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/sponsors/Axidify' } })}>Sponsor</button>
+                    <button className="support-btn" onClick={() => wm.open('browser', { title: 'Donate', width: 1000, height: 700, payload: { initialUrl: 'https://www.example.com/donate' } })}>Donate</button>
+                  </div>
                 </div>
               </div>
             </div>
