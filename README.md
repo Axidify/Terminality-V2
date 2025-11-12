@@ -200,6 +200,12 @@ Recommended setup (production): use a managed Postgres database on Render and Pr
    - OPTIONAL
      - `PORT` — Render provides `$PORT` automatically; you usually don’t need to set this.
      - `JWT_EXPIRES_IN` — Defaults to `7d`.
+      - `NODE_ENV` — Set to `production` in production. When `production`, the server selects the Postgres Prisma schema automatically. In non-production, it defaults to SQLite.
+      - `DB_PROVIDER` — Override provider selection explicitly (`postgres` or `sqlite`). Takes precedence over `NODE_ENV`.
+      - Seed Admin (used by `prisma/seed.js` on initial setup):
+        - `ADMIN_USERNAME` — Default `admin`
+        - `ADMIN_PASSWORD` — Default `admin`
+        - `ADMIN_EMAIL` — Default `<ADMIN_USERNAME>@example.local`
      - Google OAuth (if enabling full OAuth flow):
        - `GOOGLE_CLIENT_ID`
        - `GOOGLE_CLIENT_SECRET`
@@ -207,17 +213,14 @@ Recommended setup (production): use a managed Postgres database on Render and Pr
      - `DEV_ADMIN_SECRET` — If using protected dev/admin endpoints in production.
 
 Prisma + Database Notes:
-- This repo ships with `server/prisma/schema.prisma` configured for SQLite (dev). For production on Render, switch to Postgres:
-  1. Change datasource:
-     ```prisma
-     datasource db {
-       provider = "postgresql"
-       url      = env("DATABASE_URL")
-     }
-     ```
-  2. Create migrations locally (recommended): `npx prisma migrate dev -n init`
-  3. Commit migrations and push.
-  4. On Render, use `npx prisma migrate deploy` in the Build Command.
+- Automatic provider selection:
+  - The server runs a schema selector on install and before Prisma commands.
+  - If `DB_PROVIDER=postgres` (or `NODE_ENV=production`), it copies `schema.postgres.prisma` to `schema.prisma`.
+  - Otherwise, it uses `schema.sqlite.prisma` for development.
+- Migrations (recommended with Postgres):
+  1. Create migrations locally: `npx prisma migrate dev -n init`
+  2. Commit migrations and push.
+  3. On Render, use `npx prisma migrate deploy` in the Build Command.
 
 SQLite quick demo (not recommended for production):
 - You can deploy with the current SQLite setup by using `npx prisma db push` in the Build Command. However, Render’s ephemeral filesystem means data will be lost on redeploys or restarts. Prefer Postgres for persistence.

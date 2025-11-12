@@ -1,0 +1,36 @@
+// Prisma schema for dev SQLite persistence
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model State {
+  id   Int  @id @default(1)
+  // Use String to store a JSON-serialized representation for SQLite
+  data String
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  username String  @unique
+  email    String? @unique
+  password String
+  role     String  @default("user")
+  tokens   Token[]
+}
+
+model Token {
+  id     Int    @id @default(autoincrement())
+  token  String @unique
+  user   User?  @relation(fields: [userId], references: [id])
+  userId Int?
+  // Track when a token was issued, optional expiry and a revocation flag for dev convenience
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  revoked Boolean @default(false)
+  type String @default("session")
+}
