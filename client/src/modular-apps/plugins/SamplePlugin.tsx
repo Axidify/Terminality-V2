@@ -17,7 +17,11 @@ export const manifest: ModularAppManifest = {
   name: 'Sample Plugin',
   description: 'A simple sample plugin for testing the modular apps API',
   version: '0.0.1',
-  component: SamplePlugin
+  component: SamplePlugin,
+  category: 'utilities',
+  rating: 4.0,
+  downloads: 500,
+  author: 'Terminality'
 }
 
 export function registerSamplePlugin(register: (m: ModularAppManifest) => void) {

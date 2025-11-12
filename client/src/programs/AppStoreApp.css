@@ -68,6 +68,25 @@
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   background: var(--color-surface);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) var(--color-surface);
+}
+
+.appstore-categories::-webkit-scrollbar {
+  height: 6px;
+}
+
+.appstore-categories::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+.appstore-categories::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.appstore-categories::-webkit-scrollbar-thumb:hover {
+  background: var(--color-textDim);
 }
 
 .category-btn {
@@ -81,11 +100,14 @@
   white-space: nowrap;
   transition: all 0.2s;
   font-weight: 500;
+  min-width: fit-content;
+  flex-shrink: 0;
 }
 
 .category-btn:hover {
-  background: var(--color-surface);
+  background: var(--color-surfaceHover, var(--color-surface));
   border-color: var(--color-primary);
+  transform: translateY(-1px);
 }
 
 .category-btn.active {
@@ -93,6 +115,7 @@
   color: var(--color-background);
   border-color: var(--color-primary);
   font-weight: 600;
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
 }
 
 /* Featured Section */
