@@ -53,7 +53,7 @@ export const AppStoreApp: React.FC = () => {
       <div className="app-rating">
         {[...Array(5)].map((_, i) => (
           <span key={i} className="star">
-            <StarIcon filled={i < fullStars} size={14} />
+            <StarIcon filled={i < fullStars} size={16} />
           </span>
         ))}
         <span className="rating-text">{rating.toFixed(1)}</span>
@@ -108,7 +108,7 @@ export const AppStoreApp: React.FC = () => {
                 <p className="featured-author">by {app.author || 'Unknown'}</p>
                 <div className="featured-footer">
                   <span className="download-count">
-                    <DownloadIcon size={12} /> {app.downloads?.toLocaleString() || 0}
+                    <DownloadIcon size={14} /> {app.downloads?.toLocaleString() || 0}
                   </span>
                   {pm.isInstalled(app.id) ? (
                     <div className="featured-actions">
@@ -144,7 +144,7 @@ export const AppStoreApp: React.FC = () => {
               </div>
 
               <div className="app-downloads">
-                <DownloadIcon size={12} /> {app.downloads?.toLocaleString() || 0} downloads
+                <DownloadIcon size={14} /> {app.downloads?.toLocaleString() || 0} downloads
               </div>
 
               <div className="app-actions">

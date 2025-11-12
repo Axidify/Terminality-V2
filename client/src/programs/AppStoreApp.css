@@ -12,39 +12,40 @@
 
 /* Header */
 .appstore-header {
-  padding: 20px;
+  padding: 32px 28px;
   background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-background) 100%);
   border-bottom: 1px solid var(--color-border);
 }
 
 .appstore-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
+  margin: 0 0 10px 0;
+  font-size: 36px;
   font-weight: 600;
   color: var(--color-primary);
+  letter-spacing: -0.5px;
 }
 
 .appstore-header p {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--color-textDim);
 }
 
 /* Search Bar */
 .appstore-search-bar {
-  padding: 16px 20px;
+  padding: 20px 28px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
 }
 
 .search-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 14px 16px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--color-background);
   color: var(--color-text);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   outline: none;
   transition: border-color 0.2s;
@@ -62,23 +63,24 @@
 /* Categories */
 .appstore-categories {
   display: flex;
-  gap: 8px;
-  padding: 12px 20px;
+  gap: 10px;
+  padding: 18px 28px;
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   background: var(--color-surface);
 }
 
 .category-btn {
-  padding: 6px 12px;
+  padding: 10px 20px;
   border: 1px solid var(--color-border);
   background: var(--color-background);
   color: var(--color-text);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
+  font-weight: 500;
 }
 
 .category-btn:hover {
@@ -95,31 +97,32 @@
 
 /* Featured Section */
 .appstore-featured {
-  padding: 24px 20px;
+  padding: 32px 28px;
   border-bottom: 2px solid var(--color-border);
 }
 
 .appstore-featured h2 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
+  margin: 0 0 20px 0;
+  font-size: 20px;
   font-weight: 600;
   color: var(--color-primary);
+  letter-spacing: -0.3px;
 }
 
 .featured-apps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
 }
 
 .featured-card {
-  padding: 16px;
+  padding: 24px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   transition: all 0.2s;
 }
 
@@ -136,21 +139,21 @@
 
 .featured-card h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--color-text);
 }
 
 .featured-desc {
   margin: 0;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--color-textDim);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .featured-author {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-textDim);
 }
 
@@ -163,24 +166,24 @@
 .download-count {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 13px;
   color: var(--color-textDim);
 }
 
 .featured-actions {
   display: flex;
-  gap: 6px;
+  gap: 10px;
 }
 
 .btn-install,
 .btn-small,
 .btn-primary,
 .btn-secondary {
-  padding: 6px 12px;
+  padding: 10px 18px;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -206,8 +209,8 @@
   background: var(--color-primary);
   color: var(--color-background);
   border-color: var(--color-primary);
-  padding: 4px 8px;
-  font-size: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
 }
 
 .btn-small.uninstall,
@@ -215,8 +218,8 @@
   background: transparent;
   color: var(--color-text);
   border-color: var(--color-border);
-  padding: 4px 8px;
-  font-size: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
 }
 
 .btn-small.uninstall:hover,
@@ -227,32 +230,33 @@
 
 /* Apps Section */
 .appstore-section {
-  padding: 24px 20px;
+  padding: 32px 28px;
   flex: 1;
 }
 
 .appstore-section h2 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
+  margin: 0 0 24px 0;
+  font-size: 20px;
   font-weight: 600;
   color: var(--color-primary);
+  letter-spacing: -0.3px;
 }
 
 /* Apps Grid */
 .apps-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
 }
 
 .app-card {
-  padding: 12px;
+  padding: 20px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   transition: all 0.2s;
 }
 
@@ -269,32 +273,33 @@
 
 .app-card h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--color-text);
 }
 
 .app-version {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-textDim);
   background: var(--color-background);
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 .app-description {
   margin: 0;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--color-textDim);
-  line-height: 1.3;
+  line-height: 1.5;
   flex: 1;
+  min-height: 40px;
 }
 
 .app-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .app-author {
@@ -304,7 +309,7 @@
 .app-rating {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   color: var(--color-primary);
 }
 
@@ -314,21 +319,22 @@
 }
 
 .rating-text {
-  font-size: 10px;
-  margin-left: 2px;
+  font-size: 12px;
+  margin-left: 3px;
+  font-weight: 500;
 }
 
 .app-downloads {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-textDim);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .app-actions {
   display: flex;
-  gap: 6px;
+  gap: 10px;
   margin-top: auto;
 }
 
@@ -338,9 +344,10 @@
 
 /* No Results */
 .no-results {
-  padding: 40px 20px;
+  padding: 60px 20px;
   text-align: center;
   color: var(--color-textDim);
+  font-size: 14px;
 }
 
 /* Scrollbar styling */
@@ -367,18 +374,21 @@
     grid-template-columns: 1fr;
   }
   .apps-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 }
 
 @media (max-width: 600px) {
   .appstore-header {
-    padding: 16px;
+    padding: 24px 20px;
   }
   .appstore-header h1 {
-    font-size: 22px;
+    font-size: 28px;
+  }
+  .appstore-section {
+    padding: 24px 20px;
   }
   .apps-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 }
