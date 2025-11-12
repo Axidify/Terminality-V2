@@ -266,6 +266,7 @@ Save and redeploy the static site. Without this rule, navigating directly to `/a
 - If Render detects Python and asks for `requirements.txt`, the service was created with the wrong runtime. Delete it and re-create as a Node service with Root Directory set to `server`.
 - Ensure `DATABASE_URL` is set and accessible from the service (use the Internal Database URL for Render Postgres).
 - Set `NODE_ENV=production` (or `DB_PROVIDER=postgres`) so Prisma uses the Postgres schema in production.
+- If the frontend in production keeps calling `http://localhost:3000`, the client was built without `VITE_API_BASE`. In your Render Static Site (frontend) service, add env var `VITE_API_BASE=https://your-api.onrender.com` and redeploy the frontend so the compiled app points at the correct API.
 2. Environment Variables (Client):
    - REQUIRED
      - `VITE_API_BASE` — The base URL of the backend API (e.g., `https://your-api.onrender.com`)

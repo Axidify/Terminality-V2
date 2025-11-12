@@ -1,7 +1,33 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
 const DEFAULT_BASE = 'http://localhost:3000'
-const API_BASE = (import.meta as any)?.env?.VITE_API_BASE || DEFAULT_BASE
+
+// Resolve API base with fallbacks and a runtime override for production debugging.
+// Order of precedence (highest first):
+// 1) localStorage 'API_BASE_OVERRIDE' (set via ?api=... or manual)
+// 2) window.__API_BASE__ (if injected by hosting)
+// 3) VITE_API_BASE (baked at build time)
+// 4) DEFAULT_BASE
+function resolveApiBase(): string {
+  try {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      const qp = url.searchParams.get('api')
+      if (qp) {
+        try { window.localStorage.setItem('API_BASE_OVERRIDE', qp) } catch { /* ignore */ }
+      }
+      const ls = (() => { try { return window.localStorage.getItem('API_BASE_OVERRIDE') } catch { return null } })()
+      const global = (window as any).__API_BASE__
+      const baked = (import.meta as any)?.env?.VITE_API_BASE
+      const chosen = ls || global || baked || DEFAULT_BASE
+      return String(chosen).replace(/\/$/, '')
+    }
+  } catch { /* ignore */ }
+  const baked = (import.meta as any)?.env?.VITE_API_BASE
+  return String(baked || DEFAULT_BASE).replace(/\/$/, '')
+}
+
+const API_BASE = resolveApiBase()
 
 export function getApiBase(): string {
   // Ensure no trailing slash
