@@ -427,14 +427,18 @@
 }
 
 .about-header h1 {
-  font-size: 48px;
-  margin: 0 0 12px 0;
+  /* Match lock screen typography for brand title */
+  font-size: clamp(24px, 5vw, 48px);
+  font-weight: 300;
   color: var(--color-primary);
-  font-weight: bold;
-  letter-spacing: 3px;
-  text-shadow: 0 0 30px rgba(var(--color-primary-rgb), 0.5);
+  text-shadow: 0 0 40px rgba(var(--color-primary-rgb), 0.6),
+               0 0 80px rgba(var(--color-primary-rgb), 0.3);
+  letter-spacing: clamp(6px, 1.5vw, 14px);
+  font-family: 'Courier New', monospace;
+  margin: 0 0 12px 0;
   position: relative;
   z-index: 1;
+  line-height: 1.2;
 }
 
 .about-header .version {
