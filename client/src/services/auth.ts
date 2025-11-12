@@ -1,7 +1,7 @@
 import { apiRequest, setToken, getToken } from './api'
 
 export interface TokenOut { access_token: string }
-export interface MeOut { id: number; username: string; is_admin?: boolean }
+export interface MeOut { id: number; username: string; display_name?: string; is_admin?: boolean }
 
 export async function register(username: string, password: string): Promise<void> {
   const res = await apiRequest<TokenOut>('/api/auth/register', { method: 'POST', body: { username, password } })

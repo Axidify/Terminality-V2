@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getApiBase } from '../services/api'
 
 import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
@@ -9,6 +10,7 @@ import { hydrateFromServer, saveDesktopState } from '../services/saveService'
 import './HomePage.css'
 
 export const HomePage: React.FC = () => {
+  const [isExiting, setIsExiting] = useState(false)
   const [time, setTime] = useState('')
   const [date, setDate] = useState('')
   const [scrolled, setScrolled] = useState(false)
@@ -32,6 +34,33 @@ export const HomePage: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Handle OAuth2 redirect hash fragment: #access_token=... (optional state preserved in search params)
+  useEffect(() => {
+    const hash = window.location.hash || ''
+    if (hash.startsWith('#')) {
+      setIsExiting(true)
+      const frag = new URLSearchParams(hash.slice(1))
+      const token = frag.get('access_token')
+      if (token) {
+        try {
+          // Store token via auth service so downstream hooks pick it up
+          const evt = new Event('authTokenChanged')
+          // setToken is internal to auth.ts; we simulate by posting to loginWithGoogle fallback if needed
+          // Instead of exposing setToken here, we perform a direct fetch to /api/auth/me to validate then dispatch event.
+          // Simplify by writing token into localStorage directly (aligns with api.ts storage convention)
+          localStorage.setItem('authToken', token)
+          window.dispatchEvent(evt)
+          // Clean hash from URL to avoid repeated processing
+          history.replaceState(null, document.title, window.location.pathname + window.location.search)
+          // Lock state then navigate
+          ;(async () => { try { await saveDesktopState({ isLocked: true }) } catch {} setTimeout(() => { window.location.href = '/app' }, 400) })()
+        } catch (e) {
+          console.error('[oauth][token][store] error', e)
+        }
+      }
+    }
+  }, [])
+
   // features array removed (replaced with game-focused feature cards)
 
   // Authentication for HomePage (moved from LockScreen)
@@ -50,8 +79,8 @@ export const HomePage: React.FC = () => {
       await ctxLogin(hpUsername, hpPassword)
       // After successful auth, ensure the OS starts at the Lock screen
       await saveDesktopState({ isLocked: true })
-      // Navigate to OS (App gates /app and OSApp will show Lock first)
-      window.location.href = '/app'
+      setIsExiting(true)
+      setTimeout(() => { window.location.href = '/app' }, 500)
     } catch (e: any) {
       setHpError(e?.message || 'Authentication failed')
     } finally {
@@ -59,21 +88,10 @@ export const HomePage: React.FC = () => {
     }
   }
 
-  const submitHomeLoginWithGoogle = async () => {
-    setHpGoogleError(null)
-    setHpGoogleBusy(true)
-    try {
-      // For a minimal scaffold we prompt for an id_token; replace with proper Google Identity flow for production
-      const idToken = window.prompt('Paste a Google ID token (id_token) to sign in')
-      if (!idToken) throw new Error('No token provided')
-      await loginWithGoogle(idToken)
-      await saveDesktopState({ isLocked: true })
-      window.location.href = '/app'
-    } catch (e: any) {
-      setHpGoogleError(e?.message || 'Google sign-in failed')
-    } finally {
-      setHpGoogleBusy(false)
-    }
+  const submitHomeLoginWithGoogle = () => {
+    // Start OAuth redirect flow and animate out like LockScreen
+    setIsExiting(true)
+    setTimeout(() => { window.location.href = `${getApiBase()}/api/auth/oauth/google` }, 500)
   }
 
   // Guard navigation to OS routes behind auth
@@ -86,7 +104,7 @@ export const HomePage: React.FC = () => {
   }
 
   return (
-    <div className="home-page">
+    <div className={`home-page ${isExiting ? 'exiting' : ''}`}>
       {/* Background grid and scanlines */}
       <div className="home-bg-grid"></div>
       <div className="home-scanlines"></div>
@@ -174,26 +192,19 @@ export const HomePage: React.FC = () => {
                 <span className="home-btn-arrow"><Icon name="arrow-right" size={14} /></span>
               </button>
               <a href="/reset" className="home-forgot-link">Forgot password?</a>
-              <a href="/app?onboarding=1" className="home-btn home-btn-secondary" onClick={guardNav}>
-                <span className="home-btn-text">NEW AGENT</span>
+              {/* NEW AGENT button intentionally removed */}
+              <button type="button" className="home-btn home-btn-secondary" onClick={submitHomeLoginWithGoogle}>
+                <span className="home-btn-text">SIGN IN WITH GOOGLE</span>
                 <span className="home-btn-arrow">
                   <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
                     <path d="M12 2l2.6 5.4L20 9l-4 3.1L17 19l-5-2.8L7 19l1-6.9L4 9l5.4-1.6L12 2z" fill="currentColor" />
                   </svg>
                 </span>
-              </a>
-              <a href="/app" className="home-btn home-btn-secondary" onClick={guardNav}>
-                <span className="home-btn-text">ENTER SYSTEM</span>
-                <span className="home-btn-arrow">
-                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-                    <path d="M5 12h11M13 6l6 6-6 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                  </svg>
-                </span>
-              </a>
+              </button>
             </div>
           </div>
           <div style={{ marginTop: 8 }}>
-            <GoogleSignInButton onSuccess={async (idToken) => { await loginWithGoogle(idToken); await saveDesktopState({ isLocked: true }); window.location.href = '/app' }} onError={(e) => setHpGoogleError(String(e))} disabled={hpGoogleBusy} />
+            <GoogleSignInButton onSuccess={async (idToken: string) => { await loginWithGoogle(idToken); await saveDesktopState({ isLocked: true }); window.location.href = '/app' }} onError={(e: unknown) => setHpGoogleError(String(e))} disabled={hpGoogleBusy} />
             {hpGoogleError && <div className="home-auth-error">{hpGoogleError}</div>}
           </div>
         </div>

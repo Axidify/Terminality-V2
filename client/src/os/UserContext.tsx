@@ -20,7 +20,9 @@ interface UserContextValue {
 const UserContext = createContext<UserContextValue | undefined>(undefined)
 
 function toUser(me: MeOut): User {
-  return { id: me.id, username: me.username, isAdmin: !!me.is_admin }
+  // Prefer display_name if the server provided it (eg, for google accounts)
+  const username = (me as any).display_name || me.username
+  return { id: me.id, username, isAdmin: !!me.is_admin }
 }
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

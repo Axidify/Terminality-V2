@@ -47,13 +47,44 @@ If you used the default seed, the admin user already exists and you can login wi
 
 Note: `PATCH` is protected and requires an admin token to be present in the `Authorization` header.
 
-Google SSO (dev scaffold)
--------------------------
-This repository includes a small, developer-friendly scaffold for Google SSO:
-- The server exposes POST `/api/auth/google` which you can POST a Google ID token (`id_token`) to.
-- The server will verify the token with Google's `tokeninfo` endpoint and then create/lookup a local user and return an `access_token` (JWT) that the client can use for authenticated requests.
+Google SSO (ID Token) & Full OAuth2 Flow
+----------------------------------------
+This repository supports two Google sign‑in approaches for development:
 
-This is intended as a minimal dev scaffold; for production, replace this flow with a proper OIDC/OAuth2 client and secure token validation.
+1. Minimal ID Token POST (Legacy Scaffold)
+	- Endpoint: `POST /api/auth/google` with body `{ id_token }`.
+	- Verifies the token using `google-auth-library` (preferred) or falls back to Google's `tokeninfo` endpoint if a client ID isn't configured.
+	- Creates or looks up a local user and returns a JWT `access_token`.
+
+2. Full OAuth 2.0 Authorization Code Flow (Recommended)
+	- Start: `GET /api/auth/oauth/google` redirects the browser to Google's consent screen.
+	- Callback: Google redirects back to `GET /api/auth/oauth/google/callback?code=...` (must match `GOOGLE_REDIRECT_URI`).
+	- The server exchanges the `code` for tokens, verifies the `id_token`, creates/looks up the user, then redirects to the frontend with the JWT in the hash fragment (`/#access_token=...`).
+
+Environment variables required (see `.env.example`):
+
+```env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/oauth/google/callback
+CLIENT_FRONTEND_URL=http://localhost:5173
+JWT_SECRET=replace-with-secure-random
+```
+
+Security Notes:
+- Do NOT commit real secrets (.env is gitignored).
+- Hash fragment redirect (`/#access_token=...`) avoids leaking tokens via server logs or intermediary proxies capturing query strings.
+- Rotate credentials immediately if they are ever exposed in plaintext in commits, PRs, or chat (treat exposed secrets as compromised).
+- Prefer verifying ID tokens with `google-auth-library`'s `verifyIdToken`, not just relying on `tokeninfo`.
+- In production, consider state/nonce validation and CSRF protections; add PKCE for native/public clients.
+
+Client Handling:
+- The frontend should parse the `access_token` from `window.location.hash` after redirect and store it (see planned hook/update in `HomePage.tsx`).
+- A page refresh after storing the token ensures subsequent API calls include Authorization headers via existing utilities.
+
+Migration Path:
+- Existing minimal POST flow continues to work; you can progressively migrate to the redirect flow without breaking tests.
+- Integration tests can mock `google-auth-library` while exercising user creation logic.
 
 Password reset and profile updates
 ----------------------------------
@@ -93,6 +124,10 @@ The server will fall back to the file-based `state.json` if Prisma is not availa
 
 IMPORTANT: Do not commit your local `server/prisma/dev.db` file. It's a local SQLite database used for development and will lead to conflicts if checked in across branches.
 Prefer using the seed and setup scripts to create a local DB: `npm run prisma:setup`.
+
+Credential Hygiene Reminder
+---------------------------
+If any secret (Google client secret, JWT secret, etc.) was shared publicly or committed, rotate it in the provider console and update your `.env`. Treat all previously exposed values as compromised.
 
 Health check
 ------------
