@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react'
-import { VITE_GOOGLE_CLIENT_ID as _unused } from '/@env'
 
 declare global {
   interface Window {
