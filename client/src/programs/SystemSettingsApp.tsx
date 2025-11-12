@@ -563,7 +563,31 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                   </svg>
-                  <span><strong>System Monitor</strong>: Collapse/expand feature & improved z-index</span>
+                  <span><strong>Changelog & Versioning</strong>: Introduced a centralized changelog and version file (<code>client/src/version.ts</code>) with an automated bump script.</span>
+                </div>
+                <div className="changelog-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 7h16M4 12h16M4 17h16"/>
+                  </svg>
+                  <span><strong>Profile & User Management</strong>: Complete redesigns to match system UI, standardized colors, typography and layout, and moved interactive controls inside forms.</span>
+                </div>
+                <div className="changelog-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  </svg>
+                  <span><strong>About Page</strong>: Redesigned to a full OS-style About panel with system information, features, tech stack, credits and quick support links.</span>
+                </div>
+                <div className="changelog-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2l3 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z"/>
+                  </svg>
+                  <span><strong>Fixes</strong>: Desktop context menu 'About' now opens System Settings on the About tab; improved theme integration and CSS variable usage for consistent theming.</span>
+                </div>
+                <div className="changelog-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  <span><strong>System Monitor</strong>: Collapse/expand feature & improved z-index handling.</span>
                 </div>
               </div>
             </div>
@@ -632,8 +656,9 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
               <div className="version-history">
                 <h2>Version History</h2>
                 <div className="version-item">
-                  <strong>v0.5.3</strong> <span className="version-date">(Nov 10, 2025)</span>
-                  <p>System monitor collapse/expand feature, improved z-index layering</p>
+                  <strong>v0.5.3</strong> <span className="version-date">(Nov 12, 2025)</span>
+                  <p>UI redesigns for Profile and Users, About page overhaul, changelog/version system added, and theme integration improvements.</p>
+                  <p>Fixed desktop context menu behavior to open Settings - About and improved color/typography consistency.</p>
                 </div>
                 <div className="version-item">
                   <strong>v0.5.2</strong> <span className="version-date">(Nov 10, 2025)</span>
