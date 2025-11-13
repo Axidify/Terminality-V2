@@ -6,12 +6,14 @@ import './OnlineChatPlugin.css'
 
 export const OnlineChat: React.FC = () => {
   const [messages, setMessages] = useState<Array<{ id: number; username?: string; user?: { username: string }; content: string; createdAt: string }>>([])
-  const [users, setUsers] = useState<Array<{ id: number; username: string; online?: boolean }>>([])
+  const [users, setUsers] = useState<Array<{ id: number; username: string }>>([])
   const [content, setContent] = useState('')
   const [room, setRoom] = useState<string>('general')
   const [loading, setLoading] = useState(false)
   const mounted = useRef(true)
   const lastIdRef = useRef(0)
+  const lastSeenRef = useRef<Record<number, number>>({})
+  const PRESENCE_TTL_MS = 8000
 
   const fetchMessages = async () => {
     try {
@@ -58,11 +60,22 @@ export const OnlineChat: React.FC = () => {
     lastIdRef.current = 0
     fetchMessages()
     const pollId = setInterval(fetchMessages, 2000)
-    // presence ping every 20s; users list every 5s
-    const pingId = setInterval(() => { void apiRequest('/api/chat/ping', { method: 'POST', auth: true }).catch(() => {}) }, 20000)
+    // presence ping every 5s; users list every 10s (fallback)
+    const pingId = setInterval(() => { void apiRequest('/api/chat/ping', { method: 'POST', auth: true }).catch(() => {}) }, 5000)
     const usersId = setInterval(async () => {
-      try { const u = await apiRequest('/api/chat/users', { auth: true }); if (mounted.current) setUsers(Array.isArray(u) ? (u as any) : []) } catch {}
-    }, 5000)
+      try { const u = await apiRequest('/api/chat/users?onlineOnly=1', { auth: true }); if (mounted.current) {
+        // seed lastSeen entries for these users now
+        const now = Date.now()
+        (Array.isArray(u) ? (u as any) : []).forEach((usr: any) => { lastSeenRef.current[usr.id] = now })
+        setUsers(Array.isArray(u) ? (u as any) : [])
+      } } catch {}
+    }, 10000)
+    // prune users based on lastSeen for snappy offline detection
+    const pruneId = setInterval(() => {
+      if (!mounted.current) return
+      const now = Date.now()
+      setUsers(prev => prev.filter(u => (now - (lastSeenRef.current[u.id] || 0)) < PRESENCE_TTL_MS))
+    }, 1000)
     // Try to connect SSE
     let es: EventSource | null = null
     try {
@@ -81,13 +94,20 @@ export const OnlineChat: React.FC = () => {
                 lastIdRef.current = m.id
                 return next
               })
+            } else if (data && data.type === 'presence' && data.user) {
+              const u = data.user
+              lastSeenRef.current[u.id] = Date.now()
+              setUsers(prev => {
+                const exists = prev.some(x => x.id === u.id)
+                return exists ? prev : [...prev, { id: u.id, username: u.username }]
+              })
             }
           } catch { /* ignore malformed */ }
         }
         es.onerror = () => { /* silently rely on polling */ }
       }
     } catch { /* ignore */ }
-    return () => { mounted.current = false; clearInterval(pollId); clearInterval(pingId); clearInterval(usersId); if (es) es.close() }
+    return () => { mounted.current = false; clearInterval(pollId); clearInterval(pingId); clearInterval(usersId); clearInterval(pruneId); if (es) es.close() }
   }, [room])
 
   return (
@@ -101,14 +121,14 @@ export const OnlineChat: React.FC = () => {
             <option value="help">#help</option>
           </select>
         </div>
-        <div className="online-count">Online: {users.filter(u => u.online).length}</div>
+        <div className="online-count">Online: {users.length}</div>
       </div>
       <div className="online-chat-body">
         <aside className="online-chat-sidebar">
           <div className="sidebar-title">Users</div>
           <ul>
             {users.map(u => (
-              <li key={u.id} className={u.online ? 'online' : 'offline'}>
+              <li key={u.id} className={'online'}>
                 <span className="dot" /> {u.username}
               </li>
             ))}

@@ -34,6 +34,7 @@ const googleOauthClient = (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_RE
 
 // In-memory presence tracking (dev only) — userId -> timestamp ms
 const presence = new Map()
+const PRESENCE_TTL_MS = 8000
 
 async function readState() {
   if (prisma) {
@@ -385,6 +386,15 @@ function sseBroadcast(room, payload) {
   }
 }
 
+function sseBroadcastAll(payload) {
+  const data = `data: ${JSON.stringify(payload)}\n\n`
+  for (const [room, set] of sseClients.entries()) {
+    for (const res of set) {
+      try { res.write(data) } catch (e) { /* ignore broken pipe */ }
+    }
+  }
+}
+
 // GET /api/chat/stream?room=general&token=... (SSE)
 app.get('/api/chat/stream', async (req, res) => {
   try {
@@ -451,8 +461,9 @@ app.get('/api/chat/users', async (req, res) => {
     if (prisma) {
       const all = await prisma.user.findMany({ select: { id: true, username: true, role: true } })
       const now = Date.now()
-      const users = all.map(u => ({ ...u, online: !!(presence.get(u.id) && (now - presence.get(u.id) < 30000)) }))
-      return res.json(users)
+      const result = all.map(u => ({ ...u, online: !!(presence.get(u.id) && (now - presence.get(u.id) < PRESENCE_TTL_MS)) }))
+      const onlineOnly = String(req.query.onlineOnly || '').toLowerCase() === '1' || String(req.query.onlineOnly || '').toLowerCase() === 'true'
+      return res.json(onlineOnly ? result.filter(u => u.online) : result)
     }
     return res.status(500).json({ message: 'DB not available' })
   } catch (e) {
@@ -465,6 +476,8 @@ app.get('/api/chat/users', async (req, res) => {
 app.post('/api/chat/ping', authMiddleware, async (req, res) => {
   try {
     presence.set(req.user.id, Date.now())
+    // broadcast presence heartbeat to all rooms (room-agnostic)
+    try { sseBroadcastAll({ type: 'presence', user: { id: req.user.id, username: req.user.username }, ts: Date.now() }) } catch {}
     res.json({ message: 'pong' })
   } catch (e) {
     console.error('[chat][ping] error', e)
