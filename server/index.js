@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
 const cookieParser = require('cookie-parser')
+const rateLimit = require('express-rate-limit')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 // Use Prisma for persistence when available
@@ -96,6 +97,16 @@ app.options('*', cors({ origin: allowedOrigin, credentials: true }))
 // Parse JSON and URL-encoded bodies so the API accepts both JSON and x-www-form-urlencoded payloads
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
+
+// Rate limiting (prod by default; can be disabled via ENABLE_RATE_LIMIT=false)
+const makeLimiter = (opts) => {
+  const enable = process.env.NODE_ENV === 'production' ? (process.env.ENABLE_RATE_LIMIT !== 'false') : (process.env.ENABLE_RATE_LIMIT === 'true')
+  if (!enable) return (req, _res, next) => next()
+  return rateLimit({ standardHeaders: true, legacyHeaders: false, ...opts })
+}
+const authLimiter = makeLimiter({ windowMs: 15 * 60 * 1000, max: 100 })
+const resetLimiter = makeLimiter({ windowMs: 60 * 60 * 1000, max: 10 })
+const refreshLimiter = makeLimiter({ windowMs: 15 * 60 * 1000, max: 300 })
 
 // Simple in-memory users and tokens (for dev only)
 const users = [{ id: 1, username: 'player1', email: 'player1@example.local', password: bcrypt.hashSync('password', 10), role: 'user' }, { id: 2, username: 'admin', email: 'admin@example.local', password: bcrypt.hashSync('admin', 10), role: 'admin' }]
@@ -214,7 +225,7 @@ app.put('/api/state', authMiddleware, async (req, res) => {
   }
 })
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { username, password, email } = req.body || {}
   if (!username || !password) return res.status(400).json({ message: 'Missing username or password' })
   try {
@@ -242,7 +253,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { username, password } = req.body || {}
   try {
     if (prisma) {
@@ -270,7 +281,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Google ID token authentication helper
 // POST /api/auth/google expects { id_token }
-app.post('/api/auth/google', async (req, res) => {
+app.post('/api/auth/google', authLimiter, async (req, res) => {
   const { id_token } = req.body || {}
   if (!id_token) return res.status(400).json({ message: 'id_token required' })
   try {
@@ -326,7 +337,7 @@ app.post('/api/auth/google', async (req, res) => {
 
 // OAuth 2.0 Authorization Code flow (redirect-based)
 // Starts the Google OAuth flow by redirecting to Google's consent screen
-app.get('/api/auth/oauth/google', async (req, res) => {
+app.get('/api/auth/oauth/google', authLimiter, async (req, res) => {
   try {
     if (!googleOauthClient) return res.status(500).json({ message: 'OAuth not configured' })
     const state = typeof req.query.state === 'string' ? req.query.state : undefined
@@ -346,7 +357,7 @@ app.get('/api/auth/oauth/google', async (req, res) => {
 
 // Handles the OAuth callback, exchanges the code for tokens, verifies id_token,
 // issues a local JWT, and redirects to the frontend with the token
-app.get('/api/auth/oauth/google/callback', async (req, res) => {
+app.get('/api/auth/oauth/google/callback', authLimiter, async (req, res) => {
   try {
     if (!googleOauthClient) return res.status(500).json({ message: 'OAuth not configured' })
     const code = String(req.query.code || '')
@@ -439,7 +450,7 @@ app.get('/api/auth/me', async (req, res) => {
 })
 
 // Refresh access token using HttpOnly refresh cookie
-app.post('/api/auth/refresh', async (req, res) => {
+app.post('/api/auth/refresh', refreshLimiter, async (req, res) => {
   try {
     const refresh = req.cookies && req.cookies['refresh_token']
     if (!refresh) return res.status(401).json({ message: 'No refresh token' })
@@ -514,7 +525,7 @@ app.patch('/api/auth/me', authMiddleware, async (req, res) => {
 })
 
 // Password reset: request creates a reset token and (for dev) returns it; confirm consumes the token to update password
-app.post('/api/auth/reset/request', async (req, res) => {
+app.post('/api/auth/reset/request', resetLimiter, async (req, res) => {
   const { username, email } = req.body || {}
   console.log('[auth/reset/request] body:', req.body)
   const lookup = username || email
@@ -543,7 +554,7 @@ app.post('/api/auth/reset/request', async (req, res) => {
   }
 })
 
-app.post('/api/auth/reset/confirm', async (req, res) => {
+app.post('/api/auth/reset/confirm', resetLimiter, async (req, res) => {
   const { token, password } = req.body || {}
   if (!token || !password) return res.status(400).json({ message: 'token and password required' })
   try {
