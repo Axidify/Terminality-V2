@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { ModularAppManifest } from '../types'
-import { apiRequest } from '../../services/api'
+import { apiRequest, getApiBase, getToken } from '../../services/api'
 
 import './OnlineChatPlugin.css'
 
@@ -63,7 +63,31 @@ export const OnlineChat: React.FC = () => {
     const usersId = setInterval(async () => {
       try { const u = await apiRequest('/api/chat/users', { auth: true }); if (mounted.current) setUsers(Array.isArray(u) ? (u as any) : []) } catch {}
     }, 5000)
-    return () => { mounted.current = false; clearInterval(pollId); clearInterval(pingId); clearInterval(usersId) }
+    // Try to connect SSE
+    let es: EventSource | null = null
+    try {
+      const token = getToken()
+      if (typeof window !== 'undefined' && 'EventSource' in window && token) {
+        const url = `${getApiBase()}/api/chat/stream?room=${encodeURIComponent(room)}&token=${encodeURIComponent(token)}`
+        es = new EventSource(url)
+        es.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data)
+            if (data && data.type === 'message' && data.message) {
+              const m = data.message
+              setMessages(prev => {
+                if (prev.length && prev[prev.length - 1].id === m.id) return prev
+                const next = [...prev, m]
+                lastIdRef.current = m.id
+                return next
+              })
+            }
+          } catch { /* ignore malformed */ }
+        }
+        es.onerror = () => { /* silently rely on polling */ }
+      }
+    } catch { /* ignore */ }
+    return () => { mounted.current = false; clearInterval(pollId); clearInterval(pingId); clearInterval(usersId); if (es) es.close() }
   }, [room])
 
   return (

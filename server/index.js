@@ -335,6 +335,77 @@ function sanitizeMessageContent(s) {
   v = v.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
   return v
 }
+
+// Simple SSE hub per room
+const sseClients = new Map() // room -> Set(res)
+
+async function authenticateFromRequest(req) {
+  // Prefer Authorization header, else support token query param for EventSource
+  const auth = req.headers['authorization'] || ''
+  const bearerToken = String(auth).replace(/^Bearer\s+/i, '')
+  const qpToken = typeof req.query.token === 'string' ? req.query.token : null
+  const token = bearerToken || qpToken
+  if (!token) return null
+  const verified = decodeJwt(token)
+  if (!verified) return null
+  const userId = verified.userId
+  if (prisma) {
+    const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
+    if (!tk || !tk.user || tk.revoked || tk.type !== 'session') return null
+    if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return null
+    return { id: tk.user.id, username: tk.user.username, role: tk.user.role }
+  }
+  const tk = tokens.get(token)
+  if (!tk || tk.revoked || tk.type !== 'session') return null
+  if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return null
+  const user = users.find(u => u.id === tk.userId)
+  if (!user) return null
+  return { id: user.id, username: user.username, role: user.role }
+}
+
+function sseAddClient(room, res) {
+  if (!sseClients.has(room)) sseClients.set(room, new Set())
+  sseClients.get(room).add(res)
+}
+
+function sseRemoveClient(room, res) {
+  const set = sseClients.get(room)
+  if (set) {
+    set.delete(res)
+    if (set.size === 0) sseClients.delete(room)
+  }
+}
+
+function sseBroadcast(room, payload) {
+  const set = sseClients.get(room)
+  if (!set || set.size === 0) return
+  const data = `data: ${JSON.stringify(payload)}\n\n`
+  for (const res of set) {
+    try { res.write(data) } catch (e) { /* ignore broken pipe */ }
+  }
+}
+
+// GET /api/chat/stream?room=general&token=... (SSE)
+app.get('/api/chat/stream', async (req, res) => {
+  try {
+    const user = await authenticateFromRequest(req)
+    if (!user) return res.status(401).end()
+    const room = String(req.query.room || 'general')
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    })
+    res.write(': connected\n\n')
+    sseAddClient(room, res)
+    const hb = setInterval(() => { try { res.write(`: hb ${Date.now()}\n\n`) } catch {} }, 25000)
+    req.on('close', () => { clearInterval(hb); sseRemoveClient(room, res) })
+  } catch (e) {
+    console.error('[chat][stream] error', e)
+    res.status(500).end()
+  }
+})
 // GET messages for a room: /api/chat/messages?room=general&afterId=0&limit=50
 app.get('/api/chat/messages', async (req, res) => {
   const room = String(req.query.room || 'general')
@@ -363,6 +434,8 @@ app.post('/api/chat/messages', chatLimiter, authMiddleware, async (req, res) => 
     if (prisma) {
       const created = await prisma.message.create({ data: { content: clean, room: String(room), userId: req.user.id } })
       const withUser = await prisma.message.findUnique({ where: { id: created.id }, include: { user: true } })
+      // Broadcast to room listeners
+      try { sseBroadcast(String(room), { type: 'message', message: withUser }) } catch {}
       return res.json(withUser)
     }
     return res.status(500).json({ message: 'DB not available' })
