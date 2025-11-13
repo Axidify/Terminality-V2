@@ -55,6 +55,19 @@ export function setToken(token: string | null) {
   } catch { /* ignore: localStorage unavailable */ }
 }
 
+async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${getApiBase()}/api/auth/refresh`, { method: 'POST', credentials: 'include' })
+    if (!res.ok) return null
+    const data = await res.json().catch(() => null) as any
+    const newTok = data && (data.access_token as string)
+    if (newTok) setToken(newTok)
+    return newTok || null
+  } catch {
+    return null
+  }
+}
+
 export async function apiRequest<T>(path: string, options: { method?: HttpMethod; headers?: Record<string, string>; body?: any; auth?: boolean } = {}): Promise<T> {
   const method = options.method || 'GET'
   const headers: Record<string, string> = { ...(options.headers || {}) }
@@ -86,19 +99,29 @@ export async function apiRequest<T>(path: string, options: { method?: HttpMethod
     throw new Error('API seems offline')
   }
   let res: Response
+  const doFetch = async (withAuthHeaders: Record<string, string>) => {
+    return fetch(`${getApiBase()}${path}`, { method, headers: withAuthHeaders, body, credentials: 'omit' })
+  }
   try {
-    // We use Authorization header tokens instead of cookies, so omit credentials to simplify CORS.
-    res = await fetch(`${getApiBase()}${path}`, { method, headers, body, credentials: 'omit' })
+    // We use Authorization header tokens for normal calls; cookies only for refresh
+    res = await doFetch(headers)
   } catch (_err) {
     // Mark API as offline for a short duration to prevent repeated retries
     ;(apiRequest as any)._offlineUntil = Date.now() + 5000
     throw new Error('Network error')
   }
   if (res.status === 401) {
-    // Dispatch immersive session expiry event
-    window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { path, status: 401 } }))
-    const text = await res.text().catch(() => '')
-    throw new Error(text || 'Session expired')
+    // Try to refresh once
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      headers['Authorization'] = `Bearer ${refreshed}`
+      res = await doFetch(headers)
+    }
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { path, status: 401 } }))
+      const text = await res.text().catch(() => '')
+      throw new Error(text || 'Session expired')
+    }
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')

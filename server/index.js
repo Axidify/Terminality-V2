@@ -2,12 +2,14 @@
 try { require('dotenv').config() } catch {}
 const express = require('express')
 const cors = require('cors')
+const helmet = require('helmet')
 const fs = require('fs')
 const path = require('path')
 const bodyParser = require('body-parser')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
+const cookieParser = require('cookie-parser')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 // Use Prisma for persistence when available
@@ -83,10 +85,14 @@ let savedState = null
 })()
 
 const app = express()
-// Enable CORS and credentials for dev; this ensures the client can send cookies / credentials
-app.use(cors({ origin: true, credentials: true }))
-// Ensure preflight requests allow credentials as well
-app.options('*', cors({ origin: true, credentials: true }))
+// Security headers
+app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false, crossOriginEmbedderPolicy: false }))
+// Cookies for refresh tokens
+app.use(cookieParser())
+// CORS (lock to frontend in prod)
+const allowedOrigin = process.env.NODE_ENV === 'production' ? (CLIENT_FRONTEND_URL) : true
+app.use(cors({ origin: allowedOrigin, credentials: true }))
+app.options('*', cors({ origin: allowedOrigin, credentials: true }))
 // Parse JSON and URL-encoded bodies so the API accepts both JSON and x-www-form-urlencoded payloads
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
@@ -99,6 +105,7 @@ let nextTokenId = 1
 // JWT configuration
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d'
+const REFRESH_EXPIRES_IN = process.env.REFRESH_EXPIRES_IN || '30d'
 
 function signJwt(payload, expiresIn) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: expiresIn || JWT_EXPIRES_IN })
@@ -110,6 +117,35 @@ function decodeJwt(token) {
   } catch (e) {
     return null
   }
+}
+
+function cookieSettings() {
+  const isProd = process.env.NODE_ENV === 'production'
+  return { httpOnly: true, secure: isProd, sameSite: isProd ? 'none' : 'lax', path: '/' }
+}
+
+async function issueSessionTokenForUser(user) {
+  const token = signJwt({ userId: user.id, username: user.username, role: user.role })
+  const decoded = jwt.decode(token)
+  const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+  if (prisma) {
+    try { await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'session' } }) } catch {}
+  } else {
+    tokens.set(token, { userId: user.id, expiresAt, revoked: false, type: 'session' })
+  }
+  return token
+}
+
+async function issueRefreshTokenForUser(user, res) {
+  const refresh = signJwt({ userId: user.id, username: user.username, role: user.role, kind: 'refresh' }, REFRESH_EXPIRES_IN)
+  const decoded = jwt.decode(refresh)
+  const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
+  if (prisma) {
+    try { await prisma.token.create({ data: { token: refresh, userId: user.id, expiresAt, type: 'refresh' } }) } catch {}
+  } else {
+    tokens.set(refresh, { userId: user.id, expiresAt, revoked: false, type: 'refresh' })
+  }
+  res.cookie('refresh_token', refresh, cookieSettings())
 }
 
 // Protected state APIs: require authenticated session
@@ -187,31 +223,19 @@ app.post('/api/auth/register', async (req, res) => {
       if (existing) return res.status(409).json({ message: 'User exists' })
       const hashed = await bcrypt.hash(password, 10)
       const created = await prisma.user.create({ data: { username, email, password: hashed, role: 'user' } })
-      const token = signJwt({ userId: created.id, username: created.username, role: created.role })
-      const decoded = jwt.decode(token)
-      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-      try {
-        await prisma.token.create({ data: { token, userId: created.id, expiresAt, type: 'session' } })
-      } catch (err) {
-        // If token already exists (unlikely but possible in tests), ignore and proceed
-        if (err && err.code === 'P2002') {
-          console.warn('[prisma] token already exists, skipping insert')
-        } else {
-          throw err
-        }
-      }
+      const token = await issueSessionTokenForUser(created)
+      await issueRefreshTokenForUser(created, res)
       return res.json({ access_token: token })
     }
     const existing = users.find(u => u.username === username)
     if (existing) return res.status(409).json({ message: 'User exists' })
   const id = users.length + 1
   const hashed = await bcrypt.hash(password, 10)
-  users.push({ id, username, email, password: hashed, role: 'user' })
-    const token = signJwt({ userId: id, username, role: 'user' })
-    const decoded = jwt.decode(token)
-    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-  tokens.set(token, { userId: id, expiresAt, revoked: false, type: 'session' })
-    res.json({ token })
+  const user = { id, username, email, password: hashed, role: 'user' }
+  users.push(user)
+    const token = await issueSessionTokenForUser(user)
+    await issueRefreshTokenForUser(user, res)
+    res.json({ access_token: token })
   } catch (e) {
     console.error('[auth][register] error', e)
     res.status(500).json({ message: 'Server error' })
@@ -226,18 +250,8 @@ app.post('/api/auth/login', async (req, res) => {
       if (!user) return res.status(401).json({ message: 'Invalid credentials' })
       const ok = await bcrypt.compare(password, user.password)
       if (!ok) return res.status(401).json({ message: 'Invalid credentials' })
-      const token = signJwt({ userId: user.id, username: user.username, role: user.role })
-      const decoded = jwt.decode(token)
-      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-      try {
-        await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'session' } })
-      } catch (err) {
-        if (err && err.code === 'P2002') {
-          console.warn('[prisma] token already exists, skipping insert')
-        } else {
-          throw err
-        }
-      }
+      const token = await issueSessionTokenForUser(user)
+      await issueRefreshTokenForUser(user, res)
       return res.json({ access_token: token })
     }
     const u = users.find(x => x.username === username)
@@ -245,10 +259,8 @@ app.post('/api/auth/login', async (req, res) => {
     const ok = await bcrypt.compare(password, u.password)
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' })
     if (!u) return res.status(401).json({ message: 'Invalid credentials' })
-  const token = signJwt({ userId: u.id, username: u.username, role: u.role })
-    const decoded = jwt.decode(token)
-    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-  tokens.set(token, { userId: u.id, expiresAt, revoked: false, type: 'session' })
+  const token = await issueSessionTokenForUser(u)
+  await issueRefreshTokenForUser(u, res)
   res.json({ access_token: token })
   } catch (e) {
     console.error('[auth][login] error', e)
@@ -288,11 +300,9 @@ app.post('/api/auth/google', async (req, res) => {
         const usernameToUse = exists ? `google_${providerId}` : preferred
         user = await prisma.user.create({ data: { username: usernameToUse, email, password: 'oauth', role: 'user' } })
       }
-      // Create session token
-      const token = signJwt({ userId: user.id, username: user.username, role: user.role })
-      const decoded = jwt.decode(token)
-      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-      try { await prisma.token.create({ data: { token, userId: user.id, expiresAt, type: 'session' } }) } catch (err) {}
+      // Create session token and refresh cookie
+      const token = await issueSessionTokenForUser(user)
+      await issueRefreshTokenForUser(user, res)
       return res.json({ access_token: token })
     }
     // Fallback in-memory users
@@ -305,10 +315,8 @@ app.post('/api/auth/google', async (req, res) => {
       user = { id, username, email, password: 'oauth', role: 'user' }
       users.push(user)
     }
-    const token = signJwt({ userId: user.id, username: user.username, role: user.role })
-    const decoded = jwt.decode(token)
-    const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-    tokens.set(token, { userId: user.id, expiresAt, revoked: false, type: 'session' })
+    const token = await issueSessionTokenForUser(user)
+    await issueRefreshTokenForUser(user, res)
     res.json({ access_token: token })
   } catch (e) {
     console.error('[auth][google] error', e)
@@ -363,10 +371,8 @@ app.get('/api/auth/oauth/google/callback', async (req, res) => {
         const usernameToUse = exists ? `google_${providerId}` : preferred
         user = await prisma.user.create({ data: { username: usernameToUse, email, password: 'oauth', role: 'user' } })
       }
-      const jwtToken = signJwt({ userId: user.id, username: user.username, role: user.role })
-      const decoded = jwt.decode(jwtToken)
-      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-      try { await prisma.token.create({ data: { token: jwtToken, userId: user.id, expiresAt, type: 'session' } }) } catch {}
+      const jwtToken = await issueSessionTokenForUser(user)
+      await issueRefreshTokenForUser(user, res)
       accessToken = jwtToken
     } else {
       let user = users.find(u => u.email === email)
@@ -378,10 +384,8 @@ app.get('/api/auth/oauth/google/callback', async (req, res) => {
         user = { id, username, email, password: 'oauth', role: 'user' }
         users.push(user)
       }
-      const jwtToken = signJwt({ userId: user.id, username: user.username, role: user.role })
-      const decoded = jwt.decode(jwtToken)
-      const expiresAt = decoded && decoded.exp ? new Date(decoded.exp * 1000) : null
-      tokens.set(jwtToken, { userId: user.id, expiresAt, revoked: false, type: 'session' })
+      const jwtToken = await issueSessionTokenForUser(user)
+      await issueRefreshTokenForUser(user, res)
       accessToken = jwtToken
     }
 
@@ -430,6 +434,40 @@ app.get('/api/auth/me', async (req, res) => {
     res.json({ id: user.id, username: user.username, display_name: displayName, is_admin: user.role === 'admin' })
   } catch (e) {
     console.error('[auth][me] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Refresh access token using HttpOnly refresh cookie
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const refresh = req.cookies && req.cookies['refresh_token']
+    if (!refresh) return res.status(401).json({ message: 'No refresh token' })
+    const verified = decodeJwt(refresh)
+    if (!verified || verified.kind !== 'refresh') return res.status(401).json({ message: 'Invalid token' })
+    if (prisma) {
+      const tk = await prisma.token.findUnique({ where: { token: refresh }, include: { user: true } })
+      if (!tk || !tk.user || tk.revoked || tk.type !== 'refresh') return res.status(401).json({ message: 'Invalid token' })
+      if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+      const user = tk.user
+      // Rotate refresh: revoke old, issue new
+      await prisma.token.update({ where: { id: tk.id }, data: { revoked: true } })
+      await issueRefreshTokenForUser(user, res)
+      const access = await issueSessionTokenForUser(user)
+      return res.json({ access_token: access })
+    }
+    // In-memory fallback
+    const tk = tokens.get(refresh)
+    if (!tk || tk.revoked || tk.type !== 'refresh') return res.status(401).json({ message: 'Invalid token' })
+    if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return res.status(401).json({ message: 'Token expired' })
+    const user = users.find(u => u.id === tk.userId)
+    if (!user) return res.status(401).json({ message: 'Invalid token' })
+    tk.revoked = true
+    await issueRefreshTokenForUser(user, res)
+    const access = await issueSessionTokenForUser(user)
+    return res.json({ access_token: access })
+  } catch (e) {
+    console.error('[auth][refresh] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })
@@ -541,11 +579,23 @@ app.post('/api/auth/logout', async (req, res) => {
   try {
     if (!token) return res.status(400).json({ message: 'Token required' })
     if (prisma) {
-      await prisma.token.updateMany({ where: { token }, data: { revoked: true } })
+      // Revoke access token
+      const updated = await prisma.token.updateMany({ where: { token }, data: { revoked: true } })
+      // Attempt to revoke refresh tokens for this user as well
+      try {
+        const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
+        if (tk && tk.user) {
+          await prisma.token.updateMany({ where: { userId: tk.user.id, type: 'refresh' }, data: { revoked: true } })
+        }
+      } catch {}
+      res.clearCookie('refresh_token', { path: '/' })
       return res.json({ message: 'Logged out' })
     }
     const tk = tokens.get(token)
     if (tk) tk.revoked = true
+    // Best-effort revoke refresh tokens in memory
+    for (const [k, v] of tokens.entries()) { if (v.userId === (tk && tk.userId) && v.type === 'refresh') v.revoked = true }
+    res.clearCookie('refresh_token', { path: '/' })
     res.json({ message: 'Logged out' })
   } catch (e) {
     console.error('[auth][logout] error', e)

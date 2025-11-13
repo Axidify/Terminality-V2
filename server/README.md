@@ -34,6 +34,21 @@ setx JWT_SECRET "your-secret-here"
 setx JWT_EXPIRES_IN "7d" # or '1h', '3600s', etc.
 ```
 
+Access & refresh tokens (refresh flow)
+-----------------------------------
+- On successful login/register/Google SSO, the server now:
+	- Returns a short‑lived access token in the JSON response (`access_token`).
+	- Sets a long‑lived refresh token as an `HttpOnly` cookie (`refresh_token`).
+- The frontend automatically calls `POST /api/auth/refresh` when a request returns 401, receives a fresh `access_token`, and retries once.
+- Cookies are configured as:
+	- Dev: `SameSite=Lax`, `Secure=false` (localhost)
+	- Prod: `SameSite=None`, `Secure=true` (works across different frontend/backend domains)
+- Logout revokes the current access token, revokes refresh tokens for the user when possible, and clears the cookie.
+
+Environment knobs:
+- `JWT_EXPIRES_IN`: access token lifetime (default `7d`, recommend `1h` in prod)
+- `REFRESH_EXPIRES_IN`: refresh token lifetime (default `30d`)
+
 How to create or promote an admin
 ---------------------------------
 If you used the default seed, the admin user already exists and you can login with the seeded credentials.
@@ -76,6 +91,7 @@ Security Notes:
 - Hash fragment redirect (`/#access_token=...`) avoids leaking tokens via server logs or intermediary proxies capturing query strings.
 - Rotate credentials immediately if they are ever exposed in plaintext in commits, PRs, or chat (treat exposed secrets as compromised).
 - Prefer verifying ID tokens with `google-auth-library`'s `verifyIdToken`, not just relying on `tokeninfo`.
+- CORS in production is restricted to `CLIENT_FRONTEND_URL`; ensure this env is set to your deployed frontend origin.
 - In production, consider state/nonce validation and CSRF protections; add PKCE for native/public clients.
 
 Client Handling:
