@@ -600,6 +600,18 @@ body {
   margin-right: 6px;
 }
 
+/* When we render our explicit node, hide pseudo ::before by default */
+.home-status-label::before { display: none; }
+
+/* Override color variants */
+.home-status-indicator.online { background: var(--color-primary); box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.6); }
+.home-status-indicator.offline { background: #ff4d4d; box-shadow: 0 0 8px rgba(255, 77, 77, 0.6); animation: none; }
+.home-status-indicator.unknown { background: #ffd24d; box-shadow: 0 0 8px rgba(255, 210, 77, 0.6); animation: pulse 1s ease-in-out infinite; }
+
+.home-status-label.online { color: var(--color-primary); }
+.home-status-label.offline { color: #ff4d4d; }
+.home-status-label.unknown { color: #ffd24d; }
+
 /* Sections */
 section {
   position: relative;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getApiBase } from '../services/api'
+import { getApiBase, apiRequest } from '../services/api'
 
 import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
@@ -14,6 +14,7 @@ export const HomePage: React.FC = () => {
   const [time, setTime] = useState('')
   const [date, setDate] = useState('')
   const [scrolled, setScrolled] = useState(false)
+  const [backendStatus, setBackendStatus] = useState<'unknown'|'online'|'offline'>('unknown')
 
   useEffect(() => {
     const updateTime = () => {
@@ -24,6 +25,27 @@ export const HomePage: React.FC = () => {
     updateTime()
     const interval = setInterval(updateTime, 1000)
     return () => clearInterval(interval)
+  }, [])
+
+  // Backend health check: poll /health to display online/offline status
+  useEffect(() => {
+    let mounted = true
+    const check = async () => {
+      try {
+        await apiRequest('/health')
+        if (mounted) setBackendStatus('online')
+      } catch (e) {
+        if (mounted) setBackendStatus('offline')
+      }
+    }
+    // initial check
+    check()
+    const id = setInterval(check, 10000)
+    const handleOnline = () => check()
+    const handleVisibility = () => { if (document.visibilityState === 'visible') check() }
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('visibilitychange', handleVisibility)
+    return () => { mounted = false; clearInterval(id); window.removeEventListener('online', handleOnline); window.removeEventListener('visibilitychange', handleVisibility) }
   }, [])
 
   useEffect(() => {
@@ -376,7 +398,10 @@ export const HomePage: React.FC = () => {
 
       {/* Status bar */}
       <div className={`home-status-bar ${scrolled ? 'scrolled' : ''}`}>
-        <span className="home-status-label" role="status" aria-live="polite">SYSTEM ONLINE</span>
+        <span className={`home-status-label ${backendStatus}`} role="status" aria-live="polite">
+          <span className={`home-status-indicator ${backendStatus}`} aria-hidden="true" />
+          {backendStatus === 'online' ? 'SYSTEM ONLINE' : backendStatus === 'offline' ? 'SYSTEM OFFLINE' : 'SYSTEM STATUS UNKNOWN'}
+        </span>
       </div>
     </div>
   )
