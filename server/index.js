@@ -31,6 +31,9 @@ const googleOauthClient = (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_RE
   ? new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI)
   : null
 
+// In-memory presence tracking (dev only) — userId -> timestamp ms
+const presence = new Map()
+
 async function readState() {
   if (prisma) {
     try {
@@ -312,6 +315,70 @@ app.post('/api/auth/google', async (req, res) => {
     res.json({ access_token: token })
   } catch (e) {
     console.error('[auth][google] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Chat endpoints
+// GET messages for a room: /api/chat/messages?room=general&afterId=0&limit=50
+app.get('/api/chat/messages', async (req, res) => {
+  const room = String(req.query.room || 'general')
+  const afterId = parseInt(String(req.query.afterId || '0'), 10)
+  const limit = Math.min(parseInt(String(req.query.limit || '50'), 10), 200)
+  try {
+    if (prisma) {
+      const where = { room }
+      if (afterId) where.id = { gt: afterId }
+      const msgs = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'asc' }], take: limit })
+      return res.json(msgs)
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[chat][get messages] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// POST a message. Requires auth
+app.post('/api/chat/messages', authMiddleware, async (req, res) => {
+  const { room = 'general', content } = req.body || {}
+  if (!content || !content.trim()) return res.status(400).json({ message: 'Missing content' })
+  try {
+    if (prisma) {
+      const created = await prisma.message.create({ data: { content: String(content), room: String(room), userId: req.user.id } })
+      const withUser = await prisma.message.findUnique({ where: { id: created.id }, include: { user: true } })
+      return res.json(withUser)
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[chat][post message] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// GET users and simple online presence
+app.get('/api/chat/users', async (req, res) => {
+  try {
+    if (prisma) {
+      const all = await prisma.user.findMany({ select: { id: true, username: true, role: true } })
+      const now = Date.now()
+      const users = all.map(u => ({ ...u, online: !!(presence.get(u.id) && (now - presence.get(u.id) < 30000)) }))
+      return res.json(users)
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[chat][users] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Ping endpoint updates presence
+app.post('/api/chat/ping', authMiddleware, async (req, res) => {
+  try {
+    presence.set(req.user.id, Date.now())
+    res.json({ message: 'pong' })
+  } catch (e) {
+    console.error('[chat][ping] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })
@@ -649,6 +716,25 @@ app.post('/api/admin/create', async (req, res) => {
     res.json({ id, username, role: 'admin' })
   } catch (e) {
     console.error('[admin][create] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: create a new user (admin-only)
+app.post('/api/admin/users', authMiddleware, requireAdmin, async (req, res) => {
+  const { username, password, email, role = 'user' } = req.body || {}
+  if (!username || !password) return res.status(400).json({ message: 'Missing username or password' })
+  try {
+    if (prisma) {
+      const exists = await prisma.user.findUnique({ where: { username } })
+      if (exists) return res.status(409).json({ message: 'User exists' })
+      const hashed = await bcrypt.hash(password, 10)
+      const user = await prisma.user.create({ data: { username, password: hashed, email, role } })
+      return res.json({ id: user.id, username: user.username, role: user.role })
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[admin][users][create] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })
