@@ -65,13 +65,8 @@ export const HomePage: React.FC = () => {
       const token = frag.get('access_token')
       if (token) {
         try {
-          // Store token via auth service so downstream hooks pick it up
-          const evt = new Event('authTokenChanged')
-          // setToken is internal to auth.ts; we simulate by posting to loginWithGoogle fallback if needed
-          // Instead of exposing setToken here, we perform a direct fetch to /api/auth/me to validate then dispatch event.
-          // Simplify by writing token into localStorage directly (aligns with api.ts storage convention)
-          localStorage.setItem('authToken', token)
-          window.dispatchEvent(evt)
+          // Do NOT store the access token in localStorage.
+          // The refresh cookie issued by the server will allow on-demand token refresh.
           // Clean hash from URL to avoid repeated processing
           history.replaceState(null, document.title, window.location.pathname + window.location.search)
           // Lock state then navigate

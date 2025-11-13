@@ -12,13 +12,18 @@ function resolveApiBase(): string {
   try {
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href)
-      const qp = url.searchParams.get('api')
-      if (qp) {
-        try { window.localStorage.setItem('API_BASE_OVERRIDE', qp) } catch { /* ignore */ }
-      }
-      const ls = (() => { try { return window.localStorage.getItem('API_BASE_OVERRIDE') } catch { return null } })()
-      const global = (window as any).__API_BASE__
+      const isDev = !!((import.meta as any)?.env?.DEV)
+      let ls: string | null = null
+      let global: string | null = null
       const baked = (import.meta as any)?.env?.VITE_API_BASE
+      if (isDev) {
+        const qp = url.searchParams.get('api')
+        if (qp) {
+          try { window.localStorage.setItem('API_BASE_OVERRIDE', qp) } catch { /* ignore */ }
+        }
+        ls = (() => { try { return window.localStorage.getItem('API_BASE_OVERRIDE') } catch { return null } })()
+        global = (window as any).__API_BASE__
+      }
       // Project-specific safe fallback: if hosted on terminality.onrender.com and no config provided,
       // default to the known backend domain to avoid localhost in production.
       const host = window.location.hostname
@@ -27,7 +32,7 @@ function resolveApiBase(): string {
         'terminality.onrender.com': 'https://terminality-api.onrender.com',
       }
       const fallback = hostFallbacks[host]
-      const chosen = ls || global || baked || fallback || DEFAULT_BASE
+      const chosen = (isDev ? (ls || global || baked) : baked) || fallback || DEFAULT_BASE
       return String(chosen).replace(/\/$/, '')
     }
   } catch { /* ignore */ }

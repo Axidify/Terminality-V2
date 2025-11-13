@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import DOMPurify from 'dompurify'
 
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
@@ -674,7 +675,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                             </svg>
-                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                            <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
                           </div>
                         ))}
                       </>
@@ -686,7 +687,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M4 7h16M4 12h16M4 17h16"/>
                             </svg>
-                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                            <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
                           </div>
                         ))}
                       </>
@@ -698,7 +699,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M12 2l3 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z"/>
                             </svg>
-                            <span dangerouslySetInnerHTML={{ __html: item }} />
+                            <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
                           </div>
                         ))}
                       </>
