@@ -108,6 +108,12 @@ npm run admin:create -- --username alice --password secret --secret YOUR_DEV_ADM
 
 `POST /api/admin/create` will only be enabled when `NODE_ENV !== 'production'` and, if `DEV_ADMIN_SECRET` is set, the request must include the matching secret to prevent accidental exposure. In CI or production you should not use this endpoint.
 
+If you need to reset a live admin password safely, a new CLI helper is available:
+
+ - `npm run admin:reset -- --username <user> --password <newpass> --secret <DEV_ADMIN_SECRET>`
+
+This script is production gated: if `NODE_ENV === 'production'` the `DEV_ADMIN_SECRET` must match the provided secret. It performs a bcrypt hash and updates the user password; pass `--revoke-tokens true` to mark existing tokens revoked.
+
 Prisma usage
 ------------
 This repository includes a Prisma schema under `server/prisma/schema.prisma` and a small seeder `server/prisma/seed.js` to initialize the DB.

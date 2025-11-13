@@ -16,6 +16,7 @@
     "prisma:setup": "npm run prisma:dbpush && npm run prisma:generate && npm run prisma:seed",
     "migrate:hash-passwords": "node scripts/migrate_hash_passwords.js",
     "admin:create": "node scripts/create_admin.js"
+    ,"admin:reset": "node scripts/reset_admin_password.js"
   },
   "dependencies": {
   "@prisma/client": "^5.6.0",
