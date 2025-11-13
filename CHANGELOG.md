@@ -19,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Layout Overlap**: Fixed featured items overlapping the categories row and the appstore background bleeding outside the app window.
 - **System Monitor stacking**: Ensured System Monitor stays behind other windows and uses a lower z-index.
 
+## [0.5.6] - 2025-11-13
+
+### Added
+- **Backend Status Indicator**: Added a health/status indicator on the Home page status bar to show if the backend API is reachable; it polls `/health` periodically and changes the indicator color to reflect online, offline, or unknown states. This helps users know if the server is available and provides friendly feedback when the service is down.
+
+### Changed
+- **Home Page**: Updated `HomePage` to include real-time backend connectivity check and updated rendering for the status bar.
+
+
 ## [0.5.4] - 2025-11-12
 
 ### Added
