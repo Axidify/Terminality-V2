@@ -42,12 +42,8 @@ export const OnlineChat: React.FC = () => {
     if (!content.trim()) return
     setLoading(true)
     try {
-      const created = await apiRequest('/api/chat/messages', { method: 'POST', auth: true, body: { content, room } })
+      await apiRequest('/api/chat/messages', { method: 'POST', auth: true, body: { content, room } })
       setContent('')
-      if (created) {
-        setMessages(prev => [...(prev || []), created as any])
-        lastIdRef.current = (created as any).id || lastIdRef.current
-      }
     } catch (e) {
       console.error('[chat] send error', e)
     } finally {
@@ -65,16 +61,14 @@ export const OnlineChat: React.FC = () => {
     const usersId = setInterval(async () => {
       try { const u = await apiRequest('/api/chat/users?onlineOnly=1', { auth: true }); if (mounted.current) {
         // seed lastSeen entries for these users now
-        const now = Date.now()
-        (Array.isArray(u) ? (u as any) : []).forEach((usr: any) => { lastSeenRef.current[usr.id] = now })
+        (Array.isArray(u) ? (u as any) : []).forEach((usr: any) => { lastSeenRef.current[usr.id] = Number(new Date().getTime()) })
         setUsers(Array.isArray(u) ? (u as any) : [])
       } } catch {}
     }, 10000)
     // prune users based on lastSeen for snappy offline detection
     const pruneId = setInterval(() => {
       if (!mounted.current) return
-      const now = Date.now()
-      setUsers(prev => prev.filter(u => (now - (lastSeenRef.current[u.id] || 0)) < PRESENCE_TTL_MS))
+      setUsers(prev => prev.filter(u => ((Number(new Date().getTime()) - (lastSeenRef.current[u.id] || 0)) < PRESENCE_TTL_MS)))
     }, 1000)
     // Try to connect SSE
     let es: EventSource | null = null
@@ -96,7 +90,7 @@ export const OnlineChat: React.FC = () => {
               })
             } else if (data && data.type === 'presence' && data.user) {
               const u = data.user
-              lastSeenRef.current[u.id] = Date.now()
+              lastSeenRef.current[u.id] = globalThis.Date.now()
               setUsers(prev => {
                 const exists = prev.some(x => x.id === u.id)
                 return exists ? prev : [...prev, { id: u.id, username: u.username }]
@@ -144,7 +138,13 @@ export const OnlineChat: React.FC = () => {
         </div>
       </div>
       <div className="online-chat-input">
-        <textarea value={content} onChange={e => setContent(e.target.value)} rows={2} placeholder="Type message..." />
+        <textarea 
+          value={content}
+          onChange={e => setContent(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage() } }}
+          rows={2}
+          placeholder="Type message..." 
+        />
         <button onClick={sendMessage} disabled={loading || !content.trim()} className="btn-send">Send</button>
       </div>
     </div>
