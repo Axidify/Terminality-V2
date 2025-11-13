@@ -327,6 +327,14 @@ app.post('/api/auth/google', async (req, res) => {
 })
 
 // Chat endpoints
+const chatLimiter = rateLimit({ windowMs: 15 * 1000, max: 60, standardHeaders: true, legacyHeaders: false })
+function sanitizeMessageContent(s) {
+  if (!s) return ''
+  // Coerce to string, limit length, strip most control chars except newline and tab
+  let v = String(s).slice(0, 1000)
+  v = v.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+  return v
+}
 // GET messages for a room: /api/chat/messages?room=general&afterId=0&limit=50
 app.get('/api/chat/messages', async (req, res) => {
   const room = String(req.query.room || 'general')
@@ -347,12 +355,13 @@ app.get('/api/chat/messages', async (req, res) => {
 })
 
 // POST a message. Requires auth
-app.post('/api/chat/messages', authMiddleware, async (req, res) => {
+app.post('/api/chat/messages', chatLimiter, authMiddleware, async (req, res) => {
   const { room = 'general', content } = req.body || {}
-  if (!content || !content.trim()) return res.status(400).json({ message: 'Missing content' })
+  const clean = sanitizeMessageContent(content)
+  if (!clean || !clean.trim()) return res.status(400).json({ message: 'Missing content' })
   try {
     if (prisma) {
-      const created = await prisma.message.create({ data: { content: String(content), room: String(room), userId: req.user.id } })
+      const created = await prisma.message.create({ data: { content: clean, room: String(room), userId: req.user.id } })
       const withUser = await prisma.message.findUnique({ where: { id: created.id }, include: { user: true } })
       return res.json(withUser)
     }
