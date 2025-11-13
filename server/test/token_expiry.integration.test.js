@@ -6,8 +6,11 @@ const { app, prisma } = require('../index')
 
 describe('Token expiry behavior', () => {
   it('rejects expired tokens', async () => {
-    // Use seeded admin
-    const adminLogin = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'admin' })
+    // Create a dev admin user and login (hermetic)
+    const adminUser = `admin-${Date.now()}`
+    const adminPass = 'adminpass'
+    await request(app).post('/api/admin/create').send({ username: adminUser, password: adminPass, secret: process.env.DEV_ADMIN_SECRET || undefined })
+    const adminLogin = await request(app).post('/api/auth/login').send({ username: adminUser, password: adminPass })
     expect(adminLogin.status).toBe(200)
     const token = adminLogin.body.access_token
     expect(token).toBeDefined()

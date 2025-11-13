@@ -21,6 +21,7 @@ model User {
   password String
   role     String  @default("user")
   tokens   Token[]
+  messages Message[]
 }
 
 model Token {

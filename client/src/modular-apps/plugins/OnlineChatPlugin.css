@@ -1,0 +1,8 @@
+.online-chat-root { display:flex; flex-direction:column; height:100%; }
+.online-chat-messages { flex:1; overflow:auto; padding:8px; }
+.online-chat-message { margin-bottom:8px; padding:6px; border-bottom:1px solid rgba(255,255,255,0.03); }
+.online-chat-meta { font-size:12px; color:var(--color-textDim); margin-bottom:4px; }
+.online-chat-content { font-size:14px; }
+.online-chat-input { display:flex; gap:8px; padding:8px; border-top:1px solid rgba(255,255,255,0.03); }
+.online-chat-input textarea { flex:1; resize:none; padding:8px; background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-border); border-radius:6px; }
+.btn-send { background:var(--color-primary); color:#000; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }

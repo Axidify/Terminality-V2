@@ -8,6 +8,7 @@ const bodyParser = require('body-parser')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
+const rateLimit = require('express-rate-limit')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 // Use Prisma for persistence when available
@@ -95,9 +96,15 @@ app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
 
 // Simple in-memory users and tokens (for dev only)
+// Basic auth rate limiter for POST/LOGIN endpoints to keep safety on dev/test
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false })
 const users = [{ id: 1, username: 'player1', email: 'player1@example.local', password: bcrypt.hashSync('password', 10), role: 'user' }, { id: 2, username: 'admin', email: 'admin@example.local', password: bcrypt.hashSync('admin', 10), role: 'admin' }]
 const tokens = new Map() // token -> { userId, expiresAt, revoked }
 let nextTokenId = 1
+
+// Chat messages (in-memory store for MVP). Each entry: { id, userId, username, content, createdAt }
+const chatMessages = []
+let nextMessageId = 1
 
 // JWT configuration
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
@@ -631,6 +638,35 @@ app.post('/api/command', authMiddleware, (req, res) => {
   else if (command === 'date') output = new Date().toString()
   else output = `Unknown command: ${command}`
   res.json({ output })
+})
+
+// Minimal chat API (MVP)
+// GET /api/chat: returns the last 50 messages
+app.get('/api/chat', authMiddleware, async (req, res) => {
+  try {
+    const last = 50
+    const msgs = chatMessages.slice(-last).map(m => ({ id: m.id, userId: m.userId, username: m.username, content: m.content, createdAt: m.createdAt }))
+    return res.json(msgs)
+  } catch (e) {
+    console.error('[chat][get] error', e)
+    return res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// POST /api/chat: post a new message
+app.post('/api/chat', authLimiter, authMiddleware, async (req, res) => {
+  try {
+    const { content } = req.body || {}
+    if (!content || typeof content !== 'string' || content.trim().length === 0) return res.status(400).json({ message: 'content required' })
+    if (content.length > 1000) return res.status(400).json({ message: 'content too long' })
+    const m = { id: nextMessageId++, userId: req.user.id, username: req.user.username, content: String(content).slice(0, 1000), createdAt: new Date().toISOString() }
+    chatMessages.push(m)
+    // Optionally persist to Prisma in a follow-up PR
+    return res.json(m)
+  } catch (e) {
+    console.error('[chat][post] error', e)
+    return res.status(500).json({ message: 'Server error' })
+  }
 })
 
 // Admin endpoints (basic)
