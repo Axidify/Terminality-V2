@@ -484,9 +484,11 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   through a mysterious digital world shrouded in intrigue.
                 </p>
                 <p style={{ marginTop: 10 }}>
-                  <strong>What's new in this release:</strong> Online Chat now supports native desktop
-                  notifications that open and focus the chat window; plus UI refinements for a more
-                  compact, familiar chat experience. See the changelog below for full details.
+                  <strong>What's new in this release:</strong> Online Chat received a major update —
+                  notifications now carry actionable intents so clicking a chat notification opens and
+                  focuses the Online Chat window and jumps directly to the target room or DM. The
+                  chat UI was streamlined for faster messaging (compact bubbles, denser lists), and
+                  DMs and presence indicators have been added. See the changelog for full details.
                 </p>
                 <p>
                   Experience a fully-functional desktop environment with authentic window management, 
