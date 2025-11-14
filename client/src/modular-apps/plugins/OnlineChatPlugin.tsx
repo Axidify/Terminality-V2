@@ -741,7 +741,7 @@ export const manifest: ModularAppManifest = {
   id: 'online-chat',
   name: 'Online Chat',
   description: 'Chat with other agents online (MVP) - authenticated users only',
-  version: '0.0.1',
+  version: '0.0.2',
   component: OnlineChat,
   category: 'social',
   rating: 4.5,

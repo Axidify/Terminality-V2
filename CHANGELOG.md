@@ -130,6 +130,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 - **v0.5.6** (Nov 13, 2025) - Backend status indicator on Home page
+
+## [0.5.7] - 2025-11-14
+
+### Added
+- **Online Chat improvements**: Desktop notifications now include actionable intents. Clicking a chat system notification opens and focuses the Online Chat window and jumps to the specific room or DM the notification applies to.
+
+### Changed
+- **Chat UI**: Notifications toggle updated to an icon-only style and chat message bubbles, header, and sidebar were streamlined for denser chat use. Smaller fonts and compact control sizes make the chat app feel more like a rapid messaging client while keeping our visual language.
+
+### Fixed
+- **Notification handling**: Improved robustness when Notification permission is unavailable in the client; fallback to in-app banners continues to work.
 - **v0.5.5** (Nov 12, 2025) - Proxy chain icon, app store layout
 - **v0.5.4** (Nov 12, 2025) - UI improvements and About Page Designer
 - **v0.5.3** (Nov 12, 2025) - UI redesign, changelog system, version management

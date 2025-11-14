@@ -482,6 +482,11 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate 
                   through a mysterious digital world shrouded in intrigue.
                 </p>
+                <p style={{ marginTop: 10 }}>
+                  <strong>What's new in this release:</strong> Online Chat now supports native desktop
+                  notifications that open and focus the chat window; plus UI refinements for a more
+                  compact, familiar chat experience. See the changelog below for full details.
+                </p>
                 <p>
                   Experience a fully-functional desktop environment with authentic window management, 
                   file systems, applications, and network simulations—all running in your browser.
