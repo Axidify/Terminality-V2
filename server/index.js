@@ -32,9 +32,15 @@ const googleOauthClient = (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_RE
   ? new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI)
   : null
 
-// In-memory presence tracking (dev only) — userId -> timestamp ms
-const presence = new Map()
+// In-memory presence tracking (dev only)
+// Track presence per room: room -> Map(userId -> lastSeenMs)
+const presenceByRoom = new Map()
 const PRESENCE_TTL_MS = 8000
+function getPresenceMap(room) {
+  const r = String(room || 'general')
+  if (!presenceByRoom.has(r)) presenceByRoom.set(r, new Map())
+  return presenceByRoom.get(r)
+}
 
 async function readState() {
   if (prisma) {
@@ -340,6 +346,22 @@ function sanitizeMessageContent(s) {
 // Simple SSE hub per room
 const sseClients = new Map() // room -> Set(res)
 
+function parseDmRoom(room) {
+  const m = /^dm:(\d+):(\d+)$/.exec(String(room || ''))
+  if (!m) return null
+  const a = parseInt(m[1], 10)
+  const b = parseInt(m[2], 10)
+  if (isNaN(a) || isNaN(b)) return null
+  return [a, b]
+}
+
+function userAuthorizedForRoom(userId, room) {
+  const pair = parseDmRoom(room)
+  if (!pair) return true // public rooms are open to authenticated users
+  const [a, b] = pair
+  return userId === a || userId === b
+}
+
 async function authenticateFromRequest(req) {
   // Prefer Authorization header, else support token query param for EventSource
   const auth = req.headers['authorization'] || ''
@@ -401,6 +423,8 @@ app.get('/api/chat/stream', async (req, res) => {
     const user = await authenticateFromRequest(req)
     if (!user) return res.status(401).end()
     const room = String(req.query.room || 'general')
+    // Authorize DM rooms
+    if (!userAuthorizedForRoom(user.id, room)) return res.status(403).end()
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -417,14 +441,27 @@ app.get('/api/chat/stream', async (req, res) => {
   }
 })
 // GET messages for a room: /api/chat/messages?room=general&afterId=0&limit=50
-app.get('/api/chat/messages', async (req, res) => {
+app.get('/api/chat/messages', authMiddleware, async (req, res) => {
   const room = String(req.query.room || 'general')
   const afterId = parseInt(String(req.query.afterId || '0'), 10)
+  const beforeId = parseInt(String(req.query.beforeId || '0'), 10)
   const limit = Math.min(parseInt(String(req.query.limit || '50'), 10), 200)
   try {
+    // DM rooms allowed only for participants
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
     if (prisma) {
       const where = { room }
-      if (afterId) where.id = { gt: afterId }
+      if (afterId) {
+        Object.assign(where, { id: { gt: afterId } })
+        const msgs = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'asc' }], take: limit })
+        return res.json(msgs)
+      }
+      if (beforeId) {
+        Object.assign(where, { id: { lt: beforeId } })
+        // fetch older in desc then reverse to keep asc rendering
+        const older = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'desc' }], take: limit })
+        return res.json(older.reverse())
+      }
       const msgs = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'asc' }], take: limit })
       return res.json(msgs)
     }
@@ -441,6 +478,7 @@ app.post('/api/chat/messages', chatLimiter, authMiddleware, async (req, res) => 
   const clean = sanitizeMessageContent(content)
   if (!clean || !clean.trim()) return res.status(400).json({ message: 'Missing content' })
   try {
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
     if (prisma) {
       const created = await prisma.message.create({ data: { content: clean, room: String(room), userId: req.user.id } })
       const withUser = await prisma.message.findUnique({ where: { id: created.id }, include: { user: true } })
@@ -461,7 +499,12 @@ app.get('/api/chat/users', async (req, res) => {
     if (prisma) {
       const all = await prisma.user.findMany({ select: { id: true, username: true, role: true } })
       const now = Date.now()
-      const result = all.map(u => ({ ...u, online: !!(presence.get(u.id) && (now - presence.get(u.id) < PRESENCE_TTL_MS)) }))
+      const room = String(req.query.room || 'general')
+      const roomPresence = getPresenceMap(room)
+      // For DM rooms, restrict listing to the two participants only
+      const dmPair = parseDmRoom(room)
+      const base = dmPair ? all.filter(u => u.id === dmPair[0] || u.id === dmPair[1]) : all
+      const result = base.map(u => ({ ...u, online: !!(roomPresence.get(u.id) && (now - roomPresence.get(u.id) < PRESENCE_TTL_MS)) }))
       const onlineOnly = String(req.query.onlineOnly || '').toLowerCase() === '1' || String(req.query.onlineOnly || '').toLowerCase() === 'true'
       return res.json(onlineOnly ? result.filter(u => u.online) : result)
     }
@@ -472,12 +515,15 @@ app.get('/api/chat/users', async (req, res) => {
   }
 })
 
-// Ping endpoint updates presence
+// Ping endpoint updates presence (per room)
 app.post('/api/chat/ping', authMiddleware, async (req, res) => {
   try {
-    presence.set(req.user.id, Date.now())
-    // broadcast presence heartbeat to all rooms (room-agnostic)
-    try { sseBroadcastAll({ type: 'presence', user: { id: req.user.id, username: req.user.username }, ts: Date.now() }) } catch {}
+    const room = String((req.body && req.body.room) || 'general')
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
+    const pres = getPresenceMap(room)
+    pres.set(req.user.id, Date.now())
+    // broadcast presence heartbeat to the specific room
+    try { sseBroadcast(room, { type: 'presence', user: { id: req.user.id, username: req.user.username }, ts: Date.now() }) } catch {}
     res.json({ message: 'pong' })
   } catch (e) {
     console.error('[chat][ping] error', e)
@@ -762,6 +808,60 @@ app.post('/api/chat', authLimiter, authMiddleware, async (req, res) => {
     console.error('[chat][post] error', e)
     return res.status(500).json({ message: 'Server error' })
   }
+})
+
+// Typing indicator endpoint - broadcasts to all room listeners
+app.post('/api/chat/typing', chatLimiter, authMiddleware, async (req, res) => {
+  try {
+    const { room = 'general' } = req.body || {}
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
+    sseBroadcast(String(room), { type: 'typing', user: { id: req.user.id, username: req.user.username }, ts: Date.now() })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[chat][typing] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// List recent DM rooms for the current user with latest message info
+app.get('/api/chat/dm-list', authMiddleware, async (req, res) => {
+  try {
+    if (!prisma) return res.status(500).json({ message: 'DB not available' })
+    // Fetch recent messages in DM rooms to build a latest map per room
+    const recent = await prisma.message.findMany({
+      where: { room: { startsWith: 'dm:' } },
+      select: { id: true, room: true, createdAt: true },
+      orderBy: [{ id: 'desc' }],
+      take: 500
+    })
+    const latestByRoom = new Map()
+    for (const m of recent) {
+      if (!latestByRoom.has(m.room)) latestByRoom.set(m.room, m)
+    }
+    const items = []
+    for (const [room, m] of latestByRoom.entries()) {
+      const pair = parseDmRoom(room)
+      if (!pair) continue
+      const [a, b] = pair
+      if (req.user.id !== a && req.user.id !== b) continue
+      const peerId = req.user.id === a ? b : a
+      items.push({ room, peerId, latestId: m.id, latestAt: m.createdAt })
+    }
+    const peerIds = [...new Set(items.map(x => x.peerId))]
+    const peers = peerIds.length ? await prisma.user.findMany({ where: { id: { in: peerIds } }, select: { id: true, username: true } }) : []
+    const nameById = new Map(peers.map(p => [p.id, p.username]))
+    const result = items.map(x => ({ room: x.room, peer: { id: x.peerId, username: nameById.get(x.peerId) || `user${x.peerId}` }, latestId: x.latestId, latestAt: x.latestAt }))
+    res.json(result)
+  } catch (e) {
+    console.error('[chat][dm-list] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Delete a message (owner or admin)
+app.delete('/api/chat/messages/:id', chatLimiter, authMiddleware, async (req, res) => {
+  // Message deletion is disabled by product decision
+  return res.status(405).json({ message: 'Deleting messages is not allowed' })
 })
 
 // Admin endpoints (basic)
