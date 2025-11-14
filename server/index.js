@@ -27,6 +27,8 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || null
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || null
 const CLIENT_FRONTEND_URL = process.env.CLIENT_FRONTEND_URL || process.env.VITE_CLIENT_URL || 'http://localhost:5173'
+const SERVER_HOST = process.env.HOST || '0.0.0.0'
+const SERVER_PUBLIC_URL = process.env.SERVER_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || null
 // Client to verify ID tokens (no secret required)
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
 // Full OAuth2 client (authorization code exchange)
@@ -1057,8 +1059,14 @@ app.use((req, res) => {
 
 let server = null
 if (require.main === module) {
-  server = app.listen(DEFAULT_PORT, () => {
-    console.log(`Terminality dev api listening on http://localhost:${DEFAULT_PORT}`)
+  const envLabel = process.env.NODE_ENV || 'development'
+  server = app.listen(DEFAULT_PORT, SERVER_HOST, () => {
+    console.log(`[server] Terminality API listening on ${SERVER_HOST}:${DEFAULT_PORT} (env=${envLabel})`)
+    if (SERVER_PUBLIC_URL) {
+      console.log(`[server] Public URL: ${SERVER_PUBLIC_URL}`)
+    } else if (envLabel !== 'production') {
+      console.log(`[server] Local URL: http://localhost:${DEFAULT_PORT}`)
+    }
   })
 
   server.on('error', (err) => {
