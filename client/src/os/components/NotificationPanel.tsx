@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react'
 
-import { useNotifications } from '../NotificationContext'
+import { useNotifications, Notification } from '../NotificationContext'
+import { useWindowManager } from '../WindowManager'
 import './NotificationPanel.css'
 
 interface NotificationPanelProps {
@@ -10,6 +11,7 @@ interface NotificationPanelProps {
 export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
   const { notifications, markAsRead, markAllAsRead, clearNotification, clearAll } = useNotifications()
   const panelRef = useRef<HTMLDivElement>(null)
+  const wm = useWindowManager()
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -43,6 +45,28 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
     }
   }
 
+  const handleNotificationClick = (notif: Notification) => {
+    markAsRead(notif.id)
+    if (notif.intent?.window) {
+      wm.open(notif.intent.window.type, {
+        title: notif.intent.window.title,
+        payload: notif.intent.window.payload
+      })
+    }
+    if (notif.intent?.event && typeof window !== 'undefined') {
+      const fire = () => window.dispatchEvent(new CustomEvent(notif.intent!.event!.type, { detail: notif.intent!.event!.detail }))
+      const delay = notif.intent.event.delayMs ?? (notif.intent.window ? 120 : 0)
+      if (delay > 0) {
+        window.setTimeout(fire, delay)
+      } else {
+        fire()
+      }
+    }
+    if (notif.intent?.window || notif.intent?.event) {
+      onClose()
+    }
+  }
+
   return (
     <div ref={panelRef} className="notification-panel">
       <div className="notification-header">
@@ -71,7 +95,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
             <div 
               key={notif.id} 
               className={`notification-item ${notif.read ? 'read' : 'unread'} ${notif.type || 'info'}`}
-              onClick={() => markAsRead(notif.id)}
+              onClick={() => handleNotificationClick(notif)}
             >
               <div className="notif-icon">{getTypeIcon(notif.type)}</div>
               <div className="notif-content">

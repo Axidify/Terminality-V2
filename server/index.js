@@ -9,7 +9,10 @@ const bodyParser = require('body-parser')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
+<<<<<<< HEAD
 const cookieParser = require('cookie-parser')
+=======
+>>>>>>> feature/online-chat
 const rateLimit = require('express-rate-limit')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
@@ -33,6 +36,16 @@ const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : nul
 const googleOauthClient = (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI)
   ? new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI)
   : null
+
+// In-memory presence tracking (dev only)
+// Track presence per room: room -> Map(userId -> lastSeenMs)
+const presenceByRoom = new Map()
+const PRESENCE_TTL_MS = 8000
+function getPresenceMap(room) {
+  const r = String(room || 'general')
+  if (!presenceByRoom.has(r)) presenceByRoom.set(r, new Map())
+  return presenceByRoom.get(r)
+}
 
 async function readState() {
   if (prisma) {
@@ -109,9 +122,15 @@ const resetLimiter = makeLimiter({ windowMs: 60 * 60 * 1000, max: 10 })
 const refreshLimiter = makeLimiter({ windowMs: 15 * 60 * 1000, max: 300 })
 
 // Simple in-memory users and tokens (for dev only)
+// Basic auth rate limiter for POST/LOGIN endpoints to keep safety on dev/test
+// authLimiter is configured via makeLimiter above; remove hard-coded rateLimit here
 const users = [{ id: 1, username: 'player1', email: 'player1@example.local', password: bcrypt.hashSync('password', 10), role: 'user' }, { id: 2, username: 'admin', email: 'admin@example.local', password: bcrypt.hashSync('admin', 10), role: 'admin' }]
 const tokens = new Map() // token -> { userId, expiresAt, revoked }
 let nextTokenId = 1
+
+// Chat messages (in-memory store for MVP). Each entry: { id, userId, username, content, createdAt }
+const chatMessages = []
+let nextMessageId = 1
 
 // JWT configuration
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
@@ -331,6 +350,224 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     res.json({ access_token: token })
   } catch (e) {
     console.error('[auth][google] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Chat endpoints
+const chatLimiter = rateLimit({ windowMs: 15 * 1000, max: 60, standardHeaders: true, legacyHeaders: false })
+const limiterKeyForUser = (req) => {
+  if (req && req.user && req.user.id) return `user:${req.user.id}`
+  return req.ip || req.headers['x-forwarded-for'] || 'unknown'
+}
+const chatMessageLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyForUser,
+  message: { message: 'Too many messages sent too quickly. Please slow down.' }
+})
+const chatTypingLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyForUser,
+  message: { message: 'Typing notifications throttled. Give it a moment.' }
+})
+function sanitizeMessageContent(s) {
+  if (!s) return ''
+  // Coerce to string, limit length, strip most control chars except newline and tab
+  let v = String(s).slice(0, 1000)
+  v = v.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+  return v
+}
+
+// Simple SSE hub per room
+const sseClients = new Map() // room -> Set(res)
+
+function parseDmRoom(room) {
+  const m = /^dm:(\d+):(\d+)$/.exec(String(room || ''))
+  if (!m) return null
+  const a = parseInt(m[1], 10)
+  const b = parseInt(m[2], 10)
+  if (isNaN(a) || isNaN(b)) return null
+  return [a, b]
+}
+
+function userAuthorizedForRoom(userId, room) {
+  const pair = parseDmRoom(room)
+  if (!pair) return true // public rooms are open to authenticated users
+  const [a, b] = pair
+  return userId === a || userId === b
+}
+
+async function authenticateFromRequest(req) {
+  // Prefer Authorization header, else support token query param for EventSource
+  const auth = req.headers['authorization'] || ''
+  const bearerToken = String(auth).replace(/^Bearer\s+/i, '')
+  const qpToken = typeof req.query.token === 'string' ? req.query.token : null
+  const token = bearerToken || qpToken
+  if (!token) return null
+  const verified = decodeJwt(token)
+  if (!verified) return null
+  const userId = verified.userId
+  if (prisma) {
+    const tk = await prisma.token.findUnique({ where: { token }, include: { user: true } })
+    if (!tk || !tk.user || tk.revoked || tk.type !== 'session') return null
+    if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return null
+    return { id: tk.user.id, username: tk.user.username, role: tk.user.role }
+  }
+  const tk = tokens.get(token)
+  if (!tk || tk.revoked || tk.type !== 'session') return null
+  if (tk.expiresAt && new Date(tk.expiresAt) < new Date()) return null
+  const user = users.find(u => u.id === tk.userId)
+  if (!user) return null
+  return { id: user.id, username: user.username, role: user.role }
+}
+
+function sseAddClient(room, res) {
+  if (!sseClients.has(room)) sseClients.set(room, new Set())
+  sseClients.get(room).add(res)
+}
+
+function sseRemoveClient(room, res) {
+  const set = sseClients.get(room)
+  if (set) {
+    set.delete(res)
+    if (set.size === 0) sseClients.delete(room)
+  }
+}
+
+function sseBroadcast(room, payload) {
+  const set = sseClients.get(room)
+  if (!set || set.size === 0) return
+  const data = `data: ${JSON.stringify(payload)}\n\n`
+  for (const res of set) {
+    try { res.write(data) } catch (e) { /* ignore broken pipe */ }
+  }
+}
+
+function sseBroadcastAll(payload) {
+  const data = `data: ${JSON.stringify(payload)}\n\n`
+  for (const [room, set] of sseClients.entries()) {
+    for (const res of set) {
+      try { res.write(data) } catch (e) { /* ignore broken pipe */ }
+    }
+  }
+}
+
+// GET /api/chat/stream?room=general&token=... (SSE)
+app.get('/api/chat/stream', async (req, res) => {
+  try {
+    const user = await authenticateFromRequest(req)
+    if (!user) return res.status(401).end()
+    const room = String(req.query.room || 'general')
+    // Authorize DM rooms
+    if (!userAuthorizedForRoom(user.id, room)) return res.status(403).end()
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    })
+    res.write(': connected\n\n')
+    sseAddClient(room, res)
+    const hb = setInterval(() => { try { res.write(`: hb ${Date.now()}\n\n`) } catch {} }, 25000)
+    req.on('close', () => { clearInterval(hb); sseRemoveClient(room, res) })
+  } catch (e) {
+    console.error('[chat][stream] error', e)
+    res.status(500).end()
+  }
+})
+// GET messages for a room: /api/chat/messages?room=general&afterId=0&limit=50
+app.get('/api/chat/messages', authMiddleware, async (req, res) => {
+  const room = String(req.query.room || 'general')
+  const afterId = parseInt(String(req.query.afterId || '0'), 10)
+  const beforeId = parseInt(String(req.query.beforeId || '0'), 10)
+  const limit = Math.min(parseInt(String(req.query.limit || '50'), 10), 200)
+  try {
+    // DM rooms allowed only for participants
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
+    if (prisma) {
+      const where = { room }
+      if (afterId) {
+        Object.assign(where, { id: { gt: afterId } })
+        const msgs = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'asc' }], take: limit })
+        return res.json(msgs)
+      }
+      if (beforeId) {
+        Object.assign(where, { id: { lt: beforeId } })
+        // fetch older in desc then reverse to keep asc rendering
+        const older = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'desc' }], take: limit })
+        return res.json(older.reverse())
+      }
+      const msgs = await prisma.message.findMany({ where, include: { user: true }, orderBy: [{ id: 'asc' }], take: limit })
+      return res.json(msgs)
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[chat][get messages] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// POST a message. Requires auth
+app.post('/api/chat/messages', authMiddleware, chatMessageLimiter, async (req, res) => {
+  const { room = 'general', content } = req.body || {}
+  const clean = sanitizeMessageContent(content)
+  if (!clean || !clean.trim()) return res.status(400).json({ message: 'Missing content' })
+  try {
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
+    if (prisma) {
+      const created = await prisma.message.create({ data: { content: clean, room: String(room), userId: req.user.id } })
+      const withUser = await prisma.message.findUnique({ where: { id: created.id }, include: { user: true } })
+      // Broadcast to room listeners
+      try { sseBroadcast(String(room), { type: 'message', message: withUser }) } catch {}
+      return res.json(withUser)
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[chat][post message] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// GET users and simple online presence
+app.get('/api/chat/users', async (req, res) => {
+  try {
+    if (prisma) {
+      const all = await prisma.user.findMany({ select: { id: true, username: true, role: true } })
+      const now = Date.now()
+      const room = String(req.query.room || 'general')
+      const roomPresence = getPresenceMap(room)
+      // For DM rooms, restrict listing to the two participants only
+      const dmPair = parseDmRoom(room)
+      const base = dmPair ? all.filter(u => u.id === dmPair[0] || u.id === dmPair[1]) : all
+      const result = base.map(u => ({ ...u, online: !!(roomPresence.get(u.id) && (now - roomPresence.get(u.id) < PRESENCE_TTL_MS)) }))
+      const onlineOnly = String(req.query.onlineOnly || '').toLowerCase() === '1' || String(req.query.onlineOnly || '').toLowerCase() === 'true'
+      return res.json(onlineOnly ? result.filter(u => u.online) : result)
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[chat][users] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Ping endpoint updates presence (per room)
+app.post('/api/chat/ping', authMiddleware, async (req, res) => {
+  try {
+    const room = String((req.body && req.body.room) || 'general')
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
+    const pres = getPresenceMap(room)
+    pres.set(req.user.id, Date.now())
+    // broadcast presence heartbeat to the specific room
+    try { sseBroadcast(room, { type: 'presence', user: { id: req.user.id, username: req.user.username }, ts: Date.now() }) } catch {}
+    res.json({ message: 'pong' })
+  } catch (e) {
+    console.error('[chat][ping] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })
@@ -627,6 +864,89 @@ app.post('/api/command', authMiddleware, (req, res) => {
   res.json({ output })
 })
 
+// Minimal chat API (MVP)
+// GET /api/chat: returns the last 50 messages
+app.get('/api/chat', authMiddleware, async (req, res) => {
+  try {
+    const last = 50
+    const msgs = chatMessages.slice(-last).map(m => ({ id: m.id, userId: m.userId, username: m.username, content: m.content, createdAt: m.createdAt }))
+    return res.json(msgs)
+  } catch (e) {
+    console.error('[chat][get] error', e)
+    return res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// POST /api/chat: post a new message
+app.post('/api/chat', authLimiter, authMiddleware, async (req, res) => {
+  try {
+    const { content } = req.body || {}
+    if (!content || typeof content !== 'string' || content.trim().length === 0) return res.status(400).json({ message: 'content required' })
+    if (content.length > 1000) return res.status(400).json({ message: 'content too long' })
+    const m = { id: nextMessageId++, userId: req.user.id, username: req.user.username, content: String(content).slice(0, 1000), createdAt: new Date().toISOString() }
+    chatMessages.push(m)
+    // Optionally persist to Prisma in a follow-up PR
+    return res.json(m)
+  } catch (e) {
+    console.error('[chat][post] error', e)
+    return res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Typing indicator endpoint - broadcasts to all room listeners
+app.post('/api/chat/typing', authMiddleware, chatTypingLimiter, async (req, res) => {
+  try {
+    const { room = 'general' } = req.body || {}
+    if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })
+    sseBroadcast(String(room), { type: 'typing', user: { id: req.user.id, username: req.user.username }, ts: Date.now() })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[chat][typing] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// List recent DM rooms for the current user with latest message info
+app.get('/api/chat/dm-list', authMiddleware, async (req, res) => {
+  try {
+    if (!prisma) return res.status(500).json({ message: 'DB not available' })
+    // Fetch recent messages in DM rooms to build a latest map per room
+    const recent = await prisma.message.findMany({
+      where: { room: { startsWith: 'dm:' } },
+      select: { id: true, room: true, createdAt: true },
+      orderBy: [{ id: 'desc' }],
+      take: 500
+    })
+    const latestByRoom = new Map()
+    for (const m of recent) {
+      if (!latestByRoom.has(m.room)) latestByRoom.set(m.room, m)
+    }
+    const items = []
+    for (const [room, m] of latestByRoom.entries()) {
+      const pair = parseDmRoom(room)
+      if (!pair) continue
+      const [a, b] = pair
+      if (req.user.id !== a && req.user.id !== b) continue
+      const peerId = req.user.id === a ? b : a
+      items.push({ room, peerId, latestId: m.id, latestAt: m.createdAt })
+    }
+    const peerIds = [...new Set(items.map(x => x.peerId))]
+    const peers = peerIds.length ? await prisma.user.findMany({ where: { id: { in: peerIds } }, select: { id: true, username: true } }) : []
+    const nameById = new Map(peers.map(p => [p.id, p.username]))
+    const result = items.map(x => ({ room: x.room, peer: { id: x.peerId, username: nameById.get(x.peerId) || `user${x.peerId}` }, latestId: x.latestId, latestAt: x.latestAt }))
+    res.json(result)
+  } catch (e) {
+    console.error('[chat][dm-list] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Delete a message (owner or admin)
+app.delete('/api/chat/messages/:id', chatLimiter, authMiddleware, async (req, res) => {
+  // Message deletion is disabled by product decision
+  return res.status(405).json({ message: 'Deleting messages is not allowed' })
+})
+
 // Admin endpoints (basic)
 app.get('/api/admin/users', authMiddleware, requireAdmin, async (req, res) => {
   try {
@@ -710,6 +1030,25 @@ app.post('/api/admin/create', async (req, res) => {
     res.json({ id, username, role: 'admin' })
   } catch (e) {
     console.error('[admin][create] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Admin: create a new user (admin-only)
+app.post('/api/admin/users', authMiddleware, requireAdmin, async (req, res) => {
+  const { username, password, email, role = 'user' } = req.body || {}
+  if (!username || !password) return res.status(400).json({ message: 'Missing username or password' })
+  try {
+    if (prisma) {
+      const exists = await prisma.user.findUnique({ where: { username } })
+      if (exists) return res.status(409).json({ message: 'User exists' })
+      const hashed = await bcrypt.hash(password, 10)
+      const user = await prisma.user.create({ data: { username, password: hashed, email, role } })
+      return res.json({ id: user.id, username: user.username, role: user.role })
+    }
+    return res.status(500).json({ message: 'DB not available' })
+  } catch (e) {
+    console.error('[admin][users][create] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })

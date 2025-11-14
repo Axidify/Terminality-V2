@@ -8,3 +8,13 @@ This folder contains an experimental plugin system for creating modular desktop 
 - Hosting: Plugins are rendered inside the `PluginHost` window which receives `pluginId` as a payload and resolves the component.
 
 This is intentionally small so the host can be expanded later with sandboxing, permissions, and remote installers.
+
+## Built-in: Online Chat (MVP)
+
+- The built-in plugin `online-chat` is registered via `registerPlugins.ts`.
+- You can launch it from:
+	- Desktop icon: "Online Chat" (opens the plugin host with `pluginId: online-chat`).
+	- Start menu: "Online Chat" entry under the Start menu.
+	- Programmatically: `wm.open('modular-plugin', { title: 'Online Chat', payload: { pluginId: 'online-chat' } })`.
+  
+Notes: This MVP uses polling and in-memory messages on the server for now.

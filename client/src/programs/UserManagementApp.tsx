@@ -10,7 +10,7 @@ interface User {
 }
 
 export const UserManagementApp: React.FC = () => {
-  const { user: currentUser } = useUser()
+  const { user: currentUser, isAdmin } = useUser()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
@@ -19,6 +19,11 @@ export const UserManagementApp: React.FC = () => {
   const [showResetDialog, setShowResetDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [createUsername, setCreateUsername] = useState('')
+  const [createPassword, setCreatePassword] = useState('')
+  const [createEmail, setCreateEmail] = useState('')
+  const [createRole, setCreateRole] = useState<'user' | 'admin'>('user')
   const [newPassword, setNewPassword] = useState('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -119,6 +124,27 @@ export const UserManagementApp: React.FC = () => {
     }
   }
 
+  const handleCreateUser = async () => {
+    if (!createUsername || !createPassword) return
+    setMsg(null)
+    try {
+      await apiRequest(`/api/admin/users`, {
+        method: 'POST',
+        auth: true,
+        body: { username: createUsername, password: createPassword, email: createEmail || undefined, role: createRole }
+      })
+      setMsg({ text: `User ${createUsername} created`, type: 'success' })
+      setShowCreateDialog(false)
+      setCreateUsername('')
+      setCreatePassword('')
+      setCreateEmail('')
+      setCreateRole('user')
+      await loadUsers()
+    } catch (e: any) {
+      setMsg({ text: e?.message || 'Failed to create user', type: 'error' })
+    }
+  }
+
   const toggleUserSelection = (userId: number) => {
     const newSelected = new Set(selectedUsers)
     if (newSelected.has(userId)) {
@@ -176,6 +202,11 @@ export const UserManagementApp: React.FC = () => {
                 onClick={() => setShowBulkDeleteDialog(true)}
               >
                 DELETE {selectedUsers.size}
+              </button>
+            )}
+            {isAdmin && (
+              <button className="usermgmt-btn primary" onClick={() => setShowCreateDialog(true)}>
+                CREATE
               </button>
             )}
             <button className="usermgmt-btn secondary" onClick={loadUsers} disabled={loading}>
@@ -273,6 +304,67 @@ export const UserManagementApp: React.FC = () => {
       </div>
 
       {/* Dialogs */}
+      {showCreateDialog && (
+        <div className="usermgmt-overlay" onClick={() => setShowCreateDialog(false)}>
+          <div className="usermgmt-dialog" onClick={e => e.stopPropagation()}>
+            <div className="dialog-border" />
+            <div className="dialog-content">
+              <h3 className="dialog-title">{'>'} CREATE USER</h3>
+              <p className="dialog-text">Create a new user account:</p>
+              <input
+                type="text"
+                className="dialog-input"
+                value={createUsername}
+                onChange={e => setCreateUsername(e.target.value)}
+                placeholder="USERNAME"
+                autoFocus
+              />
+              <input
+                type="email"
+                className="dialog-input"
+                value={createEmail}
+                onChange={e => setCreateEmail(e.target.value)}
+                placeholder="EMAIL (optional)"
+              />
+              <input
+                type="password"
+                className="dialog-input"
+                value={createPassword}
+                onChange={e => setCreatePassword(e.target.value)}
+                placeholder="PASSWORD"
+              />
+              <div style={{ marginTop: 8 }}>
+                <label style={{ marginRight: 8 }}>Role:</label>
+                <select value={createRole} onChange={e => setCreateRole(e.target.value as 'user' | 'admin')}>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div className="dialog-actions">
+                <button 
+                  className="usermgmt-btn primary"
+                  onClick={handleCreateUser}
+                  disabled={!createUsername || !createPassword}
+                >
+                  CREATE USER
+                </button>
+                <button 
+                  className="usermgmt-btn secondary"
+                  onClick={() => {
+                    setShowCreateDialog(false)
+                    setCreateUsername('')
+                    setCreatePassword('')
+                    setCreateEmail('')
+                    setCreateRole('user')
+                  }}
+                >
+                  CANCEL
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showResetDialog && selectedUser && (
         <div className="usermgmt-overlay" onClick={() => setShowResetDialog(false)}>
           <div className="usermgmt-dialog" onClick={e => e.stopPropagation()}>

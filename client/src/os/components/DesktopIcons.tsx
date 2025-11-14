@@ -99,6 +99,14 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Chat', width: 400, height: 800 } 
   },
   { 
+    type: 'modular-plugin', 
+    name: 'Online Chat', 
+    icon: <ChatIcon size={50} />, 
+    x: 240, 
+    y: 20,
+    defaultOpts: { title: 'Online Chat', width: 500, height: 700, payload: { pluginId: 'online-chat' } } 
+  },
+  { 
     type: 'store', 
     name: 'Store', 
     icon: <StoreIcon size={50} />, 
