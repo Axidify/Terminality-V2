@@ -8,10 +8,15 @@ class SoundEffects {
   constructor() {
     // Initialize from cached server state if available
     if (typeof window !== 'undefined') {
-      const cached = getCachedDesktop()
-      if (cached && typeof cached.soundEffectsEnabled === 'boolean') {
-        this.enabled = cached.soundEffectsEnabled
-      } else {
+      try {
+        const cached = getCachedDesktop()
+        if (cached && typeof cached.soundEffectsEnabled === 'boolean') {
+          this.enabled = cached.soundEffectsEnabled
+        } else {
+          this.enabled = true
+        }
+      } catch (err) {
+        console.warn('[sounds] failed to hydrate preference', err)
         this.enabled = true
       }
     }
@@ -188,6 +193,39 @@ class SoundEffects {
 
         osc.start(startTime)
         osc.stop(startTime + duration)
+      })
+    } catch (err) {
+      console.warn('Sound playback failed:', err)
+    }
+  }
+
+  chatMessage() {
+    const ctx = this.getContext()
+    if (!this.enabled) return
+
+    try {
+      const sequence = [
+        { freq: 1047, duration: 0.08, delay: 0 },
+        { freq: 880, duration: 0.12, delay: 0.05 }
+      ]
+
+      sequence.forEach(({ freq, duration, delay }) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+
+        osc.frequency.value = freq
+        osc.type = 'triangle'
+
+        const start = ctx.currentTime + delay
+        gain.gain.setValueAtTime(0, start)
+        gain.gain.linearRampToValueAtTime(0.07, start + 0.01)
+        gain.gain.linearRampToValueAtTime(0.005, start + duration)
+
+        osc.start(start)
+        osc.stop(start + duration)
       })
     } catch (err) {
       console.warn('Sound playback failed:', err)

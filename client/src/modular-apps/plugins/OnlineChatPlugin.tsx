@@ -2,12 +2,48 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { ModularAppManifest } from '../types'
 import { apiRequest, getApiBase, getToken } from '../../services/api'
 import { useUser } from '../../os/UserContext'
+import { useNotifications } from '../../os/NotificationContext'
+import { sounds } from '../../os/SoundEffects'
+import { ONLINE_CHAT_FOCUS_EVENT, OnlineChatFocusPayload } from './onlineChatEvents'
 
 import './OnlineChatPlugin.css'
 
 const CACHE_STORAGE_KEY = 'onlineChat:cache:v1'
 const CACHE_PERSIST_LIMIT = 80
 const PUBLIC_ROOMS = ['general', 'random', 'help'] as const
+const NOTIFY_OPT_IN_KEY = 'onlineChat:nativeNotify'
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const BellIcon: React.FC<{ active: boolean }> = ({ active }) => (
+  <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M18 16v-4.5a6 6 0 10-12 0V16l-1.5 2h15z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      opacity={active ? 0.95 : 0.7}
+    />
+    <path
+      d="M10 20a2 2 0 004 0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      strokeLinecap="round"
+    />
+    {active && (
+      <circle
+        cx={18.5}
+        cy={7}
+        r={1.5}
+        fill="currentColor"
+        opacity={0.9}
+      />
+    )}
+  </svg>
+)
 
 type ChatMessage = { id: number; username?: string; user?: { id: number; username: string }; content: string; createdAt: string }
 
@@ -25,6 +61,13 @@ export const OnlineChat: React.FC = () => {
   const [typingUsers, setTypingUsers] = useState<Array<{ id: number; username: string }>>([])
   const nextTypingAt = useRef(0)
   const { user } = useUser()
+  let notificationsApi: ReturnType<typeof useNotifications> | null = null
+  try {
+    notificationsApi = useNotifications()
+  } catch {
+    notificationsApi = null
+  }
+  const addNotification = notificationsApi?.addNotification ?? (() => {})
   const messagesContainerRef = useRef<HTMLDivElement | null>(null)
   const suppressAutoScrollRef = useRef(false)
   const [dmPeer, setDmPeer] = useState<{ id: number; username: string } | null>(null)
@@ -36,6 +79,14 @@ export const OnlineChat: React.FC = () => {
   const lastReadHydratedRef = useRef(false)
   const prefetchingRoomsRef = useRef<Set<string>>(new Set())
   const cacheSaveTimeoutRef = useRef<number | null>(null)
+  const windowFocusRef = useRef(true)
+  const isAtBottomRef = useRef(true)
+  const notifiedMessagesRef = useRef<Set<number>>(new Set())
+  const mentionRegexRef = useRef<RegExp | null>(null)
+  const [desktopNotifyOptIn, setDesktopNotifyOptIn] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return window.localStorage.getItem(NOTIFY_OPT_IN_KEY) === '1' } catch { return false }
+  })
   const particleConfigs = useMemo(() => (
     Array.from({ length: 8 }).map((_, idx) => ({
       key: idx,
@@ -66,8 +117,153 @@ export const OnlineChat: React.FC = () => {
     }, 400)
   }, [])
 
+  const applyFocusIntent = useCallback((payload?: OnlineChatFocusPayload) => {
+    if (!payload?.room) return
+    setRoom(payload.room)
+    if (payload.room.startsWith('dm:')) {
+      const peer = payload.dmPeer || dmList.find(dm => dm.room === payload.room)?.peer
+      if (peer) {
+        setDmPeer(peer)
+      }
+    } else {
+      setDmPeer(null)
+    }
+  }, [dmList])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<OnlineChatFocusPayload>).detail
+      if (detail) {
+        applyFocusIntent(detail)
+      }
+    }
+    window.addEventListener(ONLINE_CHAT_FOCUS_EVENT, handler)
+    return () => window.removeEventListener(ONLINE_CHAT_FOCUS_EVENT, handler)
+  }, [applyFocusIntent])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try { window.localStorage.setItem(NOTIFY_OPT_IN_KEY, desktopNotifyOptIn ? '1' : '0') } catch {}
+  }, [desktopNotifyOptIn])
+
+  useEffect(() => {
+    if (!user?.username) {
+      mentionRegexRef.current = null
+      return
+    }
+    mentionRegexRef.current = new RegExp(`(^|[^\\w])@${escapeRegExp(user.username)}(?![\\w])`, 'i')
+  }, [user?.username])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleFocus = () => { windowFocusRef.current = true }
+    const handleBlur = () => { windowFocusRef.current = false }
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('blur', handleBlur)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [])
+
+  useEffect(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const handleScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+      isAtBottomRef.current = distance < 64
+    }
+    handleScroll()
+    el.addEventListener('scroll', handleScroll)
+    return () => { el.removeEventListener('scroll', handleScroll) }
+  }, [])
+
+  const maybeShowNativeNotification = useCallback((title: string, body: string, tag: string) => {
+    if (!desktopNotifyOptIn) return
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return
+    if (Notification.permission !== 'granted') return
+    try {
+      new Notification(title, { body, tag, silent: true })
+    } catch {}
+  }, [desktopNotifyOptIn])
+
+  const maybeNotifyForMessage = useCallback((targetRoom: string, message: ChatMessage) => {
+    if (!message || !message.id) return
+    if (!user) return
+    if (message.user?.id && message.user.id === user.id) return
+    if (notifiedMessagesRef.current.has(message.id)) return
+
+    const isCurrentRoom = targetRoom === room
+    const mention = mentionRegexRef.current ? mentionRegexRef.current.test(message.content || '') : false
+    const isDmRoom = targetRoom.startsWith('dm:')
+    const docVisible = typeof document === 'undefined' ? true : document.visibilityState === 'visible'
+    const shouldAlert = mention || isDmRoom || !isCurrentRoom || !windowFocusRef.current || !docVisible || !isAtBottomRef.current
+    if (!shouldAlert) return
+
+    notifiedMessagesRef.current.add(message.id)
+    if (notifiedMessagesRef.current.size > 400) {
+      const trimmed = Array.from(notifiedMessagesRef.current).slice(-200)
+      notifiedMessagesRef.current = new Set(trimmed)
+    }
+
+    const title = isDmRoom ? `New DM from ${message.user?.username || 'User'}` : `New activity in #${targetRoom}`
+    const snippet = message.content?.length && message.content.length > 140 ? `${message.content.slice(0, 140)}…` : (message.content || '')
+    const focusPayload: OnlineChatFocusPayload = {
+      room: targetRoom,
+      messageId: message.id
+    }
+    if (isDmRoom && message.user?.id && message.user.username) {
+      focusPayload.dmPeer = { id: message.user.id, username: message.user.username }
+    }
+
+    addNotification(
+      title,
+      snippet,
+      mention || isDmRoom ? 'warning' : 'info',
+      {
+        window: {
+          type: 'modular-plugin',
+          title: 'Online Chat',
+          payload: { pluginId: 'online-chat' }
+        },
+        event: {
+          type: ONLINE_CHAT_FOCUS_EVENT,
+          detail: focusPayload,
+          delayMs: 140
+        }
+      }
+    )
+    maybeShowNativeNotification(title, snippet, `chat-${targetRoom}-${message.id}`)
+    sounds.chatMessage()
+  }, [addNotification, maybeShowNativeNotification, room, user])
+
+  const handleNotificationToggle = useCallback(async () => {
+    const nextState = !desktopNotifyOptIn
+    if (nextState) {
+      let permission: NotificationPermission | 'unsupported' = 'unsupported'
+      if (typeof window !== 'undefined' && typeof Notification !== 'undefined') {
+        permission = Notification.permission
+        if (permission === 'default') {
+          try { permission = await Notification.requestPermission() } catch {}
+        }
+      }
+
+      if (permission === 'granted') {
+        addNotification('Desktop alerts enabled', 'We will notify you about new chat activity.', 'success')
+      } else if (permission === 'denied') {
+        addNotification('Desktop alerts limited', 'Browser permissions are blocking native notifications. In-app alerts remain enabled.', 'warning')
+      } else {
+        addNotification('Desktop alerts limited', 'Your browser does not expose the Notification API. We will show in-app indicators only.', 'warning')
+      }
+    } else {
+      addNotification('Desktop alerts muted', 'We will show in-app indicators only.', 'info')
+    }
+
+    setDesktopNotifyOptIn(nextState)
+  }, [addNotification, desktopNotifyOptIn])
+
   const prefetchRoom = useCallback(async (targetRoom: string) => {
-    if (targetRoom === room) return
     if (prefetchingRoomsRef.current.has(targetRoom)) return
     prefetchingRoomsRef.current.add(targetRoom)
     try {
@@ -78,12 +274,17 @@ export const OnlineChat: React.FC = () => {
       const existing = messagesCacheRef.current[targetRoom] || []
       const existingIds = new Set(existing.map(m => m.id))
       const merged = existing.length ? [...existing] : []
+      const newOnes: ChatMessage[] = []
       for (const msg of arr) {
-        if (!existingIds.has(msg.id)) merged.push(msg)
+        if (!existingIds.has(msg.id)) {
+          merged.push(msg)
+          newOnes.push(msg)
+        }
       }
       if (!merged.length) return
       merged.sort((a, b) => a.id - b.id)
       messagesCacheRef.current[targetRoom] = merged
+      newOnes.forEach(msg => maybeNotifyForMessage(targetRoom, msg))
       const last = merged[merged.length - 1]?.id || 0
       if (last) {
         lastIdByRoomRef.current[targetRoom] = last
@@ -95,7 +296,7 @@ export const OnlineChat: React.FC = () => {
     } finally {
       prefetchingRoomsRef.current.delete(targetRoom)
     }
-  }, [room, scheduleCacheSave])
+  }, [maybeNotifyForMessage, scheduleCacheSave])
 
   const fetchMessages = async () => {
     try {
@@ -105,6 +306,7 @@ export const OnlineChat: React.FC = () => {
       const arr = Array.isArray(res) ? (res as ChatMessage[]) : []
       if (afterId > 0) {
         if (!arr.length) return
+        arr.forEach(msg => maybeNotifyForMessage(room, msg))
         setMessages(prev => {
           const existingIds = new Set(prev.map(m => m.id))
           const next = [...prev]
@@ -227,6 +429,7 @@ export const OnlineChat: React.FC = () => {
                   scheduleCacheSave()
                 return next
               })
+                maybeNotifyForMessage(room, m)
             } else if (data && data.type === 'presence' && data.user) {
               const u = data.user
               lastSeenRef.current[u.id] = globalThis.Date.now()
@@ -273,6 +476,7 @@ export const OnlineChat: React.FC = () => {
     const el = messagesContainerRef.current
     if (el) {
       el.scrollTop = el.scrollHeight
+      isAtBottomRef.current = true
     }
     // mark current room as read up to last message
     if (messages.length) {
@@ -398,7 +602,19 @@ export const OnlineChat: React.FC = () => {
             </div>
           </div>
         )}
-        <div className="online-count">Online: {users.length}</div>
+        <div className="chat-header-actions">
+          <div className="online-count">Online: {users.length}</div>
+          <button
+            className={`notify-toggle ${desktopNotifyOptIn ? 'active' : ''}`}
+            onClick={handleNotificationToggle}
+            type="button"
+            aria-pressed={desktopNotifyOptIn}
+            aria-label={desktopNotifyOptIn ? 'Desktop alerts on' : 'Desktop alerts off'}
+            title={desktopNotifyOptIn ? 'Desktop alerts enabled' : 'Enable desktop notifications'}
+          >
+            <BellIcon active={desktopNotifyOptIn} />
+          </button>
+        </div>
       </div>
       <div className="online-chat-body">
         <aside className="online-chat-sidebar">
@@ -466,6 +682,7 @@ export const OnlineChat: React.FC = () => {
               if (arr.length) {
                 // prevent auto-scroll to bottom for this update
                 suppressAutoScrollRef.current = true
+                isAtBottomRef.current = false
                 setMessages(prev => {
                   const next = [...arr, ...prev]
                   messagesCacheRef.current[room] = next

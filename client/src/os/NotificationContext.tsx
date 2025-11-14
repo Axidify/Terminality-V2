@@ -1,6 +1,19 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
 
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
+import { WindowType } from './WindowManager'
+
+export interface NotificationWindowTarget {
+  type: WindowType
+  title?: string
+  payload?: Record<string, unknown>
+}
+
+export interface NotificationEventTarget {
+  type: string
+  detail?: Record<string, unknown>
+  delayMs?: number
+}
 
 export interface Notification {
   id: string
@@ -9,11 +22,15 @@ export interface Notification {
   timestamp: Date
   read: boolean
   type?: 'info' | 'warning' | 'error' | 'success'
+  intent?: {
+    window?: NotificationWindowTarget
+    event?: NotificationEventTarget
+  }
 }
 
 interface NotificationContextValue {
   notifications: Notification[]
-  addNotification: (title: string, message: string, type?: Notification['type']) => void
+  addNotification: (title: string, message: string, type?: Notification['type'], intent?: Notification['intent']) => void
   markAsRead: (id: string) => void
   markAllAsRead: () => void
   clearNotification: (id: string) => void
@@ -40,14 +57,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     saveDesktopState({ notifications: serializable }).catch(() => {})
   }, [notifications])
 
-  const addNotification = useCallback((title: string, message: string, type: Notification['type'] = 'info') => {
+  const addNotification = useCallback((title: string, message: string, type: Notification['type'] = 'info', intent?: Notification['intent']) => {
     const notification: Notification = {
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       title,
       message,
       timestamp: new Date(),
       read: false,
-      type
+      type,
+      intent
     }
     setNotifications(prev => [notification, ...prev])
   }, [])

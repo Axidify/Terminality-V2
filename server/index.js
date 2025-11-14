@@ -335,6 +335,26 @@ app.post('/api/auth/google', async (req, res) => {
 
 // Chat endpoints
 const chatLimiter = rateLimit({ windowMs: 15 * 1000, max: 60, standardHeaders: true, legacyHeaders: false })
+const limiterKeyForUser = (req) => {
+  if (req && req.user && req.user.id) return `user:${req.user.id}`
+  return req.ip || req.headers['x-forwarded-for'] || 'unknown'
+}
+const chatMessageLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyForUser,
+  message: { message: 'Too many messages sent too quickly. Please slow down.' }
+})
+const chatTypingLimiter = rateLimit({
+  windowMs: 10 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: limiterKeyForUser,
+  message: { message: 'Typing notifications throttled. Give it a moment.' }
+})
 function sanitizeMessageContent(s) {
   if (!s) return ''
   // Coerce to string, limit length, strip most control chars except newline and tab
@@ -473,7 +493,7 @@ app.get('/api/chat/messages', authMiddleware, async (req, res) => {
 })
 
 // POST a message. Requires auth
-app.post('/api/chat/messages', chatLimiter, authMiddleware, async (req, res) => {
+app.post('/api/chat/messages', authMiddleware, chatMessageLimiter, async (req, res) => {
   const { room = 'general', content } = req.body || {}
   const clean = sanitizeMessageContent(content)
   if (!clean || !clean.trim()) return res.status(400).json({ message: 'Missing content' })
@@ -811,7 +831,7 @@ app.post('/api/chat', authLimiter, authMiddleware, async (req, res) => {
 })
 
 // Typing indicator endpoint - broadcasts to all room listeners
-app.post('/api/chat/typing', chatLimiter, authMiddleware, async (req, res) => {
+app.post('/api/chat/typing', authMiddleware, chatTypingLimiter, async (req, res) => {
   try {
     const { room = 'general' } = req.body || {}
     if (!userAuthorizedForRoom(req.user.id, room)) return res.status(403).json({ message: 'Forbidden' })

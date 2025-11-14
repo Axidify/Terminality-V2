@@ -65,13 +65,19 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
   const open = useCallback((type: WindowType, opts?: Partial<WindowInstance>) => {
     sounds.windowOpen()
     setWindows(prev => {
-      // Check if window of this type already exists
-      const existing = prev.find(w => w.type === type)
+      const requestedPluginId = type === 'modular-plugin' ? (opts?.payload as any)?.pluginId : undefined
+      const existing = prev.find(w => {
+        if (type === 'modular-plugin' && requestedPluginId) {
+          return w.type === type && (w.payload as any)?.pluginId === requestedPluginId
+        }
+        return w.type === type
+      })
       if (existing) {
         // Focus and restore existing window instead of opening new one
         return prev.map(w => {
           if (w.id === existing.id) {
-            return { ...w, focused: true, minimized: false, z: ++zCounter }
+            const nextPayload = opts?.payload ? { ...w.payload, ...opts.payload } : w.payload
+            return { ...w, focused: true, minimized: false, z: ++zCounter, payload: nextPayload }
           }
           return { ...w, focused: false }
         })
