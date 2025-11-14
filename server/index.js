@@ -9,10 +9,7 @@ const bodyParser = require('body-parser')
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
-<<<<<<< HEAD
 const cookieParser = require('cookie-parser')
-=======
->>>>>>> feature/online-chat
 const rateLimit = require('express-rate-limit')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
