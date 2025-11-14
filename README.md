@@ -291,13 +291,12 @@ Save and redeploy the static site. Without this rule, navigating directly to `/a
 
 When releasing a new version:
 
-1. **Update version number**: Edit `client/src/version.ts` and update `VERSION` and `BUILD_DATE`
-2. **Update changelogs**: Add new version entry to the top of both:
-   - `CHANGELOG.md` (root)
-   - `client/public/CHANGELOG.md`
-3. **Format**: Follow existing changelog format with Added/Changed/Fixed sections
-4. **Order**: Newest version should appear first (chronological: newest → oldest)
-5. **About page**: SystemSettingsApp will automatically pull from the public changelog
+1. **Update version number**: Edit `client/src/version.ts` and update `VERSION` and `BUILD_DATE`.
+2. **Edit the canonical changelog**: Add a new entry to `CHANGELOG.md` (root) using the standard Added/Changed/Fixed/Breaking sections.
+3. **Sync server state**: Run `node scripts/migrate-changelog.js` (from repo root) to regenerate `server/state.json` with the latest entries.
+4. **Commit the generated state**: Include the updated `server/state.json` (and Prisma migration if applicable) so the backend ships with the new changelog data.
+5. **Verify in System Settings**: Launch the app, open System Settings → Version & About, and confirm the Highlight + Version History reflect the new release. Admins can also make editorial tweaks directly from the in-app editor.
+  - Legacy `client/public/CHANGELOG.md` is no longer read by the app; keep it only if you need a static export.
 
 ## Session Expiry Handling
 A global `SessionExpiredOverlay` listens for 401 responses and prompts a re-auth / refresh.

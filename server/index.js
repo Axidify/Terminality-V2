@@ -46,6 +46,8 @@ function getPresenceMap(room) {
   return presenceByRoom.get(r)
 }
 
+let savedState = null
+
 const DEFAULT_ABOUT_CONTENT = {
   heroTitle: 'Terminality OS',
   heroTagline: 'A Retro-Futuristic Operating System Simulation',
@@ -53,6 +55,163 @@ const DEFAULT_ABOUT_CONTENT = {
   whatsNewHeading: "What's new in this release",
   whatsNewBody: 'Online Chat received a major update — notifications now carry actionable intents so clicking a chat notification opens and focuses the Online Chat window and jumps directly to the target room or DM. The chat UI was streamlined for faster messaging, and DMs plus presence indicators have been added. See the changelog for full details.',
   outroParagraph: 'Experience a fully-functional desktop environment with authentic window management, file systems, applications, and network simulations—all running in your browser.'
+}
+
+const CHANGELOG_SECTION_KEYS = ['added', 'changed', 'fixed', 'breaking']
+const MAX_SECTION_ITEMS = 40
+const DEFAULT_CHANGELOG = { entries: [] }
+
+function sanitizeChangelogText(value, maxLen = 1200) {
+  if (typeof value !== 'string') return ''
+  return value
+    .replace(/\u0000/g, '')
+    .replace(/[<>]/g, '')
+    .trim()
+    .slice(0, maxLen)
+}
+
+function sanitizeVersionString(value) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  if (!/^\d+\.\d+\.\d+$/.test(normalized)) return null
+  return normalized
+}
+
+function sanitizeDateString(value) {
+  if (typeof value !== 'string') return new Date().toISOString().slice(0, 10)
+  const normalized = value.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return new Date().toISOString().slice(0, 10)
+  return normalized
+}
+
+function normalizeSectionList(sectionArray) {
+  if (!Array.isArray(sectionArray)) return []
+  const cleaned = []
+  for (const raw of sectionArray) {
+    const text = sanitizeChangelogText(raw || '', 800)
+    if (text) cleaned.push(text)
+    if (cleaned.length >= MAX_SECTION_ITEMS) break
+  }
+  return cleaned
+}
+
+function normalizeLinks(rawLinks) {
+  if (!Array.isArray(rawLinks)) return []
+  const cleaned = []
+  for (const raw of rawLinks) {
+    if (!raw || typeof raw !== 'object') continue
+    const label = sanitizeChangelogText(raw.label || '', 80)
+    const url = typeof raw.url === 'string' ? raw.url.trim() : ''
+    if (!label || !/^https?:\/\//i.test(url)) continue
+    cleaned.push({ label, url })
+    if (cleaned.length >= 5) break
+  }
+  return cleaned
+}
+
+function normalizeChangelogEntry(rawEntry) {
+  if (!rawEntry || typeof rawEntry !== 'object') return null
+  const version = sanitizeVersionString(rawEntry.version)
+  if (!version) return null
+  const date = sanitizeDateString(rawEntry.date)
+  const summary = sanitizeChangelogText(rawEntry.summary || '', 800)
+  const highlight = sanitizeChangelogText(rawEntry.highlight || '', 1600)
+  const spotlight = sanitizeChangelogText(rawEntry.spotlight || '', 1600)
+  const tags = Array.isArray(rawEntry.tags) ? rawEntry.tags.map(tag => sanitizeChangelogText(tag || '', 48)).filter(Boolean).slice(0, 6) : []
+  const sections = {}
+  for (const key of CHANGELOG_SECTION_KEYS) {
+    sections[key] = normalizeSectionList(rawEntry.sections && rawEntry.sections[key])
+  }
+  const links = normalizeLinks(rawEntry.links)
+  return {
+    version,
+    date,
+    summary,
+    highlight,
+    spotlight,
+    sections,
+    tags,
+    links
+  }
+}
+
+function compareVersions(a, b) {
+  const split = (val) => val.split('.').map(num => parseInt(num, 10) || 0)
+  const [aMajor, aMinor, aPatch] = split(a)
+  const [bMajor, bMinor, bPatch] = split(b)
+  if (aMajor !== bMajor) return aMajor - bMajor
+  if (aMinor !== bMinor) return aMinor - bMinor
+  return aPatch - bPatch
+}
+
+function normalizeChangelog(changelog) {
+  const entriesInput = changelog && Array.isArray(changelog.entries) ? changelog.entries : []
+  const seen = new Map()
+  for (const rawEntry of entriesInput) {
+    const entry = normalizeChangelogEntry(rawEntry)
+    if (!entry) continue
+    if (!seen.has(entry.version)) {
+      seen.set(entry.version, entry)
+    }
+  }
+  const entries = Array.from(seen.values()).sort((a, b) => {
+    const versionDiff = compareVersions(b.version, a.version)
+    if (versionDiff !== 0) return versionDiff
+    return b.date.localeCompare(a.date)
+  })
+  return { entries }
+}
+
+function ensureChangelogState() {
+  if (!savedState.changelog) {
+    savedState.changelog = { entries: [] }
+  }
+  savedState.changelog = normalizeChangelog(savedState.changelog)
+}
+
+function getChangelogState() {
+  ensureStateShape()
+  ensureChangelogState()
+  return savedState.changelog
+}
+
+function upsertChangelogEntry(rawEntry, originalVersion) {
+  const normalized = normalizeChangelogEntry(rawEntry)
+  if (!normalized) return { error: 'Invalid entry' }
+  const changelog = getChangelogState()
+  const entries = [...changelog.entries]
+  const targetVersion = originalVersion || normalized.version
+  const existingIndex = entries.findIndex(entry => entry.version === targetVersion)
+  if (originalVersion && existingIndex === -1) {
+    return { error: 'Not found' }
+  }
+  if (!originalVersion && entries.find(entry => entry.version === normalized.version)) {
+    return { error: 'Duplicate version' }
+  }
+  if (originalVersion && normalized.version !== originalVersion) {
+    const versionTaken = entries.some((entry, idx) => entry.version === normalized.version && idx !== existingIndex)
+    if (versionTaken) return { error: 'Duplicate version' }
+  }
+  if (existingIndex >= 0) {
+    entries.splice(existingIndex, 1, normalized)
+  } else {
+    entries.unshift(normalized)
+  }
+  savedState.changelog = normalizeChangelog({ entries })
+  return { entry: normalized, changelog: savedState.changelog }
+}
+
+function deleteChangelogEntry(version) {
+  const changelog = getChangelogState()
+  const entries = changelog.entries.filter(entry => entry.version !== version)
+  if (entries.length === changelog.entries.length) return false
+  savedState.changelog = normalizeChangelog({ entries })
+  return true
+}
+
+function buildChangelogResponse() {
+  const { entries } = getChangelogState()
+  return { entries, latest: entries[0] || null }
 }
 
 async function readState() {
@@ -101,7 +260,6 @@ async function writeState(s) {
   fs.writeFileSync(DEFAULT_STATE_PATH, JSON.stringify(s, null, 2), 'utf8')
 }
 
-let savedState = null
 ;(async () => {
   savedState = await readState()
   ensureStateShape()
@@ -112,6 +270,8 @@ function ensureStateShape() {
   if (!savedState) savedState = { version: 1, desktop: {}, story: {} }
   if (!savedState.desktop) savedState.desktop = {}
   if (!savedState.story) savedState.story = {}
+  if (!savedState.changelog) savedState.changelog = { entries: [] }
+  savedState.changelog = normalizeChangelog(savedState.changelog)
 }
 
 function sanitizeAboutField(value, fallback, maxLen = 1200) {
@@ -287,7 +447,12 @@ app.put('/api/state', authMiddleware, async (req, res) => {
     const incoming = req.body && req.body.state
     if (!incoming) return res.status(400).json({ message: 'state missing' })
     const aboutContent = incoming.aboutContent || (savedState && savedState.aboutContent) || DEFAULT_ABOUT_CONTENT
-    savedState = { ...incoming, aboutContent: normalizeAboutContent(aboutContent) }
+    const nextChangelog = incoming.changelog || (savedState && savedState.changelog) || DEFAULT_CHANGELOG
+    savedState = {
+      ...incoming,
+      aboutContent: normalizeAboutContent(aboutContent),
+      changelog: normalizeChangelog(nextChangelog)
+    }
     ensureStateShape()
     await writeState(savedState)
     res.json({ session_id: 1, state: savedState })
@@ -318,6 +483,73 @@ app.put('/api/about', authMiddleware, requireAdmin, async (req, res) => {
     res.json({ content: updated })
   } catch (e) {
     console.error('[api/about][put] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/changelog', (_req, res) => {
+  try {
+    res.json(buildChangelogResponse())
+  } catch (e) {
+    console.error('[api/changelog][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/changelog/:version', (req, res) => {
+  try {
+    const { version } = req.params
+    const changelog = getChangelogState()
+    const entry = changelog.entries.find(item => item.version === version)
+    if (!entry) return res.status(404).json({ message: 'Not found' })
+    res.json({ entry })
+  } catch (e) {
+    console.error('[api/changelog][get:version] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/changelog', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const incoming = req.body && req.body.entry
+    const result = upsertChangelogEntry(incoming)
+    if (result.error) {
+      const status = result.error === 'Duplicate version' ? 409 : 400
+      return res.status(status).json({ message: result.error })
+    }
+    await writeState(savedState)
+    res.json({ entry: result.entry, entries: result.changelog.entries, latest: result.changelog.entries[0] || null })
+  } catch (e) {
+    console.error('[api/changelog][post] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.put('/api/changelog/:version', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const { version } = req.params
+    const incoming = req.body && req.body.entry
+    const result = upsertChangelogEntry(incoming, version)
+    if (result.error === 'Not found') return res.status(404).json({ message: 'Not found' })
+    if (result.error === 'Duplicate version') return res.status(409).json({ message: 'Duplicate version' })
+    if (result.error) return res.status(400).json({ message: result.error })
+    await writeState(savedState)
+    res.json({ entry: result.entry, entries: result.changelog.entries, latest: result.changelog.entries[0] || null })
+  } catch (e) {
+    console.error('[api/changelog][put] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.delete('/api/changelog/:version', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const { version } = req.params
+    const removed = deleteChangelogEntry(version)
+    if (!removed) return res.status(404).json({ message: 'Not found' })
+    await writeState(savedState)
+    res.json(buildChangelogResponse())
+  } catch (e) {
+    console.error('[api/changelog][delete] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })
