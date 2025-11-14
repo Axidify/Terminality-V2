@@ -3,9 +3,11 @@ import DOMPurify from 'dompurify'
 
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
+import { useUser } from '../os/UserContext'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 import { VERSION, BUILD_DATE } from '../version'
 import { fetchAndParseChangelog, ParsedChangelog } from '../services/changelogParser'
+import { fetchAboutContent, updateAboutContent, FALLBACK_ABOUT_CONTENT, AboutContent } from '../services/aboutService'
 import './SystemSettingsApp.css'
 
 type Tab = 'themes' | 'wallpapers' | 'specs' | 'about'
@@ -75,6 +77,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [activeTab, setActiveTab] = useState<Tab>(payload?.tab || 'themes')
   const { currentTheme: _currentTheme, themeName, setTheme } = useTheme()
   const wm = useWindowManager()
+  const { isAdmin } = useUser()
   const [previewTheme, setPreviewTheme] = useState<string>(themeName)
   const [wallpaper, setWallpaper] = useState(() => getCachedDesktop()?.wallpaper || 'default')
   const [specs, _setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
@@ -82,6 +85,14 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [copyFeedback, setCopyFeedback] = useState<string>('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const aboutEditingRef = useRef(false)
+  const [aboutContent, setAboutContent] = useState<AboutContent>(FALLBACK_ABOUT_CONTENT)
+  const [aboutStatus, setAboutStatus] = useState<'idle' | 'loading' | 'error'>('loading')
+  const [aboutError, setAboutError] = useState('')
+  const [isEditingAbout, setIsEditingAbout] = useState(false)
+  const [draftAbout, setDraftAbout] = useState<AboutContent>(FALLBACK_ABOUT_CONTENT)
+  const [isSavingAbout, setIsSavingAbout] = useState(false)
+  const [aboutSaveFeedback, setAboutSaveFeedback] = useState('')
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -114,6 +125,27 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
       animationDuration: `${10 + Math.random() * 10}s`
     }))
   ), [])
+
+  const loadAboutContent = React.useCallback(async () => {
+    setAboutStatus('loading')
+    setAboutError('')
+    try {
+      const content = await fetchAboutContent()
+      setAboutContent(content)
+      if (!aboutEditingRef.current) {
+        setDraftAbout(content)
+      }
+      setAboutStatus('idle')
+    } catch (err) {
+      setAboutStatus('error')
+      const message = err instanceof Error ? err.message : 'Failed to load About content'
+      setAboutError(message)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAboutContent()
+  }, [loadAboutContent])
 
   useEffect(() => {
     saveDesktopState({ computerSpecs: specs }).catch(() => {})
@@ -151,6 +183,47 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
       setUpdateFeedback('Failed to check updates')
     }
     setTimeout(() => setUpdateFeedback(''), 2000)
+  }
+
+  const handleDraftChange = (field: keyof AboutContent, value: string) => {
+    setDraftAbout(prev => ({ ...prev, [field]: value }))
+  }
+
+  const startAboutEdit = () => {
+    setDraftAbout(aboutContent)
+    setIsEditingAbout(true)
+    aboutEditingRef.current = true
+    setAboutSaveFeedback('')
+  }
+
+  const cancelAboutEdit = () => {
+    setIsEditingAbout(false)
+    aboutEditingRef.current = false
+    setDraftAbout(aboutContent)
+    setAboutSaveFeedback('')
+  }
+
+  const handleSaveAbout = async () => {
+    setIsSavingAbout(true)
+    setAboutSaveFeedback('')
+    try {
+      const updated = await updateAboutContent(draftAbout)
+      setAboutContent(updated)
+      setAboutSaveFeedback('Changes saved')
+      setIsEditingAbout(false)
+      aboutEditingRef.current = false
+      setTimeout(() => setAboutSaveFeedback(''), 2500)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save changes'
+      setAboutSaveFeedback(message)
+    } finally {
+      setIsSavingAbout(false)
+    }
+  }
+
+  const refreshAboutContent = () => {
+    if (isEditingAbout) return
+    loadAboutContent()
   }
 
   const applyTheme = () => {
@@ -460,7 +533,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
                 <circle cx="50" cy="45" r="8" fill="currentColor" />
               </svg>
-              <h1>Terminality OS</h1>
+              <h1>{aboutContent.heroTitle}</h1>
               <div className="version-info">
                 <p className="version">Version {VERSION}</p>
                 <button className="copy-version-btn" onClick={copyVersionInfo} title="Copy version info to clipboard">
@@ -471,29 +544,113 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   <span>{copyFeedback || 'Copy'}</span>
                 </button>
               </div>
-              <p className="tagline">A Retro-Futuristic Operating System Simulation</p>
+              <p className="tagline">{aboutContent.heroTagline}</p>
             </div>
+
+            {isAdmin && (
+              <div className="about-admin-controls">
+                {!isEditingAbout ? (
+                  <div className="about-admin-bar">
+                    <span>Dynamic copy updates instantly from the server.</span>
+                    <div className="about-admin-actions">
+                      <button
+                        className="about-admin-button ghost"
+                        onClick={refreshAboutContent}
+                        disabled={aboutStatus === 'loading'}
+                      >
+                        {aboutStatus === 'loading' ? 'Refreshing…' : 'Refresh Content'}
+                      </button>
+                      <button className="about-admin-button" onClick={startAboutEdit}>
+                        Edit About Content
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="about-admin-form">
+                    <div className="about-admin-grid">
+                      <label>
+                        <span>Hero Title</span>
+                        <input
+                          type="text"
+                          value={draftAbout.heroTitle}
+                          onChange={(e) => handleDraftChange('heroTitle', e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span>Hero Tagline</span>
+                        <input
+                          type="text"
+                          value={draftAbout.heroTagline}
+                          onChange={(e) => handleDraftChange('heroTagline', e.target.value)}
+                        />
+                      </label>
+                      <label className="wide">
+                        <span>Intro Paragraph</span>
+                        <textarea
+                          rows={3}
+                          value={draftAbout.introParagraph}
+                          onChange={(e) => handleDraftChange('introParagraph', e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span>What&apos;s New Heading</span>
+                        <input
+                          type="text"
+                          value={draftAbout.whatsNewHeading}
+                          onChange={(e) => handleDraftChange('whatsNewHeading', e.target.value)}
+                        />
+                      </label>
+                      <label className="wide">
+                        <span>What&apos;s New Body</span>
+                        <textarea
+                          rows={3}
+                          value={draftAbout.whatsNewBody}
+                          onChange={(e) => handleDraftChange('whatsNewBody', e.target.value)}
+                        />
+                      </label>
+                      <label className="wide">
+                        <span>Closing Paragraph</span>
+                        <textarea
+                          rows={3}
+                          value={draftAbout.outroParagraph}
+                          onChange={(e) => handleDraftChange('outroParagraph', e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="about-admin-actions">
+                      <button
+                        className="about-admin-button"
+                        onClick={handleSaveAbout}
+                        disabled={isSavingAbout}
+                      >
+                        {isSavingAbout ? 'Saving…' : 'Save Changes'}
+                      </button>
+                      <button className="about-admin-button ghost" onClick={cancelAboutEdit}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {aboutSaveFeedback && (
+                  <div className="about-admin-feedback">{aboutSaveFeedback}</div>
+                )}
+              </div>
+            )}
+
+            {(aboutStatus === 'loading' || aboutStatus === 'error') && (
+              <div className={`about-status-message ${aboutStatus}`}>
+                {aboutStatus === 'loading' ? 'Refreshing About content…' : `Using cached About content. ${aboutError}`}
+              </div>
+            )}
 
             <div className="about-content-grid">
               <div className="about-section about-description">
                 <h2>About Terminality</h2>
-                <p>
-                  Terminality is an immersive single-player mystery game that blends puzzle solving, 
-                  deep online investigations, and narrative exploration within a retro terminal-based 
-                  operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate 
-                  through a mysterious digital world shrouded in intrigue.
+                <p>{aboutContent.introParagraph}</p>
+                <p className="about-whatsnew">
+                  <strong>{aboutContent.whatsNewHeading}:</strong> {aboutContent.whatsNewBody}
                 </p>
-                <p style={{ marginTop: 10 }}>
-                  <strong>What's new in this release:</strong> Online Chat received a major update —
-                  notifications now carry actionable intents so clicking a chat notification opens and
-                  focuses the Online Chat window and jumps directly to the target room or DM. The
-                  chat UI was streamlined for faster messaging (compact bubbles, denser lists), and
-                  DMs and presence indicators have been added. See the changelog for full details.
-                </p>
-                <p>
-                  Experience a fully-functional desktop environment with authentic window management, 
-                  file systems, applications, and network simulations—all running in your browser.
-                </p>
+                <p>{aboutContent.outroParagraph}</p>
               </div>
 
               <div className="about-section about-system-info">
