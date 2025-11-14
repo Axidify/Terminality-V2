@@ -21,7 +21,7 @@ model User {
   password String
   role     String  @default("user")
   tokens   Token[]
-  messages Message[]
+  messages Message[] @relation("UserMessages")
 }
 
 model Token {
@@ -41,6 +41,6 @@ model Message {
   content   String
   createdAt DateTime @default(now())
   room      String   @default("general")
-  user      User?    @relation(fields: [userId], references: [id])
+  user      User?    @relation("UserMessages", fields: [userId], references: [id])
   userId    Int?
 }
