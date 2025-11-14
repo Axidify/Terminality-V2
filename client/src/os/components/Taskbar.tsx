@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon } from './Icons'
+import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, AdminIcon, UserManagementIcon } from './Icons'
 import Icon from './icons/Icon'
 import { NotificationPanel } from './NotificationPanel'
 import { useNotifications } from '../NotificationContext'
@@ -15,7 +15,7 @@ interface AppDefinition {
   defaultOpts?: { title?: string; width?: number; height?: number; payload?: any }
 }
 
-const apps: AppDefinition[] = [
+const baseApps: AppDefinition[] = [
   { type: 'terminal', name: 'Terminal', icon: <TerminalIcon size={20} />, defaultOpts: { title: 'Terminal', width: 700, height: 500 } },
   { type: 'explorer', name: 'Explorer', icon: <FolderIcon size={20} />, defaultOpts: { title: 'File Explorer', width: 1200, height: 800 } },
   { type: 'notepad', name: 'Notepad', icon: <NotepadIcon size={20} />, defaultOpts: { title: 'Notepad', width: 1200, height: 800 } },
@@ -36,7 +36,7 @@ interface TaskbarProps {
 
 export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
   const wm = useWindowManager()
-  const { logout } = useUser()
+  const { logout, isAdmin } = useUser()
   const { unreadCount } = useNotifications()
   const [startOpen, setStartOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -71,6 +71,17 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
     }
   }, [startOpen])
 
+  const availableApps = React.useMemo<AppDefinition[]>(() => {
+    const list = [...baseApps]
+    if (isAdmin) {
+      list.push(
+        { type: 'usermgmt', name: 'User Management', icon: <UserManagementIcon size={20} />, defaultOpts: { title: 'User Management', width: 900, height: 650 } },
+        { type: 'adminpanel', name: 'Admin Panel', icon: <AdminIcon size={20} />, defaultOpts: { title: 'Admin Panel', width: 1200, height: 800 } }
+      )
+    }
+    return list
+  }, [isAdmin])
+
   const launchApp = (app: AppDefinition) => {
     wm.open(app.type, app.defaultOpts)
     setStartOpen(false)
@@ -99,7 +110,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
           <div className="start-menu" ref={menuRef}>
             <div className="start-menu-header">TERMINALITY OS</div>
             <div className="start-menu-apps">
-              {apps.map(app => (
+              {availableApps.map(app => (
                 <button key={app.type} className="start-menu-item" onClick={() => launchApp(app)}>
                   <span className="app-icon">{app.icon}</span>
                   <span>{app.name}</span>
@@ -143,7 +154,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
       {/* Running Apps */}
       <div className="taskbar-apps">
         {Object.entries(runningApps).map(([type, windows]) => {
-          const app = apps.find(a => a.type === type)
+          const app = availableApps.find(a => a.type === type)
           if (!app) return null
           const firstWin = windows[0]
           const isMinimized = firstWin.minimized

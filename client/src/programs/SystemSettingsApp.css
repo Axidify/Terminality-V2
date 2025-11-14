@@ -927,6 +927,121 @@
   line-height: 1.2;
 }
 
+.about-whatsnew {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: rgba(var(--color-primary-rgb), 0.08);
+  border-left: 3px solid var(--color-primary);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.about-admin-controls {
+  position: relative;
+  z-index: 12;
+  margin: 24px 0;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.15);
+}
+
+.about-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.about-admin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.about-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.about-admin-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(var(--color-primary-rgb), 0.7);
+}
+
+.about-admin-grid label.wide {
+  grid-column: 1 / -1;
+}
+
+.about-admin-grid input,
+.about-admin-grid textarea {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  color: #fff;
+  padding: 8px;
+  font-family: 'Courier New', monospace;
+  resize: vertical;
+}
+
+.about-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.about-admin-button {
+  padding: 10px 18px;
+  border: 1px solid var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.15);
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.about-admin-button.ghost {
+  border-color: rgba(var(--color-primary-rgb), 0.4);
+  background: transparent;
+}
+
+.about-admin-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.about-admin-feedback {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(var(--color-primary-rgb), 0.8);
+}
+
+.about-status-message {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: rgba(var(--color-primary-rgb), 0.08);
+  border: 1px dashed rgba(var(--color-primary-rgb), 0.5);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(var(--color-primary-rgb), 0.9);
+}
+
+.about-status-message.error {
+  border-color: rgba(255, 99, 99, 0.6);
+  color: #ffa09a;
+}
+
 /* What's New Highlight Section */
 .about-section.about-highlight {
   background: linear-gradient(135deg, 

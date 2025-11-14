@@ -46,6 +46,15 @@ function getPresenceMap(room) {
   return presenceByRoom.get(r)
 }
 
+const DEFAULT_ABOUT_CONTENT = {
+  heroTitle: 'Terminality OS',
+  heroTagline: 'A Retro-Futuristic Operating System Simulation',
+  introParagraph: 'Terminality is an immersive single-player mystery game that blends puzzle solving, deep online investigations, and narrative exploration within a retro terminal-based operating system simulation. Uncover secrets, solve cryptic puzzles, and navigate through a mysterious digital world shrouded in intrigue.',
+  whatsNewHeading: "What's new in this release",
+  whatsNewBody: 'Online Chat received a major update — notifications now carry actionable intents so clicking a chat notification opens and focuses the Online Chat window and jumps directly to the target room or DM. The chat UI was streamlined for faster messaging, and DMs plus presence indicators have been added. See the changelog for full details.',
+  outroParagraph: 'Experience a fully-functional desktop environment with authentic window management, file systems, applications, and network simulations—all running in your browser.'
+}
+
 async function readState() {
   if (prisma) {
     try {
@@ -95,7 +104,50 @@ async function writeState(s) {
 let savedState = null
 ;(async () => {
   savedState = await readState()
+  ensureStateShape()
+  savedState.aboutContent = normalizeAboutContent(savedState.aboutContent || DEFAULT_ABOUT_CONTENT)
 })()
+
+function ensureStateShape() {
+  if (!savedState) savedState = { version: 1, desktop: {}, story: {} }
+  if (!savedState.desktop) savedState.desktop = {}
+  if (!savedState.story) savedState.story = {}
+}
+
+function sanitizeAboutField(value, fallback, maxLen = 1200) {
+  if (typeof value !== 'string') return fallback
+  const trimmed = value.trim()
+  if (!trimmed) return fallback
+  return trimmed.slice(0, maxLen)
+}
+
+function normalizeAboutContent(input) {
+  ensureStateShape()
+  const current = savedState.aboutContent ? savedState.aboutContent : DEFAULT_ABOUT_CONTENT
+  const data = { ...current, ...(input && typeof input === 'object' ? input : {}) }
+  return {
+    heroTitle: sanitizeAboutField(data.heroTitle, current.heroTitle, 150),
+    heroTagline: sanitizeAboutField(data.heroTagline, current.heroTagline, 220),
+    introParagraph: sanitizeAboutField(data.introParagraph, current.introParagraph, 2000),
+    whatsNewHeading: sanitizeAboutField(data.whatsNewHeading, current.whatsNewHeading, 200),
+    whatsNewBody: sanitizeAboutField(data.whatsNewBody, current.whatsNewBody, 3000),
+    outroParagraph: sanitizeAboutField(data.outroParagraph, current.outroParagraph, 2000)
+  }
+}
+
+function getAboutContent() {
+  ensureStateShape()
+  const normalized = normalizeAboutContent(savedState.aboutContent || DEFAULT_ABOUT_CONTENT)
+  savedState.aboutContent = normalized
+  return normalized
+}
+
+function setAboutContent(next) {
+  ensureStateShape()
+  const normalized = normalizeAboutContent(next)
+  savedState.aboutContent = normalized
+  return normalized
+}
 
 const app = express()
 // Security headers
@@ -234,11 +286,38 @@ app.put('/api/state', authMiddleware, async (req, res) => {
   try {
     const incoming = req.body && req.body.state
     if (!incoming) return res.status(400).json({ message: 'state missing' })
-    savedState = incoming
+    const aboutContent = incoming.aboutContent || (savedState && savedState.aboutContent) || DEFAULT_ABOUT_CONTENT
+    savedState = { ...incoming, aboutContent: normalizeAboutContent(aboutContent) }
+    ensureStateShape()
     await writeState(savedState)
     res.json({ session_id: 1, state: savedState })
   } catch (e) {
     console.error('[api/state][put] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/about', (req, res) => {
+  try {
+    const content = getAboutContent()
+    res.json({ content })
+  } catch (e) {
+    console.error('[api/about][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.put('/api/about', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const incoming = req.body && req.body.content
+    if (!incoming || typeof incoming !== 'object') {
+      return res.status(400).json({ message: 'content payload required' })
+    }
+    const updated = setAboutContent(incoming)
+    await writeState(savedState)
+    res.json({ content: updated })
+  } catch (e) {
+    console.error('[api/about][put] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })
