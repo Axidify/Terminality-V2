@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Notification fallbacks**: Hardened notification handling when browser permission is denied, ensuring in-app banners remain available and controls stay in sync with the underlying state.
 
+## [0.5.8] - 2025-11-15
+
+### Added
+- **Changelog migration script**: Added `scripts/migrate-changelog.js` to help convert older changelog entries to the new plain-text format on demand.
+- **Tests**: Added integration coverage to verify markdown tokens are stripped on save.
+
+### Changed
+- **Changelog editor**: Finalized move to plain-text; removed `marked` and `dompurify` from the client and disabled formatting controls.
+- **About page & highlights**: `What's New` render path now pulls and displays plain text from the changelog so highlights are consistent across platforms.
+
+### Fixed
+- **Sanitization**: Backend now strips common markdown tokens (inline code, bold/italic markers, headings, lists, images/links) so stored entries remain readable and safe.
+
 ## [0.5.6] - 2025-11-13
 
 ### Added
