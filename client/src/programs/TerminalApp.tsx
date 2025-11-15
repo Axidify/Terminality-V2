@@ -207,7 +207,8 @@ export const TerminalApp: React.FC = () => {
       try {
         const defs = await listTerminalQuests()
         if (cancelled) return
-        setQuestDefinitions(defs)
+        const published = defs.filter(def => def.status !== 'draft')
+        setQuestDefinitions(published)
       } catch (err) {
         console.warn('[terminal] failed to load quest definitions, using fallback', err)
         setQuestDefinitions([])

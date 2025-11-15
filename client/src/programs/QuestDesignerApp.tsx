@@ -38,6 +38,7 @@ const createEmptyQuest = (): DesignerQuest => ({
   requirements: { required_flags: [], required_quests: [] },
   default_system_id: undefined,
   embedded_filesystems: {},
+  status: 'draft',
   __unsaved: true
 })
 
@@ -59,6 +60,7 @@ const normalizeQuest = (quest: QuestDefinition | DesignerQuest): DesignerQuest =
   },
   default_system_id: quest.default_system_id,
   embedded_filesystems: quest.embedded_filesystems || {},
+  status: quest.status === 'published' ? 'published' : 'draft',
   __unsaved: (quest as DesignerQuest).__unsaved
 })
 
@@ -85,7 +87,8 @@ const questToPayload = (quest: DesignerQuest): QuestDefinition => ({
     required_quests: quest.requirements?.required_quests || []
   },
   default_system_id: quest.default_system_id,
-  embedded_filesystems: quest.embedded_filesystems
+  embedded_filesystems: quest.embedded_filesystems,
+  status: quest.status === 'published' ? 'published' : 'draft'
 })
 
 const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: TagInputProps) => {
@@ -276,6 +279,7 @@ export const QuestDesignerApp: React.FC = () => {
   const [draft, setDraft] = useState<DesignerQuest | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
   const [validationMessages, setValidationMessages] = useState<string[]>([])
@@ -292,7 +296,7 @@ export const QuestDesignerApp: React.FC = () => {
     const load = async () => {
       setLoading(true)
       try {
-        const data = await listTerminalQuests()
+        const data = await listTerminalQuests({ includeDrafts: true })
         if (cancelled) return
         setQuests(data.map(normalizeQuest))
       } catch (err) {
@@ -367,6 +371,13 @@ export const QuestDesignerApp: React.FC = () => {
 
   const addStep = () => {
     if (!draft) return
+                  <button
+                    type="button"
+                    onClick={handlePublish}
+                    disabled={publishing || saving || draft.status === 'published'}
+                  >
+                    {publishing ? 'Publishing…' : 'Publish'}
+                  </button>
     const nextStep: QuestStep = {
       id: `step_${draft.steps.length + 1}`,
       type: 'SCAN_HOST',
@@ -528,46 +539,63 @@ export const QuestDesignerApp: React.FC = () => {
     }))
   }
 
-  const handleSave = async () => {
-    const validation = validateQuestDraft(draft || undefined)
+  const runSave = async (statusOverride?: 'draft' | 'published') => {
+    if (!draft) return
+    const targetDraft = statusOverride ? { ...draft, status: statusOverride } : draft
+    if (statusOverride) {
+      setDraft(targetDraft)
+    }
+    const validation = validateQuestDraft(targetDraft)
     if (validation.length) {
       setErrors(validation)
       return
     }
-    if (!draft) return
-    const wasUnsaved = !!draft.__unsaved
-    setSaving(true)
+    const wasUnsaved = !!targetDraft.__unsaved
+    const isPublishing = statusOverride === 'published'
+    if (isPublishing) {
+      setPublishing(true)
+    } else {
+      setSaving(true)
+    }
     setErrors([])
     setValidationMessages([])
     try {
       let response
-      if (draft.__unsaved) {
-        response = await createTerminalQuest(questToPayload(draft))
+      if (targetDraft.__unsaved) {
+        response = await createTerminalQuest(questToPayload(targetDraft))
         persistedIdRef.current = response.quest.id
       } else {
-        response = await updateTerminalQuest(persistedIdRef.current || draft.id, questToPayload(draft))
+        response = await updateTerminalQuest(persistedIdRef.current || targetDraft.id, questToPayload(targetDraft))
       }
       const savedQuest = normalizeQuest(response.quest)
       setWarnings(response.warnings || [])
       setQuests(prev => {
-        const others = prev.filter(q => q.id !== (selectedKey || draft.id))
+        const others = prev.filter(q => q.id !== (selectedKey || targetDraft.id))
         return [...others, savedQuest]
       })
       setSelectedKey(savedQuest.id)
       persistedIdRef.current = savedQuest.id
       setDraft(savedQuest)
       if (typeof window !== 'undefined') {
+        const action = isPublishing ? 'publish' : wasUnsaved ? 'create' : 'update'
         window.dispatchEvent(new CustomEvent('terminalQuestsUpdated', {
-          detail: { action: wasUnsaved ? 'create' : 'update', questId: savedQuest.id }
+          detail: { action, questId: savedQuest.id }
         }))
       }
     } catch (err: any) {
       console.error('[quest designer] save failed', err)
       setErrors([err?.message || 'Failed to save quest.'])
     } finally {
-      setSaving(false)
+      if (isPublishing) {
+        setPublishing(false)
+      } else {
+        setSaving(false)
+      }
     }
   }
+
+  const handleSave = () => { void runSave() }
+  const handlePublish = () => { void runSave('published') }
 
   const handleValidate = async () => {
     if (!draft) return
@@ -646,9 +674,14 @@ export const QuestDesignerApp: React.FC = () => {
                 className={`quest-list-item ${isActive ? 'selected' : ''}`}
                 onClick={() => selectQuest(quest)}
               >
-              <strong>{quest.title}</strong>
+              <div className="quest-item-header">
+                <strong>{quest.title}</strong>
+                <span className={`tag quest-status ${quest.status}`}>
+                  {quest.status === 'published' ? 'Published' : 'Draft'}
+                </span>
+              </div>
               <span className="muted">{quest.id}</span>
-              {quest.__unsaved && <span className="tag muted">draft</span>}
+              {quest.__unsaved && <span className="tag unsaved">Unsaved</span>}
             </button>
             )
           })}
@@ -670,7 +703,14 @@ export const QuestDesignerApp: React.FC = () => {
               </div>
               <div className="editor-actions">
                 <button type="button" className="ghost" onClick={handleValidate} disabled={validating}>{validating ? 'Validating…' : 'Validate Quest'}</button>
-                <button type="button" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Quest'}</button>
+                <button type="button" onClick={handleSave} disabled={saving || publishing}>{saving ? 'Saving…' : 'Save Draft'}</button>
+                <button
+                  type="button"
+                  onClick={handlePublish}
+                  disabled={publishing || saving || draft.status === 'published'}
+                >
+                  {publishing ? 'Publishing…' : 'Publish'}
+                </button>
                 <button type="button" className="danger" onClick={handleDelete}>Delete</button>
               </div>
             </header>
@@ -712,6 +752,16 @@ export const QuestDesignerApp: React.FC = () => {
                 <label>
                   Title
                   <input value={draft.title} onChange={e => updateCurrentQuest(prev => ({ ...prev, title: e.target.value }))} />
+                </label>
+                <label>
+                  Status
+                  <select
+                    value={draft.status || 'draft'}
+                    onChange={e => updateCurrentQuest(prev => ({ ...prev, status: e.target.value as 'draft' | 'published' }))}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                  </select>
                 </label>
                 <label>
                   Trigger

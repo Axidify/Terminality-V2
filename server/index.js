@@ -1295,7 +1295,7 @@ app.delete('/api/terminal-systems/:id', authMiddleware, requireAdmin, (req, res)
 // Terminal quest definitions (hacking terminal)
 app.get('/api/terminal-quests', (_req, res) => {
   try {
-    const quests = terminalQuestStore.listQuests()
+    const quests = terminalQuestStore.listQuests({ includeDrafts: false })
     res.json({ quests })
   } catch (err) {
     console.error('[api/terminal-quests][list] error', err)
@@ -1305,11 +1305,32 @@ app.get('/api/terminal-quests', (_req, res) => {
 
 app.get('/api/terminal-quests/:id', (req, res) => {
   try {
-    const quest = terminalQuestStore.getQuestById(req.params.id)
+    const quest = terminalQuestStore.getQuestById(req.params.id, { includeDrafts: false })
     if (!quest) return res.status(404).json({ message: 'Not found' })
     res.json({ quest })
   } catch (err) {
     console.error('[api/terminal-quests/:id][get] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/admin/terminal-quests', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const quests = terminalQuestStore.listQuests({ includeDrafts: true })
+    res.json({ quests })
+  } catch (err) {
+    console.error('[api/admin/terminal-quests][list] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/admin/terminal-quests/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const quest = terminalQuestStore.getQuestById(req.params.id, { includeDrafts: true })
+    if (!quest) return res.status(404).json({ message: 'Not found' })
+    res.json({ quest })
+  } catch (err) {
+    console.error('[api/admin/terminal-quests/:id][get] error', err)
     res.status(500).json({ message: 'Server error' })
   }
 })

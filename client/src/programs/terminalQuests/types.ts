@@ -47,6 +47,7 @@ export interface QuestDefinition {
   requirements?: QuestRequirements
   default_system_id?: string
   embedded_filesystems?: Record<string, Record<string, FileSystemNode>>
+  status?: 'draft' | 'published'
 }
 
 export interface FileSystemNode {

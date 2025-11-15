@@ -211,6 +211,31 @@
   font-weight: 500;
 }
 
+.quest-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.quest-status.published {
+  border-color: rgba(var(--color-primary-rgb), 0.6);
+  background: rgba(var(--color-primary-rgb), 0.2);
+  color: var(--color-primary);
+}
+
+.quest-status.draft {
+  border-color: rgba(255, 204, 102, 0.6);
+  background: rgba(255, 204, 102, 0.15);
+  color: #ffcc66;
+}
+
+.quest-list-item .tag.unsaved {
+  border-color: rgba(255, 141, 161, 0.6);
+  background: rgba(255, 141, 161, 0.18);
+  color: #ff8da1;
+}
+
 .quest-editor {
   flex: 1;
   padding: 24px;

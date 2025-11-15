@@ -6,7 +6,15 @@ interface QuestResponse {
   warnings?: string[]
 }
 
-export async function listTerminalQuests(): Promise<QuestDefinition[]> {
+interface ListOptions {
+  includeDrafts?: boolean
+}
+
+export async function listTerminalQuests(options?: ListOptions): Promise<QuestDefinition[]> {
+  if (options?.includeDrafts) {
+    const res = await apiRequest<{ quests: QuestDefinition[] }>('/api/admin/terminal-quests', { auth: true })
+    return res.quests || []
+  }
   const res = await apiRequest<{ quests: QuestDefinition[] }>('/api/terminal-quests')
   return res.quests || []
 }

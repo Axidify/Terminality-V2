@@ -7,6 +7,7 @@ const STEP_TYPES = new Set(['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONN
 const PATH_DEPENDENT_TYPES = new Set(['DELETE_FILE'])
 const SYSTEM_REQUIRED_TYPES = new Set(['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST'])
 const TRIGGER_TYPES = new Set(['ON_FIRST_TERMINAL_OPEN'])
+const QUEST_STATUSES = new Set(['draft', 'published'])
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -25,6 +26,10 @@ function readStore() {
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return { version: 1, quests: [], lastUpdated: new Date().toISOString() }
     if (!Array.isArray(parsed.quests)) parsed.quests = []
+    parsed.quests = parsed.quests.map((quest) => ({
+      ...quest,
+      status: normalizeStatus(quest?.status)
+    }))
     parsed.version = parsed.version || 1
     parsed.lastUpdated = parsed.lastUpdated || new Date().toISOString()
     return parsed
@@ -37,9 +42,12 @@ function readStore() {
 }
 
 function writeStore(store) {
+  const quests = Array.isArray(store.quests)
+    ? store.quests.map(q => ({ ...q, status: normalizeStatus(q.status) === 'published' ? 'published' : 'draft' }))
+    : []
   const payload = {
     version: store.version || 1,
-    quests: Array.isArray(store.quests) ? store.quests : [],
+    quests,
     lastUpdated: new Date().toISOString()
   }
   fs.writeFileSync(QUEST_FILE, JSON.stringify(payload, null, 2), 'utf8')
@@ -65,6 +73,11 @@ function normalizeText(value, { max = 1000, optional = false } = {}) {
 function normalizeArray(value) {
   if (!Array.isArray(value)) return []
   return value.filter((entry) => typeof entry === 'string' && entry.trim()).map(entry => entry.trim()).slice(0, 50)
+}
+
+function normalizeStatus(value) {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  return QUEST_STATUSES.has(raw) ? raw : 'draft'
 }
 
 function normalizePath(value) {
@@ -275,6 +288,8 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
       }
     : { required_flags: [], required_quests: [] }
 
+  const status = normalizeStatus(input?.status)
+
   if (errors.length) {
     return { errors }
   }
@@ -288,21 +303,28 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
     rewards,
     requirements,
     default_system_id: defaultSystemId || undefined,
-    embedded_filesystems: Object.keys(embeddedFilesystems).length ? embeddedFilesystems : undefined
+    embedded_filesystems: Object.keys(embeddedFilesystems).length ? embeddedFilesystems : undefined,
+    status
   }
   const warnings = buildQuestWarnings(quest, existing)
   return { quest, warnings }
 }
 
-function listQuests() {
+function listQuests(options = {}) {
   const store = readStore()
-  return clone(store.quests)
+  const includeDrafts = Boolean(options.includeDrafts)
+  const quests = includeDrafts ? store.quests : store.quests.filter(q => q.status !== 'draft')
+  return clone(quests)
 }
 
-function getQuestById(id) {
+function getQuestById(id, options = {}) {
   if (!id) return null
   const store = readStore()
-  return store.quests.find(q => q.id === id) || null
+  const includeDrafts = Boolean(options.includeDrafts)
+  const quest = store.quests.find(q => q.id === id)
+  if (!quest) return null
+  if (!includeDrafts && quest.status === 'draft') return null
+  return clone(quest)
 }
 
 function createQuest(payload) {
