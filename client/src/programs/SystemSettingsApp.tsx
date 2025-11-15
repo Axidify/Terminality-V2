@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import DOMPurify from 'dompurify'
 
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
@@ -148,6 +147,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aboutEditingRef = useRef(false)
+  const changelogEditorRef = useRef<HTMLDivElement | null>(null)
   const [aboutContent, setAboutContent] = useState<AboutContent>(FALLBACK_ABOUT_CONTENT)
   const [aboutStatus, setAboutStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [aboutError, setAboutError] = useState('')
@@ -258,6 +258,179 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [updateFeedback, setUpdateFeedback] = useState<string>('')
   const [contributors, setContributors] = useState<string[]>([]) // scaffold for contributors list
 
+  const heroTitleSource = (aboutContent.heroTitle || 'Terminality OS').trim() || 'Terminality OS'
+  const [heroPrimaryWordRaw, ...heroSecondaryWords] = heroTitleSource.split(/\s+/)
+  const heroPrimaryWordmark = (heroPrimaryWordRaw || 'Terminality').toUpperCase()
+  const heroSecondaryWordmarkSource = heroSecondaryWords.length
+    ? heroSecondaryWords.join(' ')
+    : (heroPrimaryWordmark === 'TERMINALITY' ? 'OS' : '')
+  const heroSecondaryWordmark = heroSecondaryWordmarkSource ? heroSecondaryWordmarkSource.toUpperCase() : ''
+  const shouldRenderSecondaryWordmark = Boolean(heroSecondaryWordmark && heroSecondaryWordmark !== 'OS')
+
+  const systemInfoItems = [
+    { label: 'Version', value: VERSION },
+    { label: 'Build Date', value: BUILD_DATE },
+    { label: 'Architecture', value: 'Web-Based (x64 Simulation)' },
+    { label: 'Frontend', value: 'React 18 + TypeScript + Vite' },
+    { label: 'Backend', value: 'Node.js + Express + Prisma' },
+    { label: 'Database', value: 'SQLite with JWT Auth' },
+    { label: 'License', value: 'MIT License' }
+  ]
+
+  const featureItems: Array<{ key: string; title: string; description: string; icon: React.ReactNode }> = [
+    {
+      key: 'multi-window',
+      title: 'Multi-Window System',
+      description: 'Drag, resize, minimize, and maximize windows with full desktop management',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M9 3v18" />
+        </svg>
+      )
+    },
+    {
+      key: 'filesystem',
+      title: 'Virtual Filesystem',
+      description: 'Navigate folders, create files, and manage your virtual storage',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <polyline points="13 2 13 9 20 9" />
+        </svg>
+      )
+    },
+    {
+      key: 'terminal',
+      title: 'Terminal Emulator',
+      description: 'Execute commands, run scripts, and explore the command-line interface',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+      )
+    },
+    {
+      key: 'browser',
+      title: 'Web Browser',
+      description: 'Browse simulated websites with realistic social media and news platforms',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      )
+    },
+    {
+      key: 'music',
+      title: 'Music Player',
+      description: 'Play tracks, create playlists, and control playback across the desktop',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      )
+    },
+    {
+      key: 'themes',
+      title: '17 Color Themes',
+      description: 'Customize your experience with classic green, cyber blue, neon pink, and more',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2" />
+        </svg>
+      )
+    }
+  ]
+
+  const projectFacts: Array<{ key: string; label: string; value: string; icon: React.ReactNode }> = [
+    {
+      key: 'creator',
+      label: 'Created by:',
+      value: 'Axidify',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      )
+    },
+    {
+      key: 'repository',
+      label: 'Repository:',
+      value: 'github.com/Axidify/Terminality-V2',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+        </svg>
+      )
+    },
+    {
+      key: 'license',
+      label: 'License:',
+      value: 'MIT License - Open source and free to use',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      )
+    }
+  ]
+
+  const supportActions: Array<{ key: string; label: string; icon: React.ReactNode; action: () => void }> = [
+    {
+      key: 'docs',
+      label: 'Documentation',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      ),
+      action: () => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })
+    },
+    {
+      key: 'issues',
+      label: 'Report an Issue',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      ),
+      action: () => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })
+    },
+    {
+      key: 'contribute',
+      label: 'Contribute',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+        </svg>
+      ),
+      action: () => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })
+    },
+    {
+      key: 'terminal',
+      label: 'Open Terminal',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+      ),
+      action: () => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })
+    }
+  ]
+
   const checkForUpdates = async () => {
     setUpdateFeedback('Checking...')
     try {
@@ -268,6 +441,14 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
       setUpdateFeedback('Failed to check updates')
     }
     setTimeout(() => setUpdateFeedback(''), 2000)
+  }
+
+  const jumpToLatestChangelogEntry = () => {
+    if (!changelog.latest) return
+    handleSelectChangelogVersion(changelog.latest.version)
+    requestAnimationFrame(() => {
+      changelogEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   const handleChangelogFieldChange = (field: keyof ChangelogEntry, value: string) => {
@@ -712,7 +893,13 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
                 <circle cx="50" cy="45" r="8" fill="currentColor" />
               </svg>
-              <h1>{aboutContent.heroTitle}</h1>
+              <h1 className="about-wordmark" aria-label={aboutContent.heroTitle}>
+                <span className="wordmark-primary">{heroPrimaryWordmark}</span>
+                {shouldRenderSecondaryWordmark && (
+                  <span className="wordmark-secondary">{heroSecondaryWordmark}</span>
+                )}
+              </h1>
+              <div className="wordmark-caption">Operating System</div>
               <div className="version-info">
                 <p className="version">Version {VERSION}</p>
                 <button className="copy-version-btn" onClick={copyVersionInfo} title="Copy version info to clipboard">
@@ -835,102 +1022,27 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
               <div className="about-section about-system-info">
                 <h2>System Information</h2>
                 <div className="info-table">
-                  <div className="info-row">
-                    <span className="info-label">Version</span>
-                    <span className="info-value">{VERSION}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Build Date</span>
-                    <span className="info-value">{BUILD_DATE}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Architecture</span>
-                    <span className="info-value">Web-Based (x64 Simulation)</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Frontend</span>
-                    <span className="info-value">React 18 + TypeScript + Vite</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Backend</span>
-                    <span className="info-value">Node.js + Express + Prisma</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Database</span>
-                    <span className="info-value">SQLite with JWT Auth</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">License</span>
-                    <span className="info-value">MIT License</span>
-                  </div>
+                  {systemInfoItems.map((item) => (
+                    <div className="info-row" key={item.label}>
+                      <span className="info-label">{item.label}</span>
+                      <span className="info-value">{item.value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="about-section about-features">
                 <h2>Key Features</h2>
                 <div className="features-grid">
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/>
-                      <path d="M9 3v18"/>
-                    </svg>
-                    <div>
-                      <strong>Multi-Window System</strong>
-                      <p>Drag, resize, minimize, and maximize windows with full desktop management</p>
+                  {featureItems.map((feature) => (
+                    <div className="feature-item" key={feature.key}>
+                      {feature.icon}
+                      <div>
+                        <strong>{feature.title}</strong>
+                        <p>{feature.description}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                      <polyline points="13 2 13 9 20 9"/>
-                    </svg>
-                    <div>
-                      <strong>Virtual Filesystem</strong>
-                      <p>Navigate folders, create files, and manage your virtual storage</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="4 17 10 11 4 5"/>
-                      <line x1="12" y1="19" x2="20" y2="19"/>
-                    </svg>
-                    <div>
-                      <strong>Terminal Emulator</strong>
-                      <p>Execute commands, run scripts, and explore the command-line interface</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="2" y="3" width="20" height="14" rx="2"/>
-                      <line x1="8" y1="21" x2="16" y2="21"/>
-                      <line x1="12" y1="17" x2="12" y2="21"/>
-                    </svg>
-                    <div>
-                      <strong>Web Browser</strong>
-                      <p>Browse simulated websites with realistic social media and news platforms</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 18V5l12-2v13"/>
-                      <circle cx="6" cy="18" r="3"/>
-                      <circle cx="18" cy="16" r="3"/>
-                    </svg>
-                    <div>
-                      <strong>Music Player</strong>
-                      <p>Play tracks, create playlists, and control playback across the desktop</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3"/>
-                      <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2"/>
-                    </svg>
-                    <div>
-                      <strong>17 Color Themes</strong>
-                      <p>Customize your experience with classic green, cyber blue, neon pink, and more</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -939,26 +1051,12 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <div className="resources-content">
                   <div className="resource-group">
                     <h3>Project Information</h3>
-                    <p>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                        <circle cx="12" cy="7" r="4"/>
-                      </svg>
-                      <strong>Created by:</strong> Axidify
-                    </p>
-                    <p>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                      </svg>
-                      <strong>Repository:</strong> github.com/Axidify/Terminality-V2
-                    </p>
-                    <p>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                      </svg>
-                      <strong>License:</strong> MIT License - Open source and free to use
-                    </p>
+                    {projectFacts.map((fact) => (
+                      <p key={fact.key}>
+                        {fact.icon}
+                        <strong>{fact.label}</strong> {fact.value}
+                      </p>
+                    ))}
                     <p className="copyright">
                       © 2025 Terminality OS. Designed with passion for retro computing.
                     </p>
@@ -970,35 +1068,12 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                       For documentation, updates, and support, visit our GitHub repository.
                     </p>
                     <div className="support-links">
-                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                          <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                        Documentation
-                      </button>
-                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <line x1="12" y1="8" x2="12" y2="12"/>
-                          <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        Report an Issue
-                      </button>
-                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                        </svg>
-                        Contribute
-                      </button>
-                      <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="4 17 10 11 4 5"/>
-                          <line x1="12" y1="19" x2="20" y2="19"/>
-                        </svg>
-                        Open Terminal
-                      </button>
+                      {supportActions.map((action) => (
+                        <button className="support-btn" key={action.key} onClick={action.action}>
+                          {action.icon}
+                          {action.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1012,6 +1087,15 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                   <p>Live release history pulled from the backend changelog registry.</p>
                 </div>
                 <div className="changelog-panel-actions">
+                  {isAdmin && changelog.latest && (
+                    <button
+                      className="support-btn ghost"
+                      type="button"
+                      onClick={jumpToLatestChangelogEntry}
+                    >
+                      Edit Latest
+                    </button>
+                  )}
                   <button className="support-btn" onClick={checkForUpdates} disabled={isChangelogLoading}>
                     {isChangelogLoading ? 'Refreshing…' : 'Refresh'}
                   </button>
@@ -1035,7 +1119,9 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                       <p className="highlight-date">Released on {changelog.latest.date}</p>
                     </div>
                   </div>
-                  <p className="highlight-summary">{changelog.latest.summary || 'This release is ready for prime time.'}</p>
+                  <p className="highlight-summary">
+                    {changelog.latest.summary || 'This release is ready for prime time.'}
+                  </p>
                   <div className="highlight-grid">
                     {changelogSectionKeys.map((section) => {
                       const items = changelog.latest?.sections?.[section] || []
@@ -1048,7 +1134,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                           </div>
                           <ul>
                             {items.slice(0, 2).map((item: string, idx: number) => (
-                              <li key={`highlight-${String(section)}-${idx}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
+                              <li key={`highlight-${String(section)}-${idx}`}>{item}</li>
                             ))}
                           </ul>
                         </div>
@@ -1092,7 +1178,9 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                           </div>
                         )}
                       </div>
-                      <p className="card-summary">{entry.summary || 'No summary provided yet.'}</p>
+                      <p className="card-summary">
+                        {entry.summary || 'No summary provided yet.'}
+                      </p>
                       <div className="card-sections">
                         {changelogSectionKeys.map((section) => {
                           if (changelogFilter !== 'all' && changelogFilter !== section) return null
@@ -1106,7 +1194,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                               </div>
                               <ul>
                                 {items.map((item: string, idx: number) => (
-                                  <li key={`${entry.version}-${String(section)}-${idx}`} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
+                                  <li key={`${entry.version}-${String(section)}-${idx}`}>{item}</li>
                                 ))}
                               </ul>
                             </div>
@@ -1157,7 +1245,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
             </div>
 
             {isAdmin && (
-              <div className="changelog-editor-panel">
+              <div className="changelog-editor-panel" ref={changelogEditorRef}>
                 <div className="changelog-editor-header">
                   <div>
                     <h3>Changelog Editor</h3>
@@ -1186,12 +1274,24 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     <input type="date" value={draftChangelogEntry.date} onChange={(e) => handleChangelogFieldChange('date', e.target.value)} />
                   </label>
                   <label className="wide">
-                    <span>Summary</span>
-                    <textarea rows={2} value={draftChangelogEntry.summary} onChange={(e) => handleChangelogFieldChange('summary', e.target.value)} />
+                    <div className="label-heading">
+                      <span>Summary</span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={draftChangelogEntry.summary}
+                      onChange={(e) => handleChangelogFieldChange('summary', e.target.value)}
+                    />
                   </label>
                   <label className="wide">
-                    <span>Highlight (optional)</span>
-                    <textarea rows={2} value={draftChangelogEntry.highlight} onChange={(e) => handleChangelogFieldChange('highlight', e.target.value)} />
+                    <div className="label-heading">
+                      <span>Highlight (optional)</span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={draftChangelogEntry.highlight}
+                      onChange={(e) => handleChangelogFieldChange('highlight', e.target.value)}
+                    />
                   </label>
                   <label>
                     <span>Tags (comma separated)</span>
@@ -1201,7 +1301,9 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <div className="changelog-editor-sections">
                   {changelogSectionKeys.map((section) => (
                     <label key={`editor-${String(section)}`}>
-                      <span>{sectionMeta[section].label}</span>
+                      <div className="label-heading">
+                        <span>{sectionMeta[section].label}</span>
+                      </div>
                       <textarea
                         rows={4}
                         value={(draftChangelogEntry.sections?.[section] || []).join('\n')}

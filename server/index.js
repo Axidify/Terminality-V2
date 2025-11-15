@@ -61,11 +61,34 @@ const CHANGELOG_SECTION_KEYS = ['added', 'changed', 'fixed', 'breaking']
 const MAX_SECTION_ITEMS = 40
 const DEFAULT_CHANGELOG = { entries: [] }
 
+function stripFormattingTokens(raw) {
+  if (typeof raw !== 'string') return ''
+  let text = raw
+  text = text.replace(/```([\s\S]*?)```/g, '$1')
+  text = text.replace(/`([^`]+)`/g, '$1')
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$1')
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
+    const trimmedLabel = String(label || '').trim()
+    const trimmedUrl = String(url || '').trim()
+    if (!trimmedLabel && trimmedUrl) return trimmedUrl
+    if (trimmedLabel && trimmedUrl) return `${trimmedLabel} (${trimmedUrl})`
+    return trimmedLabel
+  })
+  text = text.replace(/([*_~]{1,3})([^*_~]+)\1/g, '$2')
+  text = text.replace(/^>+\s?/gm, '')
+  text = text.replace(/^#{1,6}\s+/gm, '')
+  text = text.replace(/^\s{0,3}[-*+]\s+/gm, '')
+  return text
+}
+
 function sanitizeChangelogText(value, maxLen = 1200) {
   if (typeof value !== 'string') return ''
-  return value
+  const normalized = value
     .replace(/\u0000/g, '')
-    .replace(/[<>]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\t/g, '    ')
+  const plain = stripFormattingTokens(normalized)
+  return plain
     .trim()
     .slice(0, maxLen)
 }

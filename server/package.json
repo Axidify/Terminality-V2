@@ -15,29 +15,27 @@
     "prisma:seed": "node prisma/seed.js",
     "prisma:setup": "npm run prisma:dbpush && npm run prisma:generate && npm run prisma:seed",
     "migrate:hash-passwords": "node scripts/migrate_hash_passwords.js",
-    "admin:create": "node scripts/create_admin.js"
-    ,"admin:reset": "node scripts/reset_admin_password.js"
+    "admin:create": "node scripts/create_admin.js",
+    "admin:reset": "node scripts/reset_admin_password.js"
   },
   "dependencies": {
-  "@prisma/client": "^5.6.0",
-  "google-auth-library": "^9.4.0",
-    "dotenv": "^16.4.5",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "cookie-parser": "^1.4.6",
-    "express": "^4.18.2",
-    "body-parser": "^1.20.2",
+    "@prisma/client": "^5.6.0",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.0",
-    "express-rate-limit": "^7.4.0"
-    
+    "body-parser": "^1.20.2",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.4.0",
+    "google-auth-library": "^9.4.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.0"
   },
-  "peerDependencies": {},
   "devDependencies": {
     "nodemon": "^2.0.22",
     "prisma": "^5.6.0",
-    "vitest": "^1.2.0",
-    "supertest": "^6.3.3"
+    "supertest": "^6.3.3",
+    "vitest": "^1.2.0"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

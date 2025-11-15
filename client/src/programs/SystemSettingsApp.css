@@ -802,15 +802,49 @@
 .about-header h1 {
   position: relative;
   z-index: 10;
-  font-size: clamp(28px, 5vw, 48px);
-  font-weight: bold;
-  color: var(--color-primary);
-  text-shadow: 0 0 40px rgba(var(--color-primary-rgb), 0.8);
-  letter-spacing: clamp(8px, 2vw, 16px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(6px, 1.5vw, 12px);
   font-family: 'Courier New', monospace;
-  margin: 0 0 12px 0;
-  line-height: 1.2;
   text-transform: uppercase;
+  letter-spacing: clamp(6px, 1.5vw, 14px);
+}
+
+.about-wordmark .wordmark-primary,
+.about-wordmark .wordmark-secondary {
+  display: block;
+  color: var(--color-primary);
+  text-shadow:
+    0 0 40px rgba(var(--color-primary-rgb), 0.8),
+    0 0 80px rgba(var(--color-primary-rgb), 0.3);
+  line-height: 1;
+}
+
+.about-wordmark .wordmark-primary {
+  font-size: clamp(30px, 5vw, 52px);
+  font-weight: 300;
+  letter-spacing: clamp(8px, 2vw, 16px);
+}
+
+.about-wordmark .wordmark-secondary {
+  font-size: clamp(20px, 3.6vw, 32px);
+  font-weight: 300;
+  letter-spacing: clamp(10px, 2.4vw, 22px);
+  color: rgba(var(--color-primary-rgb), 0.85);
+}
+
+.wordmark-caption {
+  position: relative;
+  z-index: 10;
+  margin-top: -4px;
+  font-family: 'Courier New', monospace;
+  font-size: clamp(10px, 1vw, 12px);
+  letter-spacing: clamp(3px, 1vw, 6px);
+  text-transform: uppercase;
+  color: rgba(var(--color-primary-rgb), 0.6);
+  text-shadow: 0 0 12px rgba(var(--color-primary-rgb), 0.4);
 }
 
 .version-info {
@@ -915,10 +949,12 @@
 
 .about-section h2 {
   font-size: clamp(16px, 2.5vw, 20px);
-  font-weight: bold;
+  font-weight: 300;
   font-family: 'Courier New', monospace;
   color: var(--color-primary);
-  text-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.6);
+  text-shadow:
+    0 0 15px rgba(var(--color-primary-rgb), 0.6),
+    0 0 30px rgba(var(--color-primary-rgb), 0.3);
   text-transform: uppercase;
   margin: 0 0 20px 0;
   padding-bottom: 12px;
@@ -1142,8 +1178,9 @@
   font-weight: 300;
   font-size: clamp(12px, 1vw, 13px);
   font-family: 'Courier New', monospace;
-  letter-spacing: 1px;
+  letter-spacing: clamp(1px, 0.8vw, 2px);
   text-transform: uppercase;
+  text-shadow: 0 0 6px rgba(var(--color-primary-rgb), 0.4);
 }
 
 .info-value {
@@ -1190,10 +1227,11 @@
   color: var(--color-primary);
   margin-bottom: 6px;
   font-size: clamp(13px, 1.1vw, 14px);
-  font-weight: bold;
+  font-weight: 300;
   font-family: 'Courier New', monospace;
   letter-spacing: 1px;
   text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);
 }
 
 .feature-item p {
@@ -1318,6 +1356,20 @@
   letter-spacing: clamp(1px, 0.8vw, 2px);
   text-transform: uppercase;
   box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.2);
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.4);
+}
+
+.support-btn.ghost {
+  background: transparent;
+  border-color: rgba(var(--color-primary-rgb), 0.3);
+  color: rgba(var(--color-primary-rgb), 0.85);
+  box-shadow: none;
+}
+
+.support-btn.ghost:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 0 16px rgba(var(--color-primary-rgb), 0.3);
 }
 
 .support-btn:hover {
@@ -1352,7 +1404,7 @@
 
 .resource-group h3 {
   font-size: clamp(14px, 1.2vw, 16px);
-  font-weight: bold;
+  font-weight: 300;
   color: var(--color-primary);
   text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);
   text-transform: uppercase;
@@ -1483,6 +1535,7 @@
   font-size: 15px;
   line-height: 1.6;
   color: var(--color-text);
+  white-space: pre-line;
 }
 
 .highlight-grid {
@@ -1621,6 +1674,7 @@
   margin: 0;
   color: var(--color-text);
   line-height: 1.6;
+  white-space: pre-line;
 }
 
 .card-sections {
@@ -1761,6 +1815,15 @@
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
+}
+
+.changelog-editor-grid label .label-heading,
+.changelog-editor-sections label .label-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
   letter-spacing: 0.5px;
   color: var(--color-textDim);
   text-transform: uppercase;

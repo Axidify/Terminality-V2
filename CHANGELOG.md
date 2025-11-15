@@ -5,6 +5,19 @@ All notable changes to Terminality OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2025-11-14
+
+### Added
+- **Online Chat intents & notifications**: Desktop notifications now ship with actionable intents. Clicking one focuses Online Chat, opens the correct room or DM, and scrolls to the referenced message so context is never lost.
+- **Presence-aware chat**: Enriched room and DM metadata surfaces online presence indicators alongside lightweight client-side notifications, making Online Chat feel like a first-class messaging client.
+
+### Changed
+- **Chat UI density**: The notification toggle is now icon-only, and message bubbles, headers, and the sidebar were tightened up for denser, faster chat sessions while staying on-brand with the system aesthetic.
+- **Changelog editor**: Removed markdown/formatting controls and now save entries as plain text so release notes are always readable.
+
+### Fixed
+- **Notification fallbacks**: Hardened notification handling when browser permission is denied, ensuring in-app banners remain available and controls stay in sync with the underlying state.
+
 ## [0.5.6] - 2025-11-13
 
 ### Added
@@ -126,30 +139,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Notepad application
 - Basic browser functionality
 - Settings panel
-
----
-
-- **v0.5.6** (Nov 13, 2025) - Backend status indicator on Home page
-
-## [0.5.7] - 2025-11-14
-
-### Added
-- **Online Chat improvements**: Desktop notifications now include actionable intents. Clicking a chat system notification opens and focuses the Online Chat window and jumps to the specific room or DM the notification applies to.
-	- Chat messages now include lightweight intents that open and focus the correct chat room (or DM) when used with desktop notifications.
-	- First-class Online Chat: room-based chat and DMs with presence indicators and client-side notifications.
-
-### Changed
-- **Chat UI**: Notifications toggle updated to an icon-only style and chat message bubbles, header, and sidebar were streamlined for denser chat use. Smaller fonts and compact control sizes make the chat app feel more like a rapid messaging client while keeping our visual language.
-
-### Fixed
-- **Notification handling**: Improved robustness when Notification permission is unavailable in the client; fallback to in-app banners continues to work. 
-	- Minor UI polish: streamlined chat header and notification toggle to icon-only in some layouts.
-- **v0.5.5** (Nov 12, 2025) - Proxy chain icon, app store layout
-- **v0.5.4** (Nov 12, 2025) - UI improvements and About Page Designer
-- **v0.5.3** (Nov 12, 2025) - UI redesign, changelog system, version management
-- **v0.5.2** (Nov 10, 2025) - Login screen particles, audio improvements
-- **v0.5.1** (Nov 10, 2025) - System monitor enhancements
-- **v0.4.0** (Nov 10, 2025) - Article system, category navigation
-- **v0.3.0** (Nov 10, 2025) - Home website, modern file explorer, SVG icons
-- **v0.2.0** (Nov 08, 2025) - Core applications and theme system
-- **v0.1.0** (Nov 01, 2025) - Initial release
