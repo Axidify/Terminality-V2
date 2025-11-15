@@ -39,7 +39,11 @@
     "jsdom": "^27.1.0",
     "prettier": "3.3.3",
     "typescript": "5.6.3",
-    "vite": "5.4.9",
+    "vite": "5.4.21",
     "vitest": "^2.0.5"
+  },
+  "overrides": {
+    "esbuild": "0.27.0",
+    "js-yaml": "4.1.1"
   }
 }

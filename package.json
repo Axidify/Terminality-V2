@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client run build",
     "start": "node server/index.js",
     "migrate:changelog": "node scripts/migrate-changelog.js"
   },

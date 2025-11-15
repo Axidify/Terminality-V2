@@ -88,8 +88,8 @@ const DEFAULT_QUEST_DEFINITIONS: QuestDefinition[] = [
       }
     ],
     rewards: {
-      xp: 50,
-      flags: ['quest_intro_001_completed']
+      credits: 50,
+      flags: [{ key: 'quest_intro_001_completed' }]
     }
   }
 ]
@@ -186,7 +186,7 @@ const hydrateDefinitions = (definitions: QuestDefinition[]) => {
     steps: def.steps?.map(normalizeStep) ?? [],
     trigger: normalizeTrigger(def.trigger),
     rewards: {
-      xp: def.rewards?.xp,
+      credits: def.rewards?.credits,
       flags: def.rewards?.flags || [],
       unlocks_commands: def.rewards?.unlocks_commands || []
     },
@@ -229,8 +229,10 @@ const triggerSatisfied = (trigger: QuestTrigger, completedSet: Set<string>, flag
   switch (trigger.type) {
     case 'ON_FIRST_TERMINAL_OPEN':
       return true
-    case 'ON_QUEST_COMPLETION':
-      return Boolean(trigger.quest_ids?.length) && trigger.quest_ids.every(id => completedSet.has(id))
+    case 'ON_QUEST_COMPLETION': {
+      const questIds = trigger.quest_ids || []
+      return questIds.length > 0 && questIds.every(id => completedSet.has(id))
+    }
     case 'ON_FLAG_SET':
       return matchesFlagRequirement(flags, trigger.flag_key || '', trigger.flag_value)
     default:
