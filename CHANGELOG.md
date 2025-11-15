@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test**: Test
 - **Quest authoring backend**: Introduced `/api/quests` plus admin CRUD endpoints backed by new Prisma models so admins can create, update, and publish quest flows that power the terminal missions.
 
+## [0.5.11] - 2025-11-16
+
+### Changed
+
+- **Quest Designer (UI)**: Clarified save/publish controls; `Save Quest` was renamed to `Save Draft` to make it explicit that saving does not publish a quest. A new `Publish` action is used to mark quests as published.
+- **Quest Designer (Sidebar)**: Each quest now shows a status badge indicating `Draft` or `Published` for at-a-glance status tracking. Unsaved drafts display an `Unsaved` tag. This helps admins quickly find which quests are ready for players.
+
+### Other
+
+- **Version**: Bumped to `0.5.11` to record client-side UX improvements in quest authoring.
+
 ## [0.5.9] - 2025-11-15
 
 ### Added
