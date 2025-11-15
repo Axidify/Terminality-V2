@@ -53,6 +53,10 @@ export async function fetchChangelog(): Promise<ChangelogResponse> {
   }
 }
 
+export async function fetchChangelogMarkdown(): Promise<string> {
+  return apiRequest<string>('/api/changelog/markdown')
+}
+
 export async function createChangelogEntry(entry: ChangelogEntry): Promise<ChangelogMutationResponse> {
   return apiRequest<ChangelogMutationResponse>('/api/changelog', {
     method: 'POST',

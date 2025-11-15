@@ -241,8 +241,9 @@ function getMarkdownChangelogEntries() {
     const stats = fs.statSync(CHANGELOG_MD_PATH)
     const needsRefresh = markdownChangelogCache.mtimeMs !== stats.mtimeMs
     if (needsRefresh) {
-      const entries = loadChangelogFromFile(CHANGELOG_MD_PATH)
-      markdownChangelogCache = { mtimeMs: stats.mtimeMs, entries }
+      const rawEntries = loadChangelogFromFile(CHANGELOG_MD_PATH) || []
+      const normalized = normalizeChangelog({ entries: rawEntries })
+      markdownChangelogCache = { mtimeMs: stats.mtimeMs, entries: normalized.entries }
     }
     return markdownChangelogCache.entries || []
   } catch (err) {
@@ -251,13 +252,106 @@ function getMarkdownChangelogEntries() {
   }
 }
 
-function buildChangelogResponse() {
+function getMergedChangelogEntries() {
   const markdownEntries = getMarkdownChangelogEntries()
-  if (markdownEntries.length > 0) {
-    return { entries: markdownEntries, latest: markdownEntries[0] || null }
+  const stateEntries = getChangelogState().entries
+  if (!markdownEntries.length) return stateEntries
+  const versions = new Map()
+  for (const entry of markdownEntries) {
+    versions.set(entry.version, entry)
   }
-  const { entries } = getChangelogState()
+  for (const entry of stateEntries) {
+    versions.set(entry.version, entry)
+  }
+  const mergedList = Array.from(versions.values())
+  const sorted = mergedList.sort((a, b) => {
+    const diff = compareVersions(b.version, a.version)
+    if (diff !== 0) return diff
+    return (b.date || '').localeCompare(a.date || '')
+  })
+  return sorted
+}
+
+function buildChangelogResponse() {
+  const entries = getMergedChangelogEntries()
   return { entries, latest: entries[0] || null }
+}
+
+function generateChangelogBlock(entry) {
+  const lines = []
+  lines.push(`## [${entry.version}] - ${entry.date}`)
+  lines.push('')
+  if (entry.sections) {
+    for (const key of CHANGELOG_SECTION_KEYS) {
+      const items = entry.sections[key] || []
+      if (items.length) {
+        lines.push(`### ${key.charAt(0).toUpperCase() + key.slice(1)}`)
+        for (const item of items) {
+          lines.push(`- ${item}`)
+        }
+        lines.push('')
+      }
+    }
+  }
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()
+}
+
+function escapeRegExp(value) {
+  if (typeof value !== 'string') return ''
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function splitChangelogDocument(raw) {
+  const markerIndex = raw.search(/^## \[/m)
+  if (markerIndex === -1) {
+    return { header: raw, body: '' }
+  }
+  return {
+    header: raw.slice(0, markerIndex),
+    body: raw.slice(markerIndex)
+  }
+}
+
+function syncMarkdownChangelog({ type, entry, originalVersion }) {
+  try {
+    if (!fs.existsSync(CHANGELOG_MD_PATH)) return false
+    const raw = fs.readFileSync(CHANGELOG_MD_PATH, 'utf8')
+    const { header, body } = splitChangelogDocument(raw)
+    const normalizedHeader = header ? header.replace(/\s+$/, '') + '\n\n' : ''
+    const normalizedBody = body ? body.replace(/^\s+/, '') : ''
+
+    if (type === 'delete') {
+      if (!originalVersion) return false
+      const versionPattern = escapeRegExp(originalVersion)
+      const entryRegex = new RegExp(`^## \\[${versionPattern}\\][\\s\\S]*?(?=^## \\[|$)`, 'm')
+      if (!entryRegex.test(normalizedBody)) return false
+      const updatedBody = normalizedBody.replace(entryRegex, '').replace(/^\s+/, '').replace(/\n{3,}/g, '\n\n').trimEnd()
+      const finalContent = (normalizedHeader + updatedBody).trimEnd() + '\n'
+      fs.writeFileSync(CHANGELOG_MD_PATH, finalContent, 'utf8')
+      markdownChangelogCache = { mtimeMs: 0, entries: [] }
+      return true
+    }
+
+    if (!entry) return false
+    const block = generateChangelogBlock(entry) + '\n\n'
+    const targetVersion = escapeRegExp(originalVersion || entry.version)
+    const entryRegex = new RegExp(`^## \\[${targetVersion}\\][\\s\\S]*?(?=^## \\[|$)`, 'm')
+    let updatedBody
+    if (entryRegex.test(normalizedBody)) {
+      updatedBody = normalizedBody.replace(entryRegex, block).trimStart()
+    } else {
+      updatedBody = block + normalizedBody
+    }
+    updatedBody = updatedBody.replace(/\n{3,}/g, '\n\n').trimEnd()
+    const finalContent = (normalizedHeader + updatedBody).trimEnd() + '\n'
+    fs.writeFileSync(CHANGELOG_MD_PATH, finalContent, 'utf8')
+    // reset cache so next response picks up new file
+    markdownChangelogCache = { mtimeMs: 0, entries: [] }
+    return true
+  } catch (err) {
+    console.error('[changelog] Failed to sync CHANGELOG.md:', err)
+    return false
+  }
 }
 
 async function readState() {
@@ -556,8 +650,7 @@ app.get('/api/changelog/markdown', (_req, res) => {
 app.get('/api/changelog/:version', (req, res) => {
   try {
     const { version } = req.params
-    const markdownEntries = getMarkdownChangelogEntries()
-    const sourceEntries = markdownEntries.length > 0 ? markdownEntries : getChangelogState().entries
+    const sourceEntries = getMergedChangelogEntries()
     const entry = sourceEntries.find(item => item.version === version)
     if (!entry) return res.status(404).json({ message: 'Not found' })
     res.json({ entry })
@@ -576,6 +669,9 @@ app.post('/api/changelog', authMiddleware, requireAdmin, async (req, res) => {
       return res.status(status).json({ message: result.error })
     }
     await writeState(savedState)
+    // also update root CHANGELOG.md so the canonical file stays in sync with the admin UI
+    const updated = syncMarkdownChangelog({ type: 'upsert', entry: result.entry })
+    if (!updated) console.warn('[api/changelog][post] WARNING: failed to update CHANGELOG.md')
     res.json({ entry: result.entry, entries: result.changelog.entries, latest: result.changelog.entries[0] || null })
   } catch (e) {
     console.error('[api/changelog][post] error', e)
@@ -592,6 +688,8 @@ app.put('/api/changelog/:version', authMiddleware, requireAdmin, async (req, res
     if (result.error === 'Duplicate version') return res.status(409).json({ message: 'Duplicate version' })
     if (result.error) return res.status(400).json({ message: result.error })
     await writeState(savedState)
+    const updated = syncMarkdownChangelog({ type: 'upsert', entry: result.entry, originalVersion: version })
+    if (!updated) console.warn('[api/changelog][put] WARNING: failed to update CHANGELOG.md')
     res.json({ entry: result.entry, entries: result.changelog.entries, latest: result.changelog.entries[0] || null })
   } catch (e) {
     console.error('[api/changelog][put] error', e)
@@ -605,6 +703,8 @@ app.delete('/api/changelog/:version', authMiddleware, requireAdmin, async (req, 
     const removed = deleteChangelogEntry(version)
     if (!removed) return res.status(404).json({ message: 'Not found' })
     await writeState(savedState)
+    const updated = syncMarkdownChangelog({ type: 'delete', originalVersion: version })
+    if (!updated) console.warn('[api/changelog][delete] WARNING: failed to update CHANGELOG.md')
     res.json(buildChangelogResponse())
   } catch (e) {
     console.error('[api/changelog][delete] error', e)
@@ -1460,4 +1560,4 @@ process.on('SIGTERM', async () => {
   if (server) server.close(() => process.exit(0))
 })
 
-module.exports = { app, prisma }
+module.exports = { app, prisma, syncMarkdownChangelog }
