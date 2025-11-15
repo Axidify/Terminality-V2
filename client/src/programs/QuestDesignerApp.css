@@ -1,8 +1,41 @@
 .quest-designer {
   display: flex;
   height: 100%;
-  color: #f3f3f3;
-  background: #090909;
+  color: var(--color-text);
+  background: radial-gradient(
+    ellipse at center, 
+    rgba(var(--color-primary-rgb), 0.08) 0%, 
+    rgba(var(--color-secondary-rgb), 0.03) 40%,
+    var(--color-background) 70%, 
+    var(--color-background) 100%
+  );
+  position: relative;
+  overflow: hidden;
+}
+
+.quest-designer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.6) 0px,
+      transparent 2px,
+      transparent 4px
+    );
+  opacity: 0.5;
+  pointer-events: none;
+  animation: scanlines 8s linear infinite;
+  z-index: 1;
+}
+
+@keyframes scanlines {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(4px); }
 }
 
 .quest-designer.barred {
@@ -13,14 +46,34 @@
   gap: 1rem;
 }
 
+.quest-designer.barred h2 {
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  font-weight: 300;
+  text-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.6),
+               0 0 40px rgba(var(--color-primary-rgb), 0.3);
+}
+
+.quest-designer.barred p {
+  font-family: 'Courier New', monospace;
+  color: var(--color-textDim);
+  letter-spacing: 2px;
+}
+
 .quest-list {
   width: 280px;
-  border-right: 1px solid rgba(255,255,255,0.1);
+  border-right: 1px solid rgba(var(--color-primary-rgb), 0.3);
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  background: #0f0f0f;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.1);
+  position: relative;
+  z-index: 2;
 }
 
 .quest-list-header {
@@ -29,22 +82,67 @@
   align-items: flex-start;
 }
 
+.quest-list-header h2 {
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 300;
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5),
+               0 0 20px rgba(var(--color-primary-rgb), 0.3);
+}
+
 .quest-list-header button {
-  background: #00c896;
-  color: #010101;
-  border: none;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
+  background: var(--color-primary);
+  color: var(--color-background);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.6);
+  padding: 10px 20px;
+  border-radius: 0;
   cursor: pointer;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.3s;
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.4),
+              inset 0 0 10px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.quest-list-header button:hover {
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.6),
+              inset 0 0 15px rgba(var(--color-primary-rgb), 0.2);
+  transform: translateY(-1px);
 }
 
 .quest-search {
   width: 100%;
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: #111;
-  color: #f3f3f3;
+  padding: 12px 16px;
+  border-radius: 0;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  color: var(--color-text);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  transition: all 0.3s;
+  outline: none;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.quest-search:focus {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.8);
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(var(--color-primary-rgb), 0.3);
+}
+
+.quest-search::placeholder {
+  color: var(--color-textDim);
+  opacity: 0.5;
+  letter-spacing: 2px;
 }
 
 .quest-list-items {
@@ -55,48 +153,113 @@
   gap: 0.4rem;
 }
 
+.quest-list-items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.quest-list-items::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.quest-list-items::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 4px;
+}
+
+.quest-list-items::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-primary-rgb), 0.5);
+}
+
 .quest-list-item {
   text-align: left;
-  background: #151515;
-  border: 1px solid transparent;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
   padding: 0.6rem;
-  border-radius: 6px;
+  border-radius: 2px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.quest-list-item:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.2),
+              inset 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .quest-list-item.selected {
-  border-color: #00c896;
-  background: #111e1a;
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.1);
+  box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.4),
+              inset 0 0 15px rgba(var(--color-primary-rgb), 0.05);
 }
 
 .quest-list-item .tag {
   align-self: flex-start;
   font-size: 0.65rem;
-  background: rgba(255,255,255,0.1);
+  background: rgba(var(--color-primary-rgb), 0.15);
   padding: 0.1rem 0.3rem;
-  border-radius: 4px;
+  border-radius: 2px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
 }
 
 .quest-editor {
   flex: 1;
-  padding: 1.5rem;
+  padding: 24px;
   overflow-y: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.quest-editor::-webkit-scrollbar {
+  width: 8px;
+}
+
+.quest-editor::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.quest-editor::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 4px;
+}
+
+.quest-editor::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-primary-rgb), 0.5);
 }
 
 .quest-placeholder {
-  border: 1px dashed rgba(255,255,255,0.2);
+  border: 1px dashed rgba(var(--color-primary-rgb), 0.3);
   padding: 2rem;
   text-align: center;
-  color: rgba(255,255,255,0.6);
+  color: var(--color-textDim);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .quest-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 12px;
+}
+
+.quest-form > section {
+  padding: 16px 0;
+}
+
+.quest-form > section:first-child {
+  padding-top: 0;
 }
 
 .quest-editor-header {
@@ -106,38 +269,78 @@
   gap: 1rem;
 }
 
+.quest-editor-header h1 {
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 3px;
+  font-weight: 300;
+  text-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.6),
+               0 0 30px rgba(var(--color-primary-rgb), 0.3);
+}
+
+.quest-editor-header p {
+  font-family: 'Courier New', monospace;
+  color: var(--color-textDim);
+  letter-spacing: 1px;
+}
+
 .editor-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 12px;
 }
 
 .editor-actions button {
-  padding: 0.6rem 1rem;
-  border-radius: 4px;
-  border: none;
+  padding: 12px 24px;
+  border-radius: 0;
+  border: 1px solid;
   cursor: pointer;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.3s;
 }
 
 .editor-actions .danger {
-  background: #ff4d4f;
-  color: #fff;
+  background: rgba(255, 77, 79, 0.2);
+  color: #ff4d4f;
+  border-color: rgba(255, 77, 79, 0.5);
+  box-shadow: 0 0 10px rgba(255, 77, 79, 0.3),
+              inset 0 0 10px rgba(255, 77, 79, 0.1);
 }
 
-.editor-actions button:not(.danger) {
-  background: #00c896;
-  color: #010101;
+.editor-actions .danger:hover {
+  box-shadow: 0 0 20px rgba(255, 77, 79, 0.5),
+              inset 0 0 15px rgba(255, 77, 79, 0.2);
 }
 
-.editor-actions .ghost {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.3);
-  color: #f3f3f3;
+.editor-actions button:not(.danger):not(.ghost) {
+  background: rgba(var(--color-primary-rgb), 0.2);
+  color: var(--color-primary);
+  border-color: rgba(var(--color-primary-rgb), 0.6);
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.4),
+              inset 0 0 10px rgba(var(--color-primary-rgb), 0.1);
 }
 
+.editor-actions button:not(.danger):not(.ghost):hover {
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.6),
+              inset 0 0 15px rgba(var(--color-primary-rgb), 0.2);
+}
+
+.editor-actions .ghost,
 button.ghost {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.3);
-  color: #f3f3f3;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  color: var(--color-text);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.editor-actions .ghost:hover,
+button.ghost:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.3),
+              inset 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .section-header {
@@ -146,40 +349,103 @@ button.ghost {
   align-items: center;
 }
 
+.section-header h3 {
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 16px;
+  font-weight: 400;
+  text-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);
+}
+
 .section-header button {
-  border: 1px solid rgba(255,255,255,0.2);
-  background: transparent;
-  color: #f3f3f3;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--color-text);
+  padding: 10px 20px;
+  border-radius: 0;
   cursor: pointer;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 11px;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.section-header button:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.3),
+              inset 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .info-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  gap: 16px;
 }
 
 .info-grid label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.85rem;
+  gap: 10px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  color: var(--color-textDim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.8;
 }
 
 .info-grid input,
 .info-grid select,
 .info-grid textarea {
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: #0d0d0d;
-  color: #f3f3f3;
+  padding: 12px 16px;
+  border-radius: 0;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  color: var(--color-text);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  transition: all 0.3s;
+  outline: none;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.info-grid input:focus,
+.info-grid select:focus,
+.info-grid textarea:focus {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.8);
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(var(--color-primary-rgb), 0.3);
+}
+
+.info-grid input::placeholder,
+.info-grid select::placeholder,
+.info-grid textarea::placeholder {
+  color: var(--color-textDim);
+  opacity: 0.5;
+  letter-spacing: 2px;
+}
+
+.info-grid input:disabled,
+.info-grid select:disabled,
+.info-grid textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .info-grid textarea {
   min-height: 80px;
+}
+
+.step-grid textarea {
+  min-height: 60px;
+  resize: vertical;
 }
 
 .info-grid .full {
@@ -187,32 +453,73 @@ button.ghost {
 }
 
 .step-card {
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  background: #101010;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 2px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.1),
+              inset 0 0 20px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s;
+}
+
+.step-card:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+  box-shadow: 0 0 20px rgba(var(--color-primary-rgb), 0.2),
+              inset 0 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .step-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(var(--color-primary-rgb), 0.1);
+}
+
+.step-card-header > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .step-card-header strong {
-  margin-left: 0.5rem;
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
 }
 
 .step-card-actions button {
-  border: none;
-  background: rgba(255,255,255,0.1);
-  color: #f3f3f3;
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-  margin-left: 0.2rem;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--color-text);
+  padding: 6px 10px;
+  border-radius: 0;
+  margin-left: 4px;
   cursor: pointer;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.step-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.step-card-actions button {
+  margin-left: 0;
+}
+
+.step-card-actions button:hover:not(:disabled) {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.3),
+              inset 0 0 5px rgba(0, 0, 0, 0.3);
 }
 
 .step-card-actions button:disabled {
@@ -220,24 +527,134 @@ button.ghost {
   cursor: not-allowed;
 }
 
+/* Checkbox Styling */
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  position: relative;
+  transition: all 0.3s;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+input[type="checkbox"]:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+}
+
+input[type="checkbox"]:checked {
+  background: rgba(var(--color-primary-rgb), 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 
+    inset 0 0 10px rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(var(--color-primary-rgb), 0.3);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(var(--color-primary-rgb), 0.5);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .step-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-top: 0.8rem;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.step-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  color: var(--color-textDim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+/* Special handling for checkbox labels */
+.step-grid label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-grid input,
+.step-grid select,
+.step-grid textarea {
+  padding: 12px 16px;
+  border-radius: 0;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  color: var(--color-text);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  transition: all 0.3s;
+  outline: none;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.step-grid input:focus,
+.step-grid select:focus,
+.step-grid textarea:focus {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.8);
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(var(--color-primary-rgb), 0.3);
+}
+
+.step-grid input::placeholder,
+.step-grid select::placeholder,
+.step-grid textarea::placeholder {
+  color: var(--color-textDim);
+  opacity: 0.5;
+  letter-spacing: 2px;
+}
+
+.step-grid input:disabled,
+.step-grid select:disabled,
+.step-grid textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .step-type {
-  margin-left: 0.5rem;
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.6);
+  font-size: 10px;
+  color: var(--color-textDim);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  background: rgba(var(--color-primary-rgb), 0.1);
+  padding: 4px 8px;
+  border-radius: 0;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.2);
+  white-space: nowrap;
 }
 
 .tag-input {
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 4px;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 2px;
   padding: 0.25rem;
-  background: #0c0c0c;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .tag-chips {
@@ -247,14 +664,18 @@ button.ghost {
 }
 
 .tag-chip {
-  background: rgba(0,200,150,0.15);
-  color: #00e5b8;
+  background: rgba(var(--color-primary-rgb), 0.2);
+  color: var(--color-primary);
   padding: 0.2rem 0.4rem;
-  border-radius: 4px;
+  border-radius: 2px;
   display: flex;
   align-items: center;
   gap: 0.3rem;
   font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.4);
+  box-shadow: 0 0 5px rgba(var(--color-primary-rgb), 0.2),
+              inset 0 0 5px rgba(var(--color-primary-rgb), 0.1);
 }
 
 .tag-chip button {
@@ -269,28 +690,51 @@ button.ghost {
   min-width: 140px;
   border: none;
   background: transparent;
-  color: #f3f3f3;
-  padding: 0.3rem;
+  color: var(--color-text);
+  padding: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.tag-chips input:focus {
+  outline: none;
+}
+
+.tag-chips input::placeholder {
+  color: var(--color-textDim);
+  opacity: 0.5;
+  letter-spacing: 2px;
 }
 
 .alert {
-  border-radius: 6px;
-  padding: 0.8rem;
+  border-radius: 0;
+  padding: 16px 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  backdrop-filter: blur(10px);
 }
 
 .alert.error {
-  border: 1px solid #ff4d4f;
+  border: 1px solid rgba(255, 77, 79, 0.6);
   background: rgba(255,77,79,0.1);
+  box-shadow: 0 0 15px rgba(255, 77, 79, 0.2),
+              inset 0 0 15px rgba(255, 77, 79, 0.05);
 }
 
 .alert.warning {
-  border: 1px solid #ffc53d;
+  border: 1px solid rgba(255, 197, 61, 0.6);
   background: rgba(255,197,61,0.1);
+  box-shadow: 0 0 15px rgba(255, 197, 61, 0.2),
+              inset 0 0 15px rgba(255, 197, 61, 0.05);
 }
 
 .alert.info {
-  border: 1px solid #3fa9f5;
+  border: 1px solid rgba(63, 169, 245, 0.6);
   background: rgba(63,169,245,0.15);
+  box-shadow: 0 0 15px rgba(63, 169, 245, 0.2),
+              inset 0 0 15px rgba(63, 169, 245, 0.05);
 }
 
 .alert.success {
@@ -306,7 +750,7 @@ button.ghost {
 .connections {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  gap: 20px;
 }
 
 .connections ul {
@@ -315,13 +759,16 @@ button.ghost {
 }
 
 .fs-override-card {
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px;
-  padding: 0.8rem;
-  background: #101010;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 2px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 12px;
+  box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.1),
+              inset 0 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .fs-override-header {
@@ -329,40 +776,81 @@ button.ghost {
   flex-direction: column;
 }
 
+.fs-override-header strong {
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 12px;
+  text-shadow: 0 0 5px rgba(var(--color-primary-rgb), 0.4);
+}
+
 .fs-override-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .fs-override-actions select,
 .fs-override-actions button {
-  padding: 0.4rem 0.6rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: #0e0e0e;
-  color: #f3f3f3;
+  padding: 10px 16px;
+  border-radius: 0;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  color: var(--color-text);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  transition: all 0.3s;
+  outline: none;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.fs-override-actions select:focus,
+.fs-override-actions button:hover {
+  border-color: rgba(var(--color-primary-rgb), 0.5);
+  box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.3),
+              inset 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 .fs-override-actions button.ghost {
-  border-color: rgba(255,255,255,0.3);
-  background: transparent;
+  border-color: rgba(var(--color-primary-rgb), 0.3);
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .fs-override-card textarea {
   width: 100%;
   min-height: 140px;
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 6px;
-  background: #0b0b0b;
-  color: #f3f3f3;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.85rem;
-  padding: 0.6rem;
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+  border-radius: 0;
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.6);
+  color: var(--color-primary);
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  padding: 12px 16px;
+  letter-spacing: 1px;
+  transition: all 0.3s;
+  outline: none;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.fs-override-card textarea:focus {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-background-rgb, 5, 8, 16), 0.8);
+  box-shadow: 
+    inset 0 0 20px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(var(--color-primary-rgb), 0.3);
+}
+
+.fs-override-card textarea::placeholder {
+  color: var(--color-textDim);
+  opacity: 0.5;
+  letter-spacing: 2px;
 }
 
 .muted {
-  color: rgba(255,255,255,0.6);
+  color: var(--color-textDim);
+  font-family: 'Courier New', monospace;
 }
 
 .empty {
