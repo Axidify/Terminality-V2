@@ -23,9 +23,9 @@ Open http://localhost:5173 in your browser.
 
 The ops terminal now consumes live quest definitions from `/api/terminal-quests`. Admin users can open the **Quest Designer** program (desktop icon or Start menu) to create, edit, and delete quests via a form-based workflow:
 
-- **Quest Info** – id, title, description, trigger type (`ON_FIRST_TERMINAL_OPEN`).
+- **Quest Info** – id, title, description, trigger type (First Terminal Open, On Quest Completion, On Flag Set).
 - **Steps** – ordered cards for the supported terminal-only step types (`SCAN_HOST`, `CONNECT_HOST`, `DELETE_FILE`, `DISCONNECT_HOST`) with contextual parameter editors, hints, reordering, duplicate/delete controls, and `auto_advance` toggles.
-- **Requirements & Rewards** – multi-select/tag inputs for prerequisite quests/flags plus rewards (`xp`, flags, future unlockable commands).
+- **Requirements & Rewards** – multi-select/tag inputs for prerequisite quests/flags plus rewards (credits, flags, future unlockable commands).
 - **Connections** – read-only lists showing which quests depend on the selected quest or any of its reward flags.
 
 The editor persists directly to `server/data/terminal-quests.json` via the new REST endpoints:

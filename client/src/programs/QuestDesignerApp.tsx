@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import './QuestDesignerApp.css'
-import type { FileSystemNode, QuestDefinition, QuestStep, QuestStepType } from './terminalQuests/types'
+import type { FileSystemNode, QuestDefinition, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
 import {
   listTerminalQuests,
   createTerminalQuest,
@@ -24,17 +24,105 @@ interface TagInputProps {
   ariaLabel?: string
 }
 
-const DEFAULT_TRIGGER = 'ON_FIRST_TERMINAL_OPEN'
+const DEFAULT_TRIGGER: QuestTriggerType = 'ON_FIRST_TERMINAL_OPEN'
+const TRIGGER_OPTIONS: Array<{ value: QuestTriggerType; label: string }> = [
+  { value: 'ON_FIRST_TERMINAL_OPEN', label: 'On First Terminal Open' },
+  { value: 'ON_QUEST_COMPLETION', label: 'On Quest Completion' },
+  { value: 'ON_FLAG_SET', label: 'On Flag Set' }
+]
+
+const FIELD_HINTS = {
+  questId: 'Unique quest identifier referenced by automation and saves; keep stable once published.',
+  questTitle: 'Player-facing title that appears in the terminal quest list.',
+  questStatus: 'Draft quests stay internal; published quests sync to players.',
+  triggerType: 'Determines when this quest activates (first terminal, quest completion, or flag).',
+  completionQuests: 'Select quests whose completion automatically fires this quest trigger.',
+  triggerFlagKey: 'Flag key watched for ON_FLAG_SET triggers.',
+  triggerFlagValue: 'Optional flag value to match; leave blank to match any value.',
+  defaultSystem: 'System profile applied to steps without their own target.',
+  description: 'Briefing text shown to the player.',
+  requiredQuests: 'Prerequisite quests that must be done before this one unlocks.',
+  requiredFlags: 'Flag tokens (key or key=value) required before unlocking.',
+  creditsReward: 'Credits granted immediately upon completion.',
+  rewardFlags: 'Structured completion flags emitted when the quest ends.',
+  rewardFlagKey: 'Flag key stored in player state upon completion.',
+  rewardFlagValue: 'Optional value stored alongside the flag key.',
+  unlockCommands: 'Terminal commands unlocked for the player after this quest.',
+  stepId: 'Internal identifier for the step (used in logs/debugging).',
+  stepType: 'Player action needed to progress this step.',
+  stepTargetSystem: 'Override system target for this step; falls back to quest default.',
+  stepAutoAdvance: 'Automatically advance when the action succeeds.',
+  stepTargetIp: 'Host/IP the player interacts with for this step.',
+  stepFilePath: 'Remote path required for DELETE_FILE steps.',
+  stepHintPrompt: 'Hint text surfaced when the player requests help.',
+  stepCommandExample: 'Optional concrete command example shown with the hint.'
+} as const
+
+const sanitizeRewardFlagEntry = (entry?: QuestRewardFlag | string | null): QuestRewardFlag | null => {
+  if (!entry) return null
+  if (typeof entry === 'string') {
+    const raw = entry.trim()
+    if (!raw) return null
+    const idx = raw.search(/[:=]/)
+    if (idx > 0) {
+      const key = raw.slice(0, idx).trim()
+      const value = raw.slice(idx + 1).trim()
+      if (!key) return null
+      return value ? { key, value } : { key }
+    }
+    return { key: raw }
+  }
+  const key = entry.key?.trim()
+  if (!key) return null
+  const rawValue = entry.value != null ? String(entry.value).trim() : ''
+  return rawValue ? { key, value: rawValue } : { key }
+}
+
+const sanitizeRewardFlags = (flags?: Array<QuestRewardFlag | string>): QuestRewardFlag[] => {
+  if (!flags?.length) return []
+  const seen = new Set<string>()
+  const normalized: QuestRewardFlag[] = []
+  flags.forEach(entry => {
+    const flag = sanitizeRewardFlagEntry(entry)
+    if (!flag) return
+    const signature = flag.value ? `${flag.key}=${flag.value}` : flag.key
+    if (seen.has(signature)) return
+    seen.add(signature)
+    normalized.push(flag)
+  })
+  return normalized.slice(0, 25)
+}
 const STEP_TYPES: QuestStepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST']
 type SystemTemplateDTO = SystemProfilesResponse['templates'][number]
+
+const sanitizeTrigger = (trigger?: QuestTrigger): QuestTrigger => {
+  const type = trigger?.type || DEFAULT_TRIGGER
+  if (type === 'ON_QUEST_COMPLETION') {
+    const questIds = Array.isArray(trigger?.quest_ids)
+      ? trigger.quest_ids.filter(id => !!id?.trim()).map(id => id.trim())
+      : []
+    const unique = Array.from(new Set(questIds))
+    return { type, quest_ids: unique.slice(0, 5) }
+  }
+  if (type === 'ON_FLAG_SET') {
+    const key = trigger?.flag_key?.trim()
+    const value = trigger?.flag_value?.trim()
+    return {
+      type,
+      ...(key ? { flag_key: key } : {}),
+      ...(value ? { flag_value: value } : {})
+    }
+  }
+  return { type }
+}
 
 const createEmptyQuest = (): DesignerQuest => ({
   id: `quest_${Date.now()}`,
   title: 'Untitled Quest',
   description: 'Describe this operation.',
-  trigger: { type: DEFAULT_TRIGGER },
+  trigger: sanitizeTrigger({ type: DEFAULT_TRIGGER }),
   steps: [],
-  rewards: { xp: 0, flags: [], unlocks_commands: [] },
+  rewards: { credits: 0, flags: [], unlocks_commands: [] },
   requirements: { required_flags: [], required_quests: [] },
   default_system_id: undefined,
   embedded_filesystems: {},
@@ -50,14 +138,15 @@ const normalizeQuest = (quest: QuestDefinition | DesignerQuest): DesignerQuest =
     auto_advance: step.auto_advance !== false
   })),
   rewards: {
-    xp: quest.rewards?.xp ?? 0,
-    flags: quest.rewards?.flags || [],
+    credits: quest.rewards?.credits ?? 0,
+    flags: sanitizeRewardFlags(quest.rewards?.flags),
     unlocks_commands: quest.rewards?.unlocks_commands || []
   },
   requirements: {
     required_flags: quest.requirements?.required_flags || [],
     required_quests: quest.requirements?.required_quests || []
   },
+  trigger: sanitizeTrigger(quest.trigger),
   default_system_id: quest.default_system_id,
   embedded_filesystems: quest.embedded_filesystems || {},
   status: quest.status === 'published' ? 'published' : 'draft',
@@ -68,7 +157,7 @@ const questToPayload = (quest: DesignerQuest): QuestDefinition => ({
   id: quest.id.trim(),
   title: quest.title,
   description: quest.description,
-  trigger: quest.trigger,
+  trigger: sanitizeTrigger(quest.trigger),
   steps: quest.steps.map(step => ({
     ...step,
     params: step.params || {},
@@ -78,8 +167,8 @@ const questToPayload = (quest: DesignerQuest): QuestDefinition => ({
     }
   })),
   rewards: {
-    xp: quest.rewards?.xp,
-    flags: quest.rewards?.flags || [],
+    credits: quest.rewards?.credits,
+    flags: sanitizeRewardFlags(quest.rewards?.flags),
     unlocks_commands: quest.rewards?.unlocks_commands || []
   },
   requirements: {
@@ -134,6 +223,7 @@ const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: 
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onBlur={e => addValue(e.target.value)}
           placeholder={placeholder}
           aria-label={ariaLabel}
           list={suggestions && suggestions.length ? listId : undefined}
@@ -187,11 +277,11 @@ const StepCard: React.FC<{
         </div>
       </div>
       <div className="step-grid">
-        <label>
+        <label data-tooltip={FIELD_HINTS.stepId}>
           Step ID
           <input value={step.id} onChange={e => updateStep({ id: e.target.value })} />
         </label>
-        <label>
+        <label data-tooltip={FIELD_HINTS.stepType}>
           Step Type
           <select value={step.type} onChange={e => updateStep({ type: e.target.value as QuestStepType })}>
             {STEP_TYPES.map(type => (
@@ -199,7 +289,7 @@ const StepCard: React.FC<{
             ))}
           </select>
         </label>
-        <label>
+        <label data-tooltip={FIELD_HINTS.stepTargetSystem}>
           Target System
           <select
             value={step.target_system_id || ''}
@@ -211,7 +301,7 @@ const StepCard: React.FC<{
             ))}
           </select>
         </label>
-        <label>
+        <label data-tooltip={FIELD_HINTS.stepAutoAdvance}>
           Auto Advance
           <input
             type="checkbox"
@@ -222,24 +312,24 @@ const StepCard: React.FC<{
       </div>
       <div className="step-grid">
         {(step.type === 'SCAN_HOST' || step.type === 'CONNECT_HOST' || step.type === 'DELETE_FILE' || step.type === 'DISCONNECT_HOST') && (
-          <label>
+          <label data-tooltip={FIELD_HINTS.stepTargetIp}>
             Target IP
             <input value={step.params?.target_ip || ''} onChange={e => updateParams('target_ip', e.target.value)} />
           </label>
         )}
         {step.type === 'DELETE_FILE' && (
-          <label>
+          <label data-tooltip={FIELD_HINTS.stepFilePath}>
             File Path
             <input value={step.params?.file_path || ''} onChange={e => updateParams('file_path', e.target.value)} />
           </label>
         )}
       </div>
       <div className="step-grid">
-        <label>
+        <label data-tooltip={FIELD_HINTS.stepHintPrompt}>
           Hint Prompt
           <textarea value={step.hints?.prompt || ''} onChange={e => updateStep({ hints: { ...step.hints, prompt: e.target.value } })} />
         </label>
-        <label>
+        <label data-tooltip={FIELD_HINTS.stepCommandExample}>
           Command Example
           <textarea value={step.hints?.command_example || ''} onChange={e => updateStep({ hints: { ...step.hints, command_example: e.target.value } })} />
         </label>
@@ -255,6 +345,18 @@ const validateQuestDraft = (quest?: DesignerQuest): string[] => {
   if (!quest.title.trim()) errors.push('Quest title is required.')
   if (!quest.description.trim()) errors.push('Quest description is required.')
   if (!quest.steps.length) errors.push('Add at least one step.')
+  const trigger = quest.trigger || { type: DEFAULT_TRIGGER }
+  if (trigger.type === 'ON_QUEST_COMPLETION' && !(trigger.quest_ids && trigger.quest_ids.length)) {
+    errors.push('Select a quest for the completion trigger.')
+  }
+  if (trigger.type === 'ON_FLAG_SET' && !trigger.flag_key) {
+    errors.push('Select a flag for the flag-set trigger.')
+  }
+  quest.rewards?.flags?.forEach((flag, idx) => {
+    if (!flag || !flag.key || !flag.key.trim()) {
+      errors.push(`Reward flag ${idx + 1} requires a key.`)
+    }
+  })
   quest.steps.forEach((step, idx) => {
     if (!step.id.trim()) errors.push(`Step ${idx + 1} is missing an id.`)
     if (!STEP_TYPES.includes(step.type)) errors.push(`Step ${step.id} has unsupported type.`)
@@ -289,7 +391,96 @@ export const QuestDesignerApp: React.FC = () => {
   const [systemTemplates, setSystemTemplates] = useState<SystemTemplateDTO[]>([])
   const [systemsLoading, setSystemsLoading] = useState(true)
   const [fsDrafts, setFsDrafts] = useState<Record<string, string>>({})
+  const flagKeyListId = useId()
+  const rewardFlagKeyListId = useId()
   const persistedIdRef = useRef<string | null>(null)
+  const tooltipNodeRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined
+    const node = document.createElement('div')
+    node.className = 'quest-designer-tooltip'
+    document.body.appendChild(node)
+    tooltipNodeRef.current = node
+    return () => {
+      document.body.removeChild(node)
+      tooltipNodeRef.current = null
+    }
+  }, [])
+
+  const hideTooltip = useCallback(() => {
+    const node = tooltipNodeRef.current
+    if (!node) return
+    node.style.opacity = '0'
+    node.style.visibility = 'hidden'
+  }, [])
+
+  const showTooltipAtPoint = useCallback((text: string, clientX: number, clientY: number) => {
+    const node = tooltipNodeRef.current
+    if (!node) return
+    if (node.textContent !== text) {
+      node.textContent = text
+    }
+
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const offset = 8
+    const tooltipWidth = node.offsetWidth || 0
+    const tooltipHeight = node.offsetHeight || 0
+
+    let nextX = clientX + offset
+    let nextY = clientY + offset
+
+    if (clientX + tooltipWidth + offset > viewportWidth) {
+      nextX = Math.max(0, clientX - tooltipWidth - offset)
+    }
+    if (clientY + tooltipHeight + offset > viewportHeight) {
+      nextY = Math.max(0, clientY - tooltipHeight - offset)
+    }
+
+    node.style.transform = `translate(${nextX}px, ${nextY}px)`
+    node.style.opacity = '1'
+    node.style.visibility = 'visible'
+  }, [])
+
+  const handleTooltipMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = (event.target as HTMLElement | null)?.closest('[data-tooltip]') as HTMLElement | null
+    if (!target) {
+      hideTooltip()
+      return
+    }
+    const hint = target.getAttribute('data-tooltip')
+    if (!hint) {
+      hideTooltip()
+      return
+    }
+    showTooltipAtPoint(hint, event.clientX, event.clientY)
+  }, [hideTooltip, showTooltipAtPoint])
+
+  const handleTooltipFocus = useCallback((event: React.FocusEvent<HTMLDivElement>) => {
+    const target = (event.target as HTMLElement | null)?.closest('[data-tooltip]') as HTMLElement | null
+    if (!target) {
+      hideTooltip()
+      return
+    }
+    const hint = target.getAttribute('data-tooltip')
+    if (!hint) {
+      hideTooltip()
+      return
+    }
+    const rect = target.getBoundingClientRect()
+    const focusX = rect.left + rect.width / 2
+    const focusY = rect.bottom
+    showTooltipAtPoint(hint, focusX, focusY)
+  }, [hideTooltip, showTooltipAtPoint])
+
+  const handleTooltipLeave = useCallback(() => {
+    hideTooltip()
+  }, [hideTooltip])
+
+  const handleTooltipBlur = useCallback(() => {
+    hideTooltip()
+  }, [hideTooltip])
 
   useEffect(() => {
     let cancelled = false
@@ -365,6 +556,21 @@ export const QuestDesignerApp: React.FC = () => {
     setDraft(prev => (prev ? updater(prev) : prev))
   }
 
+  const updateTrigger = (patch: Partial<QuestTrigger>) => {
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      const base = prev.trigger || { type: DEFAULT_TRIGGER }
+      const merged: QuestTrigger = { ...base, ...patch }
+      if (patch.quest_ids) {
+        merged.quest_ids = patch.quest_ids.filter(id => id && id !== prev.id)
+      }
+      return {
+        ...prev,
+        trigger: sanitizeTrigger(merged)
+      }
+    })
+  }
+
   const updateStep = (index: number, next: QuestStep) => {
     updateCurrentQuest(prev => ({ ...prev, steps: prev.steps.map((step, idx) => (idx === index ? next : step)) }))
   }
@@ -418,11 +624,24 @@ export const QuestDesignerApp: React.FC = () => {
 
   const questFlagSuggestions = useMemo(() => {
     const flags = new Set<string>()
-    quests.forEach(q => q.rewards?.flags?.forEach(flag => flags.add(flag)))
+    quests.forEach(q => q.rewards?.flags?.forEach(entry => {
+      const flag = sanitizeRewardFlagEntry(entry)
+      if (!flag) return
+      flags.add(flag.key)
+      if (flag.value) flags.add(`${flag.key}=${flag.value}`)
+    }))
     return Array.from(flags)
   }, [quests])
 
   const questIdSuggestions = useMemo(() => quests.map(q => q.id), [quests])
+
+  const completionTriggerInput = useTagInput({
+    values: draft?.trigger?.quest_ids || [],
+    onChange: values => updateTrigger({ quest_ids: values }),
+    suggestions: questIdSuggestions,
+    placeholder: 'quest_id',
+    ariaLabel: 'Trigger quest completions'
+  })
 
   const requiredQuestInput = useTagInput({
     values: draft?.requirements?.required_quests || [],
@@ -440,20 +659,45 @@ export const QuestDesignerApp: React.FC = () => {
     ariaLabel: 'Required flags'
   })
 
-  const rewardFlagInput = useTagInput({
-    values: draft?.rewards?.flags || [],
-    onChange: values => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, flags: values } })),
-    placeholder: 'flag set on completion',
-    suggestions: questFlagSuggestions,
-    ariaLabel: 'Reward flags'
-  })
-
   const unlockCommandInput = useTagInput({
     values: draft?.rewards?.unlocks_commands || [],
     onChange: values => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, unlocks_commands: values } })),
     placeholder: 'command name',
     ariaLabel: 'Unlock command list'
   })
+
+  const rewardFlags = draft?.rewards?.flags || []
+
+  const addRewardFlag = () => {
+    updateCurrentQuest(prev => ({
+      ...prev,
+      rewards: {
+        ...prev.rewards,
+        flags: [...(prev.rewards?.flags || []), { key: '', value: '' }]
+      }
+    }))
+  }
+
+  const updateRewardFlag = (index: number, patch: Partial<QuestRewardFlag>) => {
+    updateCurrentQuest(prev => {
+      const flags = [...(prev.rewards?.flags || [])]
+      flags[index] = { ...flags[index], ...patch }
+      return {
+        ...prev,
+        rewards: { ...prev.rewards, flags }
+      }
+    })
+  }
+
+  const removeRewardFlag = (index: number) => {
+    updateCurrentQuest(prev => ({
+      ...prev,
+      rewards: {
+        ...prev.rewards,
+        flags: (prev.rewards?.flags || []).filter((_, idx) => idx !== index)
+      }
+    }))
+  }
 
   const filteredQuests = quests.filter(quest => {
     if (!search.trim()) return true
@@ -462,10 +706,16 @@ export const QuestDesignerApp: React.FC = () => {
   })
 
   const dependentQuests = useMemo(() => {
-    if (!draft) return { questLinks: [], flagLinks: [] as DesignerQuest[] }
+    if (!draft) return { questLinks: [], flagDependents: [] as Array<{ flag: QuestRewardFlag; quests: DesignerQuest[] }> }
     const questLinks = quests.filter(q => q.requirements?.required_quests?.includes(draft.id))
-    const flagLinks = quests.filter(q => q.requirements?.required_flags?.some(flag => draft.rewards?.flags?.includes(flag)))
-    return { questLinks, flagLinks }
+    const normalizedFlags = sanitizeRewardFlags(draft.rewards?.flags)
+    const flagDependents = normalizedFlags.map(flag => {
+      const tokens = [flag.key]
+      if (flag.value) tokens.push(`${flag.key}=${flag.value}`)
+      const questsUsing = quests.filter(q => q.id !== draft.id && q.requirements?.required_flags?.some(req => tokens.includes(req)))
+      return { flag, quests: questsUsing }
+    }).filter(entry => entry.quests.length)
+    return { questLinks, flagDependents }
   }, [draft, quests])
 
   const systemOptions = useMemo(() => (
@@ -650,7 +900,13 @@ export const QuestDesignerApp: React.FC = () => {
   }
 
   return (
-    <div className="quest-designer">
+    <div
+      className="quest-designer"
+      onMouseMove={handleTooltipMouseMove}
+      onMouseLeave={handleTooltipLeave}
+      onFocusCapture={handleTooltipFocus}
+      onBlurCapture={handleTooltipBlur}
+    >
       <aside className="quest-list">
         <div className="quest-list-header">
           <div>
@@ -745,15 +1001,15 @@ export const QuestDesignerApp: React.FC = () => {
             <section>
               <h3>Quest Info</h3>
               <div className="info-grid">
-                <label>
+                <label data-tooltip={FIELD_HINTS.questId}>
                   Quest ID
                   <input value={draft.id} onChange={e => updateCurrentQuest(prev => ({ ...prev, id: e.target.value }))} />
                 </label>
-                <label>
+                <label data-tooltip={FIELD_HINTS.questTitle}>
                   Title
                   <input value={draft.title} onChange={e => updateCurrentQuest(prev => ({ ...prev, title: e.target.value }))} />
                 </label>
-                <label>
+                <label data-tooltip={FIELD_HINTS.questStatus}>
                   Status
                   <select
                     value={draft.status || 'draft'}
@@ -763,16 +1019,52 @@ export const QuestDesignerApp: React.FC = () => {
                     <option value="published">Published</option>
                   </select>
                 </label>
-                <label>
+                <label data-tooltip={FIELD_HINTS.triggerType}>
                   Trigger
                   <select
                     value={draft.trigger?.type || DEFAULT_TRIGGER}
-                    onChange={e => updateCurrentQuest(prev => ({ ...prev, trigger: { type: e.target.value as typeof DEFAULT_TRIGGER } }))}
+                    onChange={e => updateTrigger({ type: e.target.value as QuestTriggerType })}
                   >
-                    <option value="ON_FIRST_TERMINAL_OPEN">On First Terminal Open</option>
+                    {TRIGGER_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </label>
-                <label>
+                {draft.trigger?.type === 'ON_QUEST_COMPLETION' && (
+                  <label className="full" data-tooltip={FIELD_HINTS.completionQuests}>
+                    Completion Quests
+                    {completionTriggerInput.Input}
+                  </label>
+                )}
+                {draft.trigger?.type === 'ON_FLAG_SET' && (
+                  <>
+                    <label className="full" data-tooltip={FIELD_HINTS.triggerFlagKey}>
+                      Flag Key
+                      <input
+                        list={flagKeyListId}
+                        value={draft.trigger?.flag_key || ''}
+                        onChange={e => updateTrigger({ flag_key: e.target.value })}
+                        placeholder="quest_intro_001_completed"
+                      />
+                      {questFlagSuggestions.length > 0 && (
+                        <datalist id={flagKeyListId}>
+                          {questFlagSuggestions.map(flag => (
+                            <option key={flag} value={flag} />
+                          ))}
+                        </datalist>
+                      )}
+                    </label>
+                    <label data-tooltip={FIELD_HINTS.triggerFlagValue}>
+                      Required Value
+                      <input
+                        value={draft.trigger?.flag_value || ''}
+                        onChange={e => updateTrigger({ flag_value: e.target.value })}
+                        placeholder="true"
+                      />
+                    </label>
+                  </>
+                )}
+                <label data-tooltip={FIELD_HINTS.defaultSystem}>
                   Default System
                   <select
                     value={draft.default_system_id || ''}
@@ -785,7 +1077,7 @@ export const QuestDesignerApp: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                <label className="full">
+                <label className="full" data-tooltip={FIELD_HINTS.description}>
                   Description
                   <textarea value={draft.description} onChange={e => updateCurrentQuest(prev => ({ ...prev, description: e.target.value }))} />
                 </label>
@@ -860,11 +1152,11 @@ export const QuestDesignerApp: React.FC = () => {
             <section>
               <h3>Requirements</h3>
               <div className="info-grid">
-                <label className="full">
+                <label className="full" data-tooltip={FIELD_HINTS.requiredQuests}>
                   Required Quests
                   {requiredQuestInput.Input}
                 </label>
-                <label className="full">
+                <label className="full" data-tooltip={FIELD_HINTS.requiredFlags}>
                   Required Flags
                   {requiredFlagInput.Input}
                 </label>
@@ -874,19 +1166,51 @@ export const QuestDesignerApp: React.FC = () => {
             <section>
               <h3>Rewards</h3>
               <div className="info-grid">
-                <label>
-                  XP Reward
+                <label data-tooltip={FIELD_HINTS.creditsReward}>
+                  Credits Reward
                   <input
                     type="number"
-                    value={draft.rewards?.xp ?? 0}
-                    onChange={e => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, xp: Number(e.target.value) } }))}
+                    value={draft.rewards?.credits ?? 0}
+                    onChange={e => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, credits: Number(e.target.value) } }))}
                   />
                 </label>
-                <label className="full">
-                  Flags Granted
-                  {rewardFlagInput.Input}
-                </label>
-                <label className="full">
+                <div className="full reward-flags-field">
+                  <div className="reward-flags-header" data-tooltip={FIELD_HINTS.rewardFlags}>
+                    <span>Flags Granted</span>
+                    <button type="button" onClick={addRewardFlag}>+ Add Flag</button>
+                  </div>
+                  {rewardFlags.length === 0 && <p className="muted empty">No completion flags defined yet.</p>}
+                  {rewardFlags.map((flag, idx) => (
+                    <div key={`${flag.key || 'flag'}-${idx}`} className="reward-flag-row">
+                      <label data-tooltip={FIELD_HINTS.rewardFlagKey}>
+                        Key
+                        <input
+                          list={rewardFlagKeyListId}
+                          value={flag.key || ''}
+                          onChange={e => updateRewardFlag(idx, { key: e.target.value })}
+                          placeholder="quest_completed"
+                        />
+                      </label>
+                      <label data-tooltip={FIELD_HINTS.rewardFlagValue}>
+                        Value
+                        <input
+                          value={flag.value || ''}
+                          onChange={e => updateRewardFlag(idx, { value: e.target.value })}
+                          placeholder="true"
+                        />
+                      </label>
+                      <button type="button" className="ghost" onClick={() => removeRewardFlag(idx)}>Remove</button>
+                    </div>
+                  ))}
+                  {questFlagSuggestions.length > 0 && (
+                    <datalist id={rewardFlagKeyListId}>
+                      {questFlagSuggestions.map(flag => (
+                        <option key={`reward-flag-${flag}`} value={flag} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+                <label className="full" data-tooltip={FIELD_HINTS.unlockCommands}>
                   Unlock Commands
                   {unlockCommandInput.Input}
                 </label>
@@ -907,10 +1231,20 @@ export const QuestDesignerApp: React.FC = () => {
                 </div>
                 <div>
                   <strong>Flags used by</strong>
-                  {dependentQuests.flagLinks.length === 0 && <p className="muted">No quests reference the reward flags.</p>}
-                  <ul>
-                    {dependentQuests.flagLinks.map(q => (
-                      <li key={q.id}>{q.title} ({q.id})</li>
+                  {dependentQuests.flagDependents.length === 0 && <p className="muted">No quests reference the reward flags.</p>}
+                  <ul className="flag-dependents">
+                    {dependentQuests.flagDependents.map(({ flag, quests }) => (
+                      <li key={`${flag.key}-${flag.value || 'true'}`}>
+                        <div><strong>{flag.key}{flag.value ? ` = ${flag.value}` : ''}</strong></div>
+                        {quests.length === 0 && <p className="muted">Unused</p>}
+                        {quests.length > 0 && (
+                          <ul>
+                            {quests.map(q => (
+                              <li key={q.id}>{q.title} ({q.id})</li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>

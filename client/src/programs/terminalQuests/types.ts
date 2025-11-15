@@ -1,9 +1,12 @@
-export type QuestTriggerType = 'ON_FIRST_TERMINAL_OPEN'
+export type QuestTriggerType = 'ON_FIRST_TERMINAL_OPEN' | 'ON_QUEST_COMPLETION' | 'ON_FLAG_SET'
 
 export type QuestStepType = 'SCAN_HOST' | 'CONNECT_HOST' | 'DELETE_FILE' | 'DISCONNECT_HOST'
 
 export interface QuestTrigger {
   type: QuestTriggerType
+  quest_ids?: string[]
+  flag_key?: string
+  flag_value?: string
 }
 
 export interface QuestStepParamsBase {
@@ -31,9 +34,14 @@ export interface QuestRequirements {
   required_quests?: string[]
 }
 
+export interface QuestRewardFlag {
+  key: string
+  value?: string
+}
+
 export interface QuestRewards {
-  xp?: number
-  flags?: string[]
+  credits?: number
+  flags?: QuestRewardFlag[]
   unlocks_commands?: string[]
 }
 

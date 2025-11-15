@@ -64,10 +64,7 @@
         }
       ],
       "rewards": {
-        "xp": 50,
-        "flags": [
-          "quest_intro_001_completed"
-        ],
+        "flags": [],
         "unlocks_commands": []
       },
       "requirements": {
@@ -76,7 +73,39 @@
       },
       "default_system_id": "atlas_relay",
       "status": "published"
+    },
+    {
+      "id": "quest_1763243129732",
+      "title": "Untitled Quest",
+      "description": "Describe this operation.",
+      "trigger": {
+        "type": "ON_FIRST_TERMINAL_OPEN"
+      },
+      "steps": [
+        {
+          "id": "step_1",
+          "type": "SCAN_HOST",
+          "target_system_id": "atlas_relay",
+          "params": {
+            "target_ip": "10.10.10.10"
+          },
+          "hints": {
+            "prompt": "scan 10.10.10.10",
+            "command_example": "scan 10.10.10.10"
+          },
+          "auto_advance": true
+        }
+      ],
+      "rewards": {
+        "flags": [],
+        "unlocks_commands": []
+      },
+      "requirements": {
+        "required_flags": [],
+        "required_quests": []
+      },
+      "status": "published"
     }
   ],
-  "lastUpdated": "2025-11-15T20:11:41.878Z"
+  "lastUpdated": "2025-11-15T21:53:23.540Z"
 }
