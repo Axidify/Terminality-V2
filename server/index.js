@@ -49,7 +49,7 @@ function getPresenceMap(room) {
 }
 
 let savedState = null
-let markdownChangelogCache = { mtimeMs: 0, entries: [] }
+let markdownChangelogCache = null
 
 const DEFAULT_ABOUT_CONTENT = {
   heroTitle: 'Terminality OS',
@@ -238,17 +238,13 @@ function deleteChangelogEntry(version) {
 function getMarkdownChangelogEntries() {
   try {
     if (!fs.existsSync(CHANGELOG_MD_PATH)) return []
-    const stats = fs.statSync(CHANGELOG_MD_PATH)
-    const needsRefresh = markdownChangelogCache.mtimeMs !== stats.mtimeMs
-    if (needsRefresh) {
-      const rawEntries = loadChangelogFromFile(CHANGELOG_MD_PATH) || []
-      const normalized = normalizeChangelog({ entries: rawEntries })
-      markdownChangelogCache = { mtimeMs: stats.mtimeMs, entries: normalized.entries }
-    }
-    return markdownChangelogCache.entries || []
+    const rawEntries = loadChangelogFromFile(CHANGELOG_MD_PATH) || []
+    const normalized = normalizeChangelog({ entries: rawEntries })
+    markdownChangelogCache = { entries: normalized.entries }
+    return normalized.entries
   } catch (err) {
     console.warn('[changelog] Failed to read markdown changelog:', err)
-    return markdownChangelogCache.entries || []
+    return Array.isArray(markdownChangelogCache?.entries) ? markdownChangelogCache.entries : []
   }
 }
 
@@ -261,7 +257,19 @@ function getMergedChangelogEntries() {
     versions.set(entry.version, entry)
   }
   for (const entry of stateEntries) {
-    versions.set(entry.version, entry)
+    const existing = versions.get(entry.version)
+    if (!existing) {
+      versions.set(entry.version, entry)
+      continue
+    }
+    versions.set(entry.version, {
+      ...existing,
+      summary: entry.summary || existing.summary,
+      highlight: entry.highlight || existing.highlight,
+      spotlight: entry.spotlight || existing.spotlight,
+      tags: Array.isArray(entry.tags) && entry.tags.length ? entry.tags : existing.tags,
+      links: Array.isArray(entry.links) && entry.links.length ? entry.links : existing.links
+    })
   }
   const mergedList = Array.from(versions.values())
   const sorted = mergedList.sort((a, b) => {
@@ -328,7 +336,7 @@ function syncMarkdownChangelog({ type, entry, originalVersion }) {
       const updatedBody = normalizedBody.replace(entryRegex, '').replace(/^\s+/, '').replace(/\n{3,}/g, '\n\n').trimEnd()
       const finalContent = (normalizedHeader + updatedBody).trimEnd() + '\n'
       fs.writeFileSync(CHANGELOG_MD_PATH, finalContent, 'utf8')
-      markdownChangelogCache = { mtimeMs: 0, entries: [] }
+      markdownChangelogCache = null
       return true
     }
 
@@ -346,7 +354,7 @@ function syncMarkdownChangelog({ type, entry, originalVersion }) {
     const finalContent = (normalizedHeader + updatedBody).trimEnd() + '\n'
     fs.writeFileSync(CHANGELOG_MD_PATH, finalContent, 'utf8')
     // reset cache so next response picks up new file
-    markdownChangelogCache = { mtimeMs: 0, entries: [] }
+    markdownChangelogCache = null
     return true
   } catch (err) {
     console.error('[changelog] Failed to sync CHANGELOG.md:', err)
