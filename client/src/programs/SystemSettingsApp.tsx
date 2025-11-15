@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
+import type { Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
@@ -6,14 +9,11 @@ import { useUser } from '../os/UserContext'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 import { VERSION, BUILD_DATE } from '../version'
 import { fetchAboutContent, updateAboutContent, FALLBACK_ABOUT_CONTENT, AboutContent } from '../services/aboutService'
-import { fetchChangelog, createChangelogEntry, updateChangelogEntry, deleteChangelogEntry, createEmptyChangelogEntry } from '../services/changelogService'
-import type { ChangelogEntry, ChangelogResponse, ChangelogSections } from '../services/changelogService'
+import { fetchChangelog, fetchChangelogMarkdown } from '../services/changelogService'
+import type { ChangelogResponse } from '../services/changelogService'
 import './SystemSettingsApp.css'
 
 type Tab = 'themes' | 'wallpapers' | 'specs' | 'about'
-type ChangelogFilter = 'all' | 'added' | 'changed' | 'fixed' | 'breaking'
-type ChangelogSectionKey = keyof ChangelogSections
-
 interface ComputerSpecs {
   cpu: { name: string; level: number; maxLevel: number; speed: string }
   ram: { name: string; level: number; maxLevel: number; size: string }
@@ -31,59 +31,6 @@ const wallpapers = [
   { id: 'minimal', name: 'Minimal Dark', gradient: 'linear-gradient(180deg, #050505 0%, #000000 100%)' },
   { id: 'retro', name: 'Retro Wave', gradient: 'linear-gradient(180deg, #150028 0%, #280018 50%, #0d0000 100%)' }
 ]
-
-const sectionMeta: Record<ChangelogSectionKey, { label: string; accent: string; icon: JSX.Element }> = {
-  added: {
-    label: 'Added',
-    accent: 'var(--color-primary)',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="16" />
-        <line x1="8" y1="12" x2="16" y2="12" />
-      </svg>
-    )
-  },
-  changed: {
-    label: 'Changed',
-    accent: 'var(--color-secondary)',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M4 7h16M4 12h16M4 17h16" />
-      </svg>
-    )
-  },
-  fixed: {
-    label: 'Fixed',
-    accent: 'var(--color-accent, #00eaff)',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M9 11l3 3L22 4" />
-        <path d="M21 12.3V21H3V3h9.7" />
-      </svg>
-    )
-  },
-  breaking: {
-    label: 'Breaking',
-    accent: '#ff4d4d',
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M10 2l2 7 5 2-5 2-2 7-2-7-5-2 5-2z" />
-      </svg>
-    )
-  }
-}
-
-const changelogFilters: Array<{ key: ChangelogFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'added', label: 'Added' },
-  { key: 'changed', label: 'Changed' },
-  { key: 'fixed', label: 'Fixed' },
-  { key: 'breaking', label: 'Breaking' }
-]
-
-const changelogSectionKeys: ChangelogSectionKey[] = ['added', 'changed', 'fixed', 'breaking']
-
 const getInitialSpecs = (): ComputerSpecs => {
   const cached = getCachedDesktop()?.computerSpecs
   if (cached) return cached as ComputerSpecs
@@ -138,16 +85,13 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [changelog, setChangelog] = useState<ChangelogResponse>({ entries: [], latest: null })
   const [isChangelogLoading, setIsChangelogLoading] = useState<boolean>(false)
   const [changelogError, setChangelogError] = useState('')
-  const [changelogFilter, setChangelogFilter] = useState<ChangelogFilter>('all')
-  const [selectedChangelogVersion, setSelectedChangelogVersion] = useState<'new' | string>('new')
-  const [draftChangelogEntry, setDraftChangelogEntry] = useState<ChangelogEntry>(() => createEmptyChangelogEntry())
-  const [changelogEditorBusy, setChangelogEditorBusy] = useState(false)
-  const [changelogEditorFeedback, setChangelogEditorFeedback] = useState('')
+  const [changelogMarkdown, setChangelogMarkdown] = useState('')
+  const [isChangelogMarkdownLoading, setIsChangelogMarkdownLoading] = useState(true)
+  const [changelogMarkdownError, setChangelogMarkdownError] = useState('')
   const [copyFeedback, setCopyFeedback] = useState<string>('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aboutEditingRef = useRef(false)
-  const changelogEditorRef = useRef<HTMLDivElement | null>(null)
   const [aboutContent, setAboutContent] = useState<AboutContent>(FALLBACK_ABOUT_CONTENT)
   const [aboutStatus, setAboutStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [aboutError, setAboutError] = useState('')
@@ -188,6 +132,12 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
     }))
   ), [])
 
+  const markdownComponents = React.useMemo<Components>(() => ({
+    a: ({ node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
+      <a {...props} target="_blank" rel="noreferrer" />
+    )
+  }), [])
+
   const loadAboutContent = React.useCallback(async () => {
     setAboutStatus('loading')
     setAboutError('')
@@ -215,15 +165,21 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
 
   const applyChangelogData = React.useCallback((data: ChangelogResponse) => {
     setChangelog(data)
-    if (selectedChangelogVersion === 'new') return
-    const match = data.entries.find((entry: ChangelogEntry) => entry.version === selectedChangelogVersion)
-    if (match) {
-      setDraftChangelogEntry(match)
-    } else {
-      setSelectedChangelogVersion('new')
-      setDraftChangelogEntry(createEmptyChangelogEntry())
+  }, [])
+
+  const loadChangelogMarkdown = React.useCallback(async () => {
+    setIsChangelogMarkdownLoading(true)
+    setChangelogMarkdownError('')
+    try {
+      const markdown = await fetchChangelogMarkdown()
+      setChangelogMarkdown(markdown)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load full changelog'
+      setChangelogMarkdownError(message)
+    } finally {
+      setIsChangelogMarkdownLoading(false)
     }
-  }, [selectedChangelogVersion])
+  }, [])
 
   const loadChangelog = React.useCallback(async () => {
     setIsChangelogLoading(true)
@@ -241,10 +197,15 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
 
   useEffect(() => {
     loadChangelog()
-  }, [loadChangelog])
+    loadChangelogMarkdown()
+  }, [loadChangelog, loadChangelogMarkdown])
+
+  const displayVersion = React.useMemo(() => {
+    return changelog.latest?.version || VERSION
+  }, [changelog.latest])
 
   const copyVersionInfo = async () => {
-    const versionInfo = `Terminality OS v${VERSION} (Built: ${BUILD_DATE})`
+    const versionInfo = `Terminality OS v${displayVersion} (Built: ${BUILD_DATE})`
     try {
       await navigator.clipboard.writeText(versionInfo)
       setCopyFeedback('Version info copied!')
@@ -268,7 +229,7 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const shouldRenderSecondaryWordmark = Boolean(heroSecondaryWordmark && heroSecondaryWordmark !== 'OS')
 
   const systemInfoItems = [
-    { label: 'Version', value: VERSION },
+    { label: 'Version', value: displayVersion },
     { label: 'Build Date', value: BUILD_DATE },
     { label: 'Architecture', value: 'Web-Based (x64 Simulation)' },
     { label: 'Frontend', value: 'React 18 + TypeScript + Vite' },
@@ -431,119 +392,19 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
     }
   ]
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = React.useCallback(async () => {
     setUpdateFeedback('Checking...')
     try {
       const data = await fetchChangelog()
       applyChangelogData(data)
+      await loadChangelogMarkdown()
       setUpdateFeedback(data.latest ? `Latest: v${data.latest.version}` : 'No releases yet')
     } catch (_err) {
       setUpdateFeedback('Failed to check updates')
     }
     setTimeout(() => setUpdateFeedback(''), 2000)
-  }
+  }, [applyChangelogData, loadChangelogMarkdown])
 
-  const jumpToLatestChangelogEntry = () => {
-    if (!changelog.latest) return
-    handleSelectChangelogVersion(changelog.latest.version)
-    requestAnimationFrame(() => {
-      changelogEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }
-
-  const handleChangelogFieldChange = (field: keyof ChangelogEntry, value: string) => {
-    setDraftChangelogEntry((prev: ChangelogEntry) => ({ ...prev, [field]: value }))
-  }
-
-  const handleChangelogTagsChange = (value: string) => {
-    const tags = value
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(Boolean)
-    setDraftChangelogEntry((prev: ChangelogEntry) => ({ ...prev, tags }))
-  }
-
-  const handleChangelogSectionChange = (section: ChangelogSectionKey, raw: string) => {
-    const items = raw
-      .split('\n')
-      .map(line => line.trim())
-      .filter(Boolean)
-    setDraftChangelogEntry((prev: ChangelogEntry) => ({
-      ...prev,
-      sections: {
-        ...prev.sections,
-        [section]: items
-      }
-    }))
-  }
-
-  const handleSelectChangelogVersion = (value: string) => {
-    setChangelogEditorFeedback('')
-    if (value === 'new') {
-      setSelectedChangelogVersion('new')
-      setDraftChangelogEntry(createEmptyChangelogEntry())
-      return
-    }
-    const existing = changelog.entries.find((entry: ChangelogEntry) => entry.version === value)
-    if (existing) {
-      setSelectedChangelogVersion(value)
-      setDraftChangelogEntry(existing)
-    } else {
-      setSelectedChangelogVersion('new')
-      setDraftChangelogEntry(createEmptyChangelogEntry())
-    }
-  }
-
-  const handleResetChangelogDraft = () => {
-    setSelectedChangelogVersion('new')
-    setDraftChangelogEntry(createEmptyChangelogEntry())
-    setChangelogEditorFeedback('Draft cleared')
-    setTimeout(() => setChangelogEditorFeedback(''), 2000)
-  }
-
-  const handleSaveChangelogEntry = async () => {
-    if (!draftChangelogEntry.version.trim()) {
-      setChangelogEditorFeedback('Version is required')
-      return
-    }
-    setChangelogEditorBusy(true)
-    setChangelogEditorFeedback('')
-    try {
-      const response = selectedChangelogVersion === 'new'
-        ? await createChangelogEntry(draftChangelogEntry)
-        : await updateChangelogEntry(selectedChangelogVersion, draftChangelogEntry)
-      applyChangelogData({ entries: response.entries, latest: response.latest })
-      setDraftChangelogEntry(response.entry)
-      setSelectedChangelogVersion(response.entry.version)
-      setChangelogEditorFeedback('Changelog saved')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save changelog'
-      setChangelogEditorFeedback(message)
-    } finally {
-      setChangelogEditorBusy(false)
-    }
-  }
-
-  const handleDeleteChangelogEntry = async () => {
-    if (selectedChangelogVersion === 'new') {
-      setChangelogEditorFeedback('Select a version to delete')
-      return
-    }
-    setChangelogEditorBusy(true)
-    setChangelogEditorFeedback('')
-    try {
-      const data = await deleteChangelogEntry(selectedChangelogVersion)
-      applyChangelogData(data)
-      setSelectedChangelogVersion('new')
-      setDraftChangelogEntry(createEmptyChangelogEntry())
-      setChangelogEditorFeedback('Entry deleted')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete entry'
-      setChangelogEditorFeedback(message)
-    } finally {
-      setChangelogEditorBusy(false)
-    }
-  }
 
   const handleDraftChange = (field: keyof AboutContent, value: string) => {
     setDraftAbout(prev => ({ ...prev, [field]: value }))
@@ -876,41 +737,36 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
         {activeTab === 'about' && (
           <div className="about-panel">
             <div className="about-header">
-              <svg className="about-logo" width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                <polygon 
-                  points="50,5 90,25 90,65 50,85 10,65 10,25" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2"
-                />
-                <circle cx="50" cy="30" r="3" fill="currentColor" />
-                <circle cx="70" cy="45" r="3" fill="currentColor" />
-                <circle cx="50" cy="60" r="3" fill="currentColor" />
-                <circle cx="30" cy="45" r="3" fill="currentColor" />
-                <line x1="50" y1="30" x2="70" y2="45" stroke="currentColor" strokeWidth="1.5" />
-                <line x1="70" y1="45" x2="50" y2="60" stroke="currentColor" strokeWidth="1.5" />
-                <line x1="50" y1="60" x2="30" y2="45" stroke="currentColor" strokeWidth="1.5" />
-                <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
-                <circle cx="50" cy="45" r="8" fill="currentColor" />
-              </svg>
-              <h1 className="about-wordmark" aria-label={aboutContent.heroTitle}>
-                <span className="wordmark-primary">{heroPrimaryWordmark}</span>
-                {shouldRenderSecondaryWordmark && (
-                  <span className="wordmark-secondary">{heroSecondaryWordmark}</span>
-                )}
-              </h1>
-              <div className="wordmark-caption">Operating System</div>
-              <div className="version-info">
-                <p className="version">Version {VERSION}</p>
-                <button className="copy-version-btn" onClick={copyVersionInfo} title="Copy version info to clipboard">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                  </svg>
-                  <span>{copyFeedback || 'Copy'}</span>
-                </button>
+              <div className="about-logo-container">
+                <svg className="about-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  <polygon 
+                    points="50,5 90,25 90,65 50,85 10,65 10,25" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                  />
+                  <circle cx="50" cy="30" r="3" fill="currentColor" />
+                  <circle cx="70" cy="45" r="3" fill="currentColor" />
+                  <circle cx="50" cy="60" r="3" fill="currentColor" />
+                  <circle cx="30" cy="45" r="3" fill="currentColor" />
+                  <line x1="50" y1="30" x2="70" y2="45" stroke="currentColor" strokeWidth="1.5" />
+                  <line x1="70" y1="45" x2="50" y2="60" stroke="currentColor" strokeWidth="1.5" />
+                  <line x1="50" y1="60" x2="30" y2="45" stroke="currentColor" strokeWidth="1.5" />
+                  <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
+                  <circle cx="50" cy="45" r="8" fill="currentColor" />
+                </svg>
               </div>
-              <p className="tagline">{aboutContent.heroTagline}</p>
+
+              <h1 className="about-brand-title">TERMINALITY</h1>
+              <p className="about-brand-subtitle">OPERATING SYSTEM</p>
+
+              <div className="about-divider"></div>
+
+              <div className="about-version-info">
+                <p className="about-version">v{displayVersion}</p>
+              </div>
+
+              <p className="about-tagline">{aboutContent.heroTagline}</p>
             </div>
 
             {isAdmin && (
@@ -1084,246 +940,34 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
               <div className="changelog-panel-header">
                 <div>
                   <h2>Changelog & Release Notes</h2>
-                  <p>Live release history pulled from the backend changelog registry.</p>
+                  <p>Rendered straight from <code>CHANGELOG.md</code> with full markdown formatting.</p>
                 </div>
                 <div className="changelog-panel-actions">
-                  {isAdmin && changelog.latest && (
-                    <button
-                      className="support-btn ghost"
-                      type="button"
-                      onClick={jumpToLatestChangelogEntry}
-                    >
-                      Edit Latest
-                    </button>
-                  )}
-                  <button className="support-btn" onClick={checkForUpdates} disabled={isChangelogLoading}>
-                    {isChangelogLoading ? 'Refreshing…' : 'Refresh'}
+                  <button className="support-btn" onClick={checkForUpdates} disabled={isChangelogLoading || isChangelogMarkdownLoading}>
+                    {(isChangelogLoading || isChangelogMarkdownLoading) ? 'Refreshing…' : 'Refresh'}
                   </button>
                   {updateFeedback && <span className="changelog-status-text">{updateFeedback}</span>}
                 </div>
               </div>
 
-              {changelogError && (
-                <div className="changelog-alert error">{changelogError}</div>
+              {(changelogError || changelogMarkdownError) && (
+                <div className="changelog-alert error">
+                  {changelogError || changelogMarkdownError}
+                </div>
               )}
-              {isChangelogLoading && !changelog.entries.length && !changelogError && (
+
+              {(isChangelogMarkdownLoading && !changelogMarkdownError) && (
                 <div className="changelog-alert">Loading changelog…</div>
               )}
 
-              {changelog.latest && (
-                <div className="changelog-highlight-card">
-                  <div className="highlight-meta">
-                    <span className="highlight-badge">Latest Release</span>
-                    <div>
-                      <h3>v{changelog.latest.version}</h3>
-                      <p className="highlight-date">Released on {changelog.latest.date}</p>
-                    </div>
-                  </div>
-                  <p className="highlight-summary">
-                    {changelog.latest.summary || 'This release is ready for prime time.'}
-                  </p>
-                  <div className="highlight-grid">
-                    {changelogSectionKeys.map((section) => {
-                      const items = changelog.latest?.sections?.[section] || []
-                      if (!items.length) return null
-                      return (
-                        <div className="highlight-section" key={`highlight-${String(section)}`}>
-                          <div className="highlight-section-title" style={{ color: sectionMeta[section].accent }}>
-                            {sectionMeta[section].icon}
-                            <span>{sectionMeta[section].label}</span>
-                          </div>
-                          <ul>
-                            {items.slice(0, 2).map((item: string, idx: number) => (
-                              <li key={`highlight-${String(section)}-${idx}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )
-                    })}
-                  </div>
+              {(!isChangelogMarkdownLoading && !changelogMarkdownError && changelogMarkdown) && (
+                <div className="changelog-markdown-content" role="region" aria-label="Rendered changelog">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                    {changelogMarkdown}
+                  </ReactMarkdown>
                 </div>
               )}
-
-              <div className="changelog-filter-bar">
-                <span>Filter updates</span>
-                <div className="changelog-filters">
-                  {changelogFilters.map(filter => (
-                    <button
-                      key={filter.key}
-                      className={filter.key === changelogFilter ? 'active' : ''}
-                      onClick={() => setChangelogFilter(filter.key)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="changelog-grid">
-                {changelog.entries.length === 0 && !isChangelogLoading ? (
-                  <div className="changelog-empty">No releases recorded yet.</div>
-                ) : (
-                  changelog.entries.map((entry: ChangelogEntry) => (
-                    <div className="changelog-card" key={entry.version}>
-                      <div className="card-header">
-                        <div>
-                          <h3>v{entry.version}</h3>
-                          <p>{entry.date}</p>
-                        </div>
-                        {entry.tags && entry.tags.length > 0 && (
-                          <div className="changelog-tags">
-                            {entry.tags.map((tag: string) => (
-                              <span key={`${entry.version}-${tag}`}>{tag}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <p className="card-summary">
-                        {entry.summary || 'No summary provided yet.'}
-                      </p>
-                      <div className="card-sections">
-                        {changelogSectionKeys.map((section) => {
-                          if (changelogFilter !== 'all' && changelogFilter !== section) return null
-                          const items = entry.sections?.[section] || []
-                          if (!items.length) return null
-                          return (
-                            <div className="changelog-section-block" key={`${entry.version}-${String(section)}`}>
-                              <div className="section-block-heading" style={{ color: sectionMeta[section].accent }}>
-                                {sectionMeta[section].icon}
-                                <span>{sectionMeta[section].label}</span>
-                              </div>
-                              <ul>
-                                {items.map((item: string, idx: number) => (
-                                  <li key={`${entry.version}-${String(section)}-${idx}`}>{item}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      {entry.links && entry.links.length > 0 && (
-                        <div className="changelog-links">
-                          {entry.links.map((link: { label: string; url: string }) => (
-                            <a key={`${entry.version}-${link.url}`} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="version-history">
-                <h3>Version History</h3>
-                <div className="version-list">
-                  {changelog.entries.map((entry: ChangelogEntry) => {
-                    const counts: Record<ChangelogSectionKey, number> = {
-                      added: entry.sections?.added?.length || 0,
-                      changed: entry.sections?.changed?.length || 0,
-                      fixed: entry.sections?.fixed?.length || 0,
-                      breaking: entry.sections?.breaking?.length || 0
-                    }
-                    const summary = changelogSectionKeys
-                      .map(section => {
-                        const value = counts[section]
-                        return value ? `${value} ${String(section)}` : null
-                      })
-                      .filter(Boolean)
-                      .join(' · ')
-                    return (
-                      <div className="version-item" key={`history-${entry.version}`}>
-                        <div>
-                          <strong>v{entry.version}</strong>
-                          <span className="version-date">{entry.date}</span>
-                        </div>
-                        <p>{summary || 'No notes yet.'}</p>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
             </div>
-
-            {isAdmin && (
-              <div className="changelog-editor-panel" ref={changelogEditorRef}>
-                <div className="changelog-editor-header">
-                  <div>
-                    <h3>Changelog Editor</h3>
-                    <p>Publish updates without touching the codebase.</p>
-                  </div>
-                  {changelogEditorFeedback && (
-                    <span className="changelog-editor-feedback">{changelogEditorFeedback}</span>
-                  )}
-                </div>
-                <div className="changelog-editor-grid">
-                  <label>
-                    <span>Target Entry</span>
-                    <select value={selectedChangelogVersion} onChange={(e) => handleSelectChangelogVersion(e.target.value)}>
-                      <option value="new">Create new release</option>
-                      {changelog.entries.map((entry: ChangelogEntry) => (
-                        <option key={`select-${entry.version}`} value={entry.version}>v{entry.version}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Version (semver)</span>
-                    <input value={draftChangelogEntry.version} onChange={(e) => handleChangelogFieldChange('version', e.target.value)} placeholder="0.0.0" />
-                  </label>
-                  <label>
-                    <span>Release Date</span>
-                    <input type="date" value={draftChangelogEntry.date} onChange={(e) => handleChangelogFieldChange('date', e.target.value)} />
-                  </label>
-                  <label className="wide">
-                    <div className="label-heading">
-                      <span>Summary</span>
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={draftChangelogEntry.summary}
-                      onChange={(e) => handleChangelogFieldChange('summary', e.target.value)}
-                    />
-                  </label>
-                  <label className="wide">
-                    <div className="label-heading">
-                      <span>Highlight (optional)</span>
-                    </div>
-                    <textarea
-                      rows={2}
-                      value={draftChangelogEntry.highlight}
-                      onChange={(e) => handleChangelogFieldChange('highlight', e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Tags (comma separated)</span>
-                    <input value={(draftChangelogEntry.tags || []).join(', ')} onChange={(e) => handleChangelogTagsChange(e.target.value)} placeholder="major, ui" />
-                  </label>
-                </div>
-                <div className="changelog-editor-sections">
-                  {changelogSectionKeys.map((section) => (
-                    <label key={`editor-${String(section)}`}>
-                      <div className="label-heading">
-                        <span>{sectionMeta[section].label}</span>
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={(draftChangelogEntry.sections?.[section] || []).join('\n')}
-                        onChange={(e) => handleChangelogSectionChange(section, e.target.value)}
-                        placeholder={`One ${sectionMeta[section].label.toLowerCase()} per line`}
-                      />
-                    </label>
-                  ))}
-                </div>
-                <div className="changelog-editor-actions">
-                  <button onClick={handleSaveChangelogEntry} disabled={changelogEditorBusy}>
-                    {changelogEditorBusy ? 'Saving…' : 'Save Entry'}
-                  </button>
-                  <button className="ghost" onClick={handleResetChangelogDraft} disabled={changelogEditorBusy}>Reset Draft</button>
-                  <button className="danger" onClick={handleDeleteChangelogEntry} disabled={changelogEditorBusy || selectedChangelogVersion === 'new'}>
-                    Delete Entry
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

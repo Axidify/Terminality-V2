@@ -5,18 +5,16 @@ All notable changes to Terminality OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.7] - 2025-11-14
+## [0.5.9] - 2025-11-15
 
 ### Added
-- **Online Chat intents & notifications**: Desktop notifications now ship with actionable intents. Clicking one focuses Online Chat, opens the correct room or DM, and scrolls to the referenced message so context is never lost.
-- **Presence-aware chat**: Enriched room and DM metadata surfaces online presence indicators alongside lightweight client-side notifications, making Online Chat feel like a first-class messaging client.
+- **Markdown-powered changelog**: System Settings now renders the root `CHANGELOG.md` with full Markdown semantics via a new `/api/changelog/markdown` endpoint, so bold text, bullet lists, and tables appear exactly as authored.
 
 ### Changed
-- **Chat UI density**: The notification toggle is now icon-only, and message bubbles, headers, and the sidebar were tightened up for denser, faster chat sessions while staying on-brand with the system aesthetic.
-- **Changelog editor**: Removed markdown/formatting controls and now save entries as plain text so release notes are always readable.
+- **Changelog ordering**: Reordered the changelog file (and UI panels) so newest releases remain at the top and match the structured API feed.
 
 ### Fixed
-- **Notification fallbacks**: Hardened notification handling when browser permission is denied, ensuring in-app banners remain available and controls stay in sync with the underlying state.
+- **Version sorting**: Corrected panel ordering so v0.5.8 now appears before v0.5.7 across the OS.
 
 ## [0.5.8] - 2025-11-15
 
@@ -30,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Sanitization**: Backend now strips common markdown tokens (inline code, bold/italic markers, headings, lists, images/links) so stored entries remain readable and safe.
+
+## [0.5.7] - 2025-11-14
+
+### Added
+- **Online Chat intents & notifications**: Desktop notifications now ship with actionable intents. Clicking one focuses Online Chat, opens the correct room or DM, and scrolls to the referenced message so context is never lost.
+- **Presence-aware chat**: Enriched room and DM metadata surfaces online presence indicators alongside lightweight client-side notifications, making Online Chat feel like a first-class messaging client.
+
+### Changed
+- **Chat UI density**: The notification toggle is now icon-only, and message bubbles, headers, and the sidebar were tightened up for denser, faster chat sessions while staying on-brand with the system aesthetic.
+- **Changelog editor**: Removed markdown/formatting controls and now save entries as plain text so release notes are always readable.
+
+### Fixed
+- **Notification fallbacks**: Hardened notification handling when browser permission is denied, ensuring in-app banners remain available and controls stay in sync with the underlying state.
 
 ## [0.5.6] - 2025-11-13
 
