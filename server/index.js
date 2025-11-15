@@ -14,6 +14,7 @@ const rateLimit = require('express-rate-limit')
 const { loadChangelogFromFile, readChangelogMarkdown } = require('./utils/markdownChangelog')
 const terminalQuestStore = require('./terminalQuestsStore')
 const systemProfilesStore = require('./systemProfilesStore')
+const economyStore = require('./economyStore')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 const CHANGELOG_MD_PATH = path.join(__dirname, '..', 'CHANGELOG.md')
@@ -413,6 +414,7 @@ async function writeState(s) {
 ;(async () => {
   savedState = await readState()
   ensureStateShape()
+  syncEconomyToState()
   savedState.aboutContent = normalizeAboutContent(savedState.aboutContent || DEFAULT_ABOUT_CONTENT)
 })()
 
@@ -424,6 +426,21 @@ function ensureStateShape() {
   if (typeof savedState.story.questCounter !== 'number') savedState.story.questCounter = savedState.story.quests.length
   if (!savedState.changelog) savedState.changelog = { entries: [] }
   savedState.changelog = normalizeChangelog(savedState.changelog)
+}
+
+function syncEconomyToState() {
+  if (!savedState) savedState = { version: 1, desktop: {}, story: {} }
+  if (!savedState.desktop) savedState.desktop = {}
+  const snapshot = economyStore.getCreditsState()
+  savedState.desktop.credits = snapshot.balance
+  savedState.desktop.bankTransactions = snapshot.transactions.slice(0, 50).map(entry => ({
+    id: entry.id,
+    date: entry.timestamp,
+    description: entry.reason,
+    amount: Math.abs(entry.amount),
+    type: entry.amount >= 0 ? 'credit' : 'debit'
+  }))
+  return snapshot
 }
 
 const QUEST_STAGE_ORDER = ['briefing', 'investigation', 'infiltration', 'decryption', 'complete']
@@ -949,6 +966,8 @@ async function issueRefreshTokenForUser(user, res) {
 app.get('/api/state', authMiddleware, async (req, res) => {
   try {
     if (!savedState) savedState = await readState()
+    ensureStateShape()
+    syncEconomyToState()
     res.json({ session_id: 1, state: savedState })
   } catch (e) {
     console.error('[api/state][get] error', e)
@@ -1010,10 +1029,43 @@ app.put('/api/state', authMiddleware, async (req, res) => {
       changelog: normalizeChangelog(nextChangelog)
     }
     ensureStateShape()
+    syncEconomyToState()
     await writeState(savedState)
     res.json({ session_id: 1, state: savedState })
   } catch (e) {
     console.error('[api/state][put] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/credits', authMiddleware, (req, res) => {
+  try {
+    const snapshot = syncEconomyToState()
+    res.json(snapshot)
+  } catch (e) {
+    console.error('[api/credits][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/credits/transactions', authMiddleware, async (req, res) => {
+  try {
+    const body = req.body || {}
+    const result = economyStore.applyTransaction({
+      amount: body.amount,
+      reason: body.reason,
+      metadata: body.metadata,
+      actor: req.user?.username || req.user?.id || 'player',
+      source: typeof body.source === 'string' ? body.source.slice(0, 120) : null
+    })
+    if (result.errors && result.errors.length) {
+      return res.status(400).json({ errors: result.errors })
+    }
+    syncEconomyToState()
+    await writeState(savedState)
+    res.json(result)
+  } catch (e) {
+    console.error('[api/credits][post] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })

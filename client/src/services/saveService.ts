@@ -1,5 +1,6 @@
 import { apiRequest } from './api'
 import { isLoggedIn as hasToken } from './auth'
+import type { SerializedQuestState } from '../programs/questSystem'
 
 export interface DesktopState {
   windowMemory?: Record<string, { x: number; y: number; width: number; height: number }>
@@ -42,11 +43,7 @@ export interface DesktopState {
   terminalState?: {
     lines?: Array<{ role: 'system' | 'user'; text: string }>
     buffer?: string
-    questState?: {
-      active?: Array<{ questId: string; currentStepIndex: number }>
-      completedIds?: string[]
-      flags?: string[]
-    }
+    questState?: SerializedQuestState
     session?: {
       hostIp: string
       username?: string

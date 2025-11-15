@@ -6,7 +6,7 @@ const QUEST_FILE = path.join(__dirname, 'data', 'terminal-quests.json')
 const STEP_TYPES = new Set(['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST'])
 const PATH_DEPENDENT_TYPES = new Set(['DELETE_FILE'])
 const SYSTEM_REQUIRED_TYPES = new Set(['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST'])
-const TRIGGER_TYPES = new Set(['ON_FIRST_TERMINAL_OPEN'])
+const TRIGGER_TYPES = new Set(['ON_FIRST_TERMINAL_OPEN', 'ON_QUEST_COMPLETION', 'ON_FLAG_SET'])
 const QUEST_STATUSES = new Set(['draft', 'published'])
 
 function clone(value) {
@@ -26,10 +26,19 @@ function readStore() {
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return { version: 1, quests: [], lastUpdated: new Date().toISOString() }
     if (!Array.isArray(parsed.quests)) parsed.quests = []
-    parsed.quests = parsed.quests.map((quest) => ({
-      ...quest,
-      status: normalizeStatus(quest?.status)
-    }))
+    parsed.quests = parsed.quests.map((quest) => {
+      const normalized = {
+        ...quest,
+        status: normalizeStatus(quest?.status)
+      }
+      if (normalized?.rewards && Array.isArray(normalized.rewards.flags)) {
+        normalized.rewards = {
+          ...normalized.rewards,
+          flags: normalizeRewardFlags(normalized.rewards.flags)
+        }
+      }
+      return normalized
+    })
     parsed.version = parsed.version || 1
     parsed.lastUpdated = parsed.lastUpdated || new Date().toISOString()
     return parsed
@@ -75,6 +84,52 @@ function normalizeArray(value) {
   return value.filter((entry) => typeof entry === 'string' && entry.trim()).map(entry => entry.trim()).slice(0, 50)
 }
 
+function normalizeRewardFlagEntry(entry) {
+  if (!entry) return null
+  if (typeof entry === 'string') {
+    const raw = entry.trim()
+    if (!raw) return null
+    const idx = raw.search(/[:=]/)
+    if (idx > 0) {
+      const key = raw.slice(0, idx).trim()
+      const value = raw.slice(idx + 1).trim()
+      if (!key) return null
+      return value ? { key, value } : { key }
+    }
+    return { key: raw }
+  }
+  if (typeof entry === 'object') {
+    const key = normalizeId(entry.key)
+    if (!key) return null
+    const rawValue = entry.value != null ? String(entry.value).trim() : ''
+    return rawValue ? { key, value: rawValue } : { key }
+  }
+  return null
+}
+
+function normalizeRewardFlags(input) {
+  if (!Array.isArray(input)) return []
+  const seen = new Set()
+  const flags = []
+  input.forEach(entry => {
+    const flag = normalizeRewardFlagEntry(entry)
+    if (!flag) return
+    const signature = flag.value ? `${flag.key}=${flag.value}` : flag.key
+    if (seen.has(signature)) return
+    seen.add(signature)
+    flags.push(flag)
+  })
+  return flags.slice(0, 50)
+}
+
+function buildFlagTokenSet(flags) {
+  if (!Array.isArray(flags)) return new Set()
+  const tokens = normalizeRewardFlags(flags).flatMap(flag => (
+    flag.value ? [flag.key, `${flag.key}=${flag.value}`] : [flag.key]
+  ))
+  return new Set(tokens)
+}
+
 function normalizeStatus(value) {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
   return QUEST_STATUSES.has(raw) ? raw : 'draft'
@@ -109,6 +164,35 @@ function normalizeEmbeddedFilesystems(input) {
     normalized[systemId] = cloneFilesystem(fsValue)
   })
   return normalized
+}
+
+function normalizeTrigger(input, errors) {
+  const rawType = typeof input?.type === 'string' ? input.type.trim().toUpperCase() : ''
+  if (!TRIGGER_TYPES.has(rawType)) {
+    errors.push('trigger.type is required and must be a supported trigger.')
+    return { type: 'ON_FIRST_TERMINAL_OPEN' }
+  }
+  if (rawType === 'ON_QUEST_COMPLETION') {
+    const questIdsInput = Array.isArray(input?.quest_ids)
+      ? input.quest_ids
+      : (input?.quest_ids ? [input.quest_ids] : [])
+    const candidates = [input?.quest_id, ...questIdsInput]
+    const questIds = candidates
+      .map(candidate => normalizeId(candidate))
+      .filter((value, index, array) => value && array.indexOf(value) === index)
+    if (!questIds.length) {
+      errors.push('On Quest Completion trigger requires at least one quest id.')
+    }
+    return { type: rawType, quest_ids: questIds }
+  }
+  if (rawType === 'ON_FLAG_SET') {
+    const flagKey = normalizeId(input?.flag_key)
+    if (!flagKey) errors.push('On Flag Set trigger requires a flag key.')
+    const rawValue = typeof input?.flag_value === 'string' ? input.flag_value.trim() : undefined
+    const flagValue = rawValue ? rawValue.slice(0, 100) : undefined
+    return { type: rawType, flag_key: flagKey || undefined, flag_value: flagValue }
+  }
+  return { type: rawType }
 }
 
 function getFilesystemForSystem(systemId, embedded, errors) {
@@ -195,7 +279,11 @@ function validateStep(step, index) {
 function buildQuestWarnings(quest, storeQuests) {
   const warnings = []
   const knownIds = new Set(storeQuests.map(q => q.id))
-  const knownFlags = new Set(storeQuests.flatMap(q => (Array.isArray(q.rewards?.flags) ? q.rewards.flags : [])))
+  const knownFlags = new Set()
+  storeQuests.forEach(q => {
+    const tokens = buildFlagTokenSet(q.rewards?.flags)
+    tokens.forEach(token => knownFlags.add(token))
+  })
   const requirements = quest.requirements || { required_quests: [], required_flags: [] }
   requirements.required_quests?.forEach(req => {
     if (req === quest.id) {
@@ -206,8 +294,9 @@ function buildQuestWarnings(quest, storeQuests) {
       warnings.push(`Requirement references unknown quest id ${req}.`)
     }
   })
+  const questFlagTokens = buildFlagTokenSet(quest.rewards?.flags)
   requirements.required_flags?.forEach(flag => {
-    if (!knownFlags.has(flag) && !(quest.rewards?.flags || []).includes(flag)) {
+    if (!knownFlags.has(flag) && !questFlagTokens.has(flag)) {
       warnings.push(`Requirement references flag '${flag}' that no quest emits yet.`)
     }
   })
@@ -226,10 +315,7 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
   if (!title) errors.push('title is required.')
   const description = normalizeText(input?.description, { max: 2000 })
   if (!description) errors.push('description is required.')
-  const triggerType = input?.trigger?.type
-  if (!TRIGGER_TYPES.has(triggerType)) {
-    errors.push('trigger.type is required and must be a supported trigger.')
-  }
+  const trigger = normalizeTrigger(input?.trigger, errors)
   const stepsInput = Array.isArray(input?.steps) ? input.steps : []
   if (!stepsInput.length) errors.push('At least one step is required.')
   const normalizedSteps = []
@@ -298,7 +384,7 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
     id: questId,
     title,
     description,
-    trigger: { type: triggerType },
+    trigger,
     steps: normalizedSteps,
     rewards,
     requirements,

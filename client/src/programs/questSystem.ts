@@ -1,5 +1,6 @@
 import type {
   QuestDefinition,
+  QuestRewardFlag,
   QuestStep,
   QuestStepType,
   QuestTrigger
@@ -16,13 +17,18 @@ export interface QuestInstanceState {
 export interface QuestEngineState {
   active: QuestInstanceState[]
   completedIds: string[]
-  flags: string[]
+  flags: QuestFlagState[]
 }
 
 export interface SerializedQuestState {
   active?: Array<{ questId: string; currentStepIndex: number }>
   completedIds?: string[]
-  flags?: string[]
+  flags?: Array<string | QuestFlagState>
+}
+
+export interface QuestFlagState {
+  key: string
+  value?: string
 }
 
 export interface QuestEventPayload {
@@ -96,11 +102,89 @@ const normalizeStep = (step: QuestStep): QuestStep => ({
   params: step.params || {}
 })
 
+const normalizeTrigger = (trigger?: QuestTrigger): QuestTrigger => {
+  const type = trigger?.type || 'ON_FIRST_TERMINAL_OPEN'
+  if (type === 'ON_QUEST_COMPLETION') {
+    const questIds = Array.isArray(trigger?.quest_ids)
+      ? trigger.quest_ids.map(id => id?.trim()).filter(Boolean)
+      : []
+    return { type, quest_ids: questIds.slice(0, 5) }
+  }
+  if (type === 'ON_FLAG_SET') {
+    const flagKey = trigger?.flag_key?.trim()
+    const flagValue = trigger?.flag_value?.trim()
+    return {
+      type,
+      ...(flagKey ? { flag_key: flagKey } : {}),
+      ...(flagValue ? { flag_value: flagValue } : {})
+    }
+  }
+  return { type }
+}
+
+const DEFAULT_FLAG_VALUE = 'true'
+
+const normalizeFlagState = (entry?: string | QuestFlagState | QuestRewardFlag): QuestFlagState | null => {
+  if (!entry) return null
+  if (typeof entry === 'string') {
+    const raw = entry.trim()
+    if (!raw) return null
+    const separators = ['=', ':']
+    for (const separator of separators) {
+      const idx = raw.indexOf(separator)
+      if (idx > 0) {
+        const key = raw.slice(0, idx).trim()
+        const value = raw.slice(idx + 1).trim()
+        if (!key) return null
+        return { key, value: value || DEFAULT_FLAG_VALUE }
+      }
+    }
+    return { key: raw, value: DEFAULT_FLAG_VALUE }
+  }
+  const key = entry.key?.trim()
+  if (!key) return null
+  const rawValue = entry.value != null ? String(entry.value).trim() : ''
+  return {
+    key,
+    value: rawValue || DEFAULT_FLAG_VALUE
+  }
+}
+
+const upsertFlagState = (flags: QuestFlagState[], next: QuestFlagState): QuestFlagState[] => {
+  if (!next.key) return flags
+  const existingIndex = flags.findIndex(flag => flag.key === next.key)
+  if (existingIndex >= 0) {
+    const clone = [...flags]
+    clone[existingIndex] = next
+    return clone
+  }
+  return [...flags, next]
+}
+
+const normalizeSerializedFlags = (entries?: Array<string | QuestFlagState>): QuestFlagState[] => {
+  if (!entries?.length) return []
+  return entries.reduce<QuestFlagState[]>((acc, entry) => {
+    const normalized = normalizeFlagState(entry)
+    if (!normalized) return acc
+    return upsertFlagState(acc, normalized)
+  }, [])
+}
+
+const applyRewardFlags = (flags: QuestFlagState[], rewardTokens?: Array<string | QuestRewardFlag>): QuestFlagState[] => {
+  if (!rewardTokens?.length) return flags
+  return rewardTokens.reduce<QuestFlagState[]>((acc, token) => {
+    const normalized = normalizeFlagState(token)
+    if (!normalized) return acc
+    return upsertFlagState(acc, normalized)
+  }, flags)
+}
+
 const hydrateDefinitions = (definitions: QuestDefinition[]) => {
   QUEST_INDEX.clear()
   QUEST_DEFINITIONS = definitions.map(def => ({
     ...def,
     steps: def.steps?.map(normalizeStep) ?? [],
+    trigger: normalizeTrigger(def.trigger),
     rewards: {
       xp: def.rewards?.xp,
       flags: def.rewards?.flags || [],
@@ -130,11 +214,56 @@ const createTriggeredQuests = () => (
     .map<QuestInstanceState>(quest => ({ quest, currentStepIndex: 0, completed: false }))
 )
 
-export const createQuestEngineState = (): QuestEngineState => ({
-  active: createTriggeredQuests(),
-  completedIds: [],
-  flags: []
-})
+const matchesFlagRequirement = (flags: QuestFlagState[], flagKey: string, expectedValue?: string): boolean => {
+  if (!flagKey) return false
+  const normalizedExpected = expectedValue?.trim().toLowerCase()
+  return flags.some(flag => {
+    if (flag.key !== flagKey) return false
+    if (!normalizedExpected || normalizedExpected === 'set') return true
+    const value = (flag.value || DEFAULT_FLAG_VALUE).toLowerCase()
+    return value === normalizedExpected
+  })
+}
+
+const triggerSatisfied = (trigger: QuestTrigger, completedSet: Set<string>, flags: QuestFlagState[]): boolean => {
+  switch (trigger.type) {
+    case 'ON_FIRST_TERMINAL_OPEN':
+      return true
+    case 'ON_QUEST_COMPLETION':
+      return Boolean(trigger.quest_ids?.length) && trigger.quest_ids.every(id => completedSet.has(id))
+    case 'ON_FLAG_SET':
+      return matchesFlagRequirement(flags, trigger.flag_key || '', trigger.flag_value)
+    default:
+      return false
+  }
+}
+
+const spawnTriggeredQuests = (
+  active: QuestInstanceState[],
+  completedIds: string[],
+  flags: QuestFlagState[]
+): { active: QuestInstanceState[]; triggered: QuestDefinition[] } => {
+  const completedSet = new Set(completedIds)
+  const activeIds = new Set(active.map(instance => instance.quest.id))
+  const triggeredDefinitions = QUEST_DEFINITIONS.filter(quest => {
+    if (completedSet.has(quest.id) || activeIds.has(quest.id)) return false
+    return triggerSatisfied(quest.trigger, completedSet, flags)
+  })
+  if (!triggeredDefinitions.length) {
+    return { active, triggered: [] }
+  }
+  const nextActive = [...active, ...triggeredDefinitions.map(quest => ({ quest, currentStepIndex: 0, completed: false }))]
+  return { active: nextActive, triggered: triggeredDefinitions }
+}
+
+export const createQuestEngineState = (): QuestEngineState => {
+  const baseActive = createTriggeredQuests()
+  return {
+    active: spawnTriggeredQuests(baseActive, [], []).active,
+    completedIds: [],
+    flags: []
+  }
+}
 
 export const getQuestDefinitionById = (id: string): QuestDefinition | undefined => QUEST_INDEX.get(id)
 
@@ -167,10 +296,14 @@ export const hydrateQuestState = (serialized?: SerializedQuestState | null): Que
     }
   })
 
+  const completedIdsList = Array.from(completedSet)
+  const normalizedFlags = normalizeSerializedFlags(serialized.flags)
+  const hydratedActive = spawnTriggeredQuests(activeInstances, completedIdsList, normalizedFlags).active
+
   return {
-    active: activeInstances,
-    completedIds: Array.from(completedSet),
-    flags: [...new Set(serialized.flags || [])]
+    active: hydratedActive,
+    completedIds: completedIdsList,
+    flags: normalizedFlags
   }
 }
 
@@ -180,7 +313,11 @@ export const serializeQuestState = (state: QuestEngineState): SerializedQuestSta
     currentStepIndex: instance.currentStepIndex
   })),
   completedIds: [...state.completedIds],
-  flags: [...state.flags]
+  flags: state.flags.map(flag => (
+    flag.value && flag.value !== DEFAULT_FLAG_VALUE
+      ? { key: flag.key, value: flag.value }
+      : { key: flag.key }
+  ))
 })
 
 const stepSatisfiedByEvent = (step: QuestStep, event: QuestEvent): boolean => {
@@ -233,21 +370,21 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
     ? [...state.completedIds, ...newlyCompleted.map(inst => inst.quest.id)]
     : state.completedIds
 
-  const updatedFlags = newlyCompleted.reduce<string[]>((acc, inst) => {
-    const rewards = inst.quest.rewards
-    if (rewards.flags) {
-      rewards.flags.forEach(flag => {
-        if (!acc.includes(flag)) acc.push(flag)
-      })
-    }
-    return acc
-  }, [...state.flags])
+  const updatedFlags = newlyCompleted.reduce<QuestFlagState[]>((acc, inst) => (
+    applyRewardFlags(acc, inst.quest.rewards?.flags)
+  ), [...state.flags])
 
   const stillActive = nextActive.filter(inst => !inst.completed)
+  const spawnResult = spawnTriggeredQuests(stillActive, updatedCompletedIds, updatedFlags)
+  if (spawnResult.triggered.length) {
+    spawnResult.triggered.forEach(quest => {
+      notifications.push(`New quest available: ${quest.title}`)
+    })
+  }
 
   return {
     state: {
-      active: stillActive,
+      active: spawnResult.active,
       completedIds: updatedCompletedIds,
       flags: updatedFlags
     },
