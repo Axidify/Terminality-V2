@@ -7,6 +7,7 @@ import { ContextMenuPortal } from '../os/components/ContextMenuPortal'
 import { CopyIcon, PasteIcon, ClearIcon, InfoIcon } from '../os/components/Icons'
 import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
 import { apiRequest } from '../services/api'
+import { createInitialGameState, getNodeById, getPuzzleById, formatIntel, createNote, TerminalStage } from './terminalGameData'
 
 // Use centralized API client for auth and error handling
 
@@ -20,10 +21,37 @@ export const TerminalApp: React.FC = () => {
   const [cwd, setCwd] = useState('/home/player')
   const [buffer, setBuffer] = useState('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [game, setGame] = useState(createInitialGameState)
   const inputRef = useRef<HTMLInputElement>(null)
+  const outputRef = useRef<HTMLDivElement>(null)
   const { ref: menuRef, pos: menuPos } = useContextMenuPosition(contextMenu?.x ?? 0, contextMenu?.y ?? 0)
 
+  const mission = game.mission
+  const totalNodes = mission.nodes.length || 1
+  const solvedPct = Math.round((game.solvedNodeIds.length / totalNodes) * 100)
+  const activePuzzle = getPuzzleById(mission, game.activePuzzleId)
+
   useEffect(() => { inputRef.current?.focus() }, [])
+
+  useEffect(() => {
+    outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' })
+  }, [lines])
+
+  useEffect(() => {
+    const intelDir = '/home/player/cases'
+    try {
+      if (!fs.exists(intelDir)) fs.mkdir(intelDir)
+      const briefingPath = `${intelDir}/touchstone.txt`
+      if (!fs.exists(briefingPath)) {
+        fs.touch(briefingPath)
+        fs.write(briefingPath, [
+          'OPERATION TOUCHSTONE',
+          'Hack-for-hire broker using our sandbox as a dead-drop.',
+          'Available command: scan (use scan to map the relay chain).'
+        ].join('\n'))
+      }
+    } catch { /* ignore seed errors */ }
+  }, [])
 
   useEffect(() => {
     if (contextMenu) {
@@ -35,8 +63,28 @@ export const TerminalApp: React.FC = () => {
 
   const print = (role: Line['role'], text: string) => setLines(l => [...l, { role, text }])
 
-  const help = `Commands: help, ls, cat <file>, edit <file>, touch <file>, mkdir <dir>, rm <path>, cd <dir>, api <command>
-Discovery: find <path>, grep <pattern> <file>, file <path>, strings <file>, ps, netstat`
+  const printBlock = (role: Line['role'], text: string) => {
+    text.split('\n').forEach(line => print(role, line))
+  }
+
+  const help = [
+    'Core: help, ls, cat <file>, edit <file>, touch <file>, mkdir <dir>, rm <path>, cd <dir>, api <command>',
+    'Discovery: find <path>, grep <pattern> <file>, file <path>, strings <file>, ps, netstat',
+    'Story: scan'
+  ].join('\n')
+
+  const handleGameCommand = async (command: string) => {
+    if (command !== 'scan') {
+      return false
+    }
+
+    mission.nodes.forEach(node => {
+      const solved = game.solvedNodeIds.includes(node.id)
+      const status = solved ? 'CLEAR' : 'UNRESOLVED'
+      print('system', `${node.id.padEnd(15, ' ')} :: ${node.label} :: ${status}`)
+    })
+    return true
+  }
 
   const resolve = (p: string) => {
     if (!p.startsWith('/')) p = (cwd.replace(/\/$/, '')) + '/' + p
@@ -50,8 +98,11 @@ Discovery: find <path>, grep <pattern> <file>, file <path>, strings <file>, ps, 
   }
 
   const handleLocal = async (cmd: string) => {
-    const [name, ...rest] = cmd.split(/\s+/)
+    const [rawName, ...rest] = cmd.split(/\s+/)
+    const name = (rawName || '').toLowerCase()
     const arg = rest.join(' ')
+    if (!name) return
+    if (await handleGameCommand(name)) return
     switch (name) {
       case 'help': print('system', help); break
       case 'ls': {

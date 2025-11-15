@@ -4,37 +4,26 @@ All notable changes to Terminality OS will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.5.10] - 2025-11-15
 
 ### Added
-- Added bold formatting
 
-### Changed
-- Changed rendering path
-
-### Fixed
-- Fixed dangerous sanitization
-
-### Added
-- Added bold formatting
-
-### Changed
-- Changed rendering path
-
-### Fixed
-- Fixed dangerous sanitization
+- **Test**: Test
+- **Quest authoring backend**: Introduced `/api/quests` plus admin CRUD endpoints backed by new Prisma models so admins can create, update, and publish quest flows that power the terminal missions.
 
 ## [0.5.9] - 2025-11-15
 
 ### Added
+
 - **Markdown-powered changelog**: System Settings now renders the root `CHANGELOG.md` with full Markdown semantics via a new `/api/changelog/markdown` endpoint, so bold text, bullet lists, and tables appear exactly as authored.
 
 ### Changed
+
 - **Changelog ordering**: Reordered the changelog file (and UI panels) so newest releases remain at the top and match the structured API feed.
 
 ### Fixed
-- **Version sorting**: Corrected panel ordering so v0.5.8 now appears before v0.5.7 across the OS.
 
-## [0.5.8] - 2025-11-15
+- **Version sorting**: Corrected panel ordering so v0.5.8 now appears before v0.5.7 across the OS.
 
 ### Added
 - **Changelog migration script**: Added `scripts/migrate-changelog.js` to help convert older changelog entries to the new plain-text format on demand.

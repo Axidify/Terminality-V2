@@ -24,7 +24,6 @@ import { RecycleBinApp } from '../programs/RecycleBinApp'
 import { StoreApp } from '../programs/StoreApp'
 import { SystemSettingsApp } from '../programs/SystemSettingsApp'
 import { TerminalApp } from '../programs/TerminalApp'
-import { AdminPanel } from '../programs/AdminPanel'
 import './Desktop.css'
 
 interface DesktopProps {
@@ -113,7 +112,6 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
             {win.type === 'store' && <StoreApp />}
             {win.type === 'profile' && <ProfileApp />}
             {win.type === 'usermgmt' && <UserManagementApp />}
-            {win.type === 'adminpanel' && <AdminPanel />}
           </WindowFrame>
         ))}
 

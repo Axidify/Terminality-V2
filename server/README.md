@@ -23,6 +23,19 @@ VITE_API_BASE=http://localhost:8000
 
 This server is intentionally minimal: it persists `state` to `server/state.json` or (if Prisma is enabled) to a local SQLite DB using `prisma`. It supports `/api/state` GET/PUT, a simple token-based auth mock, `/api/command` and basic `admin` endpoints for testing.
 
+Quest Flow API
+--------------
+Admins can now author multi-stage quest flows that power the gamified terminal experience:
+
+- `GET /api/quests` – Returns the published quests (full mission structure: objectives, nodes, puzzles, finale cipher).
+- `GET /api/quests/:slug` – Fetch a single published quest by slug or numeric id.
+- `GET /api/admin/quests` – Admin-only listing that includes draft quests.
+- `POST /api/admin/quests` – Create a quest by posting the mission definition (same shape as the terminal mission data).
+- `PUT /api/admin/quests/:slug` – Replace an existing quest (also accepts numeric id).
+- `DELETE /api/admin/quests/:slug` – Remove a quest.
+
+All admin routes require an authenticated admin token (`Authorization: Bearer <access_token>`). When Prisma is enabled, quests are stored in dedicated tables (`QuestFlow`, `QuestObjective`, `QuestNode`, `QuestPuzzle`). The seed script now provisions “Operation Touchstone” as the starter quest so the client has data immediately after `npm run prisma:setup`.
+
 Auth notes
 ----------
 This dev server implements simple email/password authentication. Passwords are hashed using bcrypt and tokens are JWTs stored in the DB for revocation in dev. A default admin account is seeded for local development: username `admin`, password `admin`.

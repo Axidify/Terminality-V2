@@ -418,8 +418,414 @@ function ensureStateShape() {
   if (!savedState) savedState = { version: 1, desktop: {}, story: {} }
   if (!savedState.desktop) savedState.desktop = {}
   if (!savedState.story) savedState.story = {}
+  if (!Array.isArray(savedState.story.quests)) savedState.story.quests = []
+  if (typeof savedState.story.questCounter !== 'number') savedState.story.questCounter = savedState.story.quests.length
   if (!savedState.changelog) savedState.changelog = { entries: [] }
   savedState.changelog = normalizeChangelog(savedState.changelog)
+}
+
+const QUEST_STAGE_ORDER = ['briefing', 'investigation', 'infiltration', 'decryption', 'complete']
+const QUEST_STATUSES = new Set(['draft', 'published', 'archived'])
+const QUEST_DIFFICULTIES = new Set(['story', 'standard', 'elite'])
+const questInclude = {
+  objectives: { orderBy: { position: 'asc' } },
+  nodes: { orderBy: { position: 'asc' } },
+  puzzles: { orderBy: [{ isFinale: 'asc' }, { puzzleKey: 'asc' }] }
+}
+
+function ensureQuestState() {
+  ensureStateShape()
+  if (!Array.isArray(savedState.story.quests)) savedState.story.quests = []
+  if (typeof savedState.story.questCounter !== 'number') savedState.story.questCounter = savedState.story.quests.length
+  return savedState.story.quests
+}
+
+const clamp = (value, max) => value.length > max ? value.slice(0, max) : value
+
+function sanitizeQuestText(value, max = 2000) {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return clamp(trimmed, max)
+}
+
+function sanitizeQuestSlug(value) {
+  if (typeof value !== 'string') return null
+  const normalized = value.normalize('NFKD').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  if (!normalized) return null
+  return clamp(normalized, 60)
+}
+
+function sanitizeQuestId(value, max = 48) {
+  if (typeof value !== 'string') return null
+  const normalized = value.normalize('NFKD').toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  if (!normalized) return null
+  return clamp(normalized, max)
+}
+
+function coerceStringArray(value, { maxItems = 6, maxLen = 600 } = {}) {
+  if (!Array.isArray(value)) return []
+  const output = []
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue
+    const sanitized = sanitizeQuestText(entry, maxLen)
+    if (!sanitized) continue
+    output.push(sanitized)
+    if (output.length >= maxItems) break
+  }
+  return output
+}
+
+function sanitizeMetadata(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch {
+    return null
+  }
+}
+
+function parseStringifiedArray(raw, fallback = []) {
+  if (Array.isArray(raw)) return raw
+  if (typeof raw !== 'string') return fallback
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function parseStringifiedObject(raw) {
+  if (!raw || typeof raw !== 'string') return null
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function normalizeQuestPayload(input) {
+  const errors = []
+  if (!input || typeof input !== 'object') return { errors: ['Request body must be a JSON object.'] }
+  const slug = sanitizeQuestSlug(input.slug)
+  if (!slug) errors.push('slug is required and must contain letters or numbers.')
+  const codename = sanitizeQuestText(input.codename, 160)
+  if (!codename) errors.push('codename is required.')
+  const tagline = sanitizeQuestText(input.tagline, 240)
+  if (!tagline) errors.push('tagline is required.')
+  const summary = sanitizeQuestText(input.summary ?? '', 1400)
+  const difficulty = QUEST_DIFFICULTIES.has(input.difficulty) ? input.difficulty : 'standard'
+  const status = QUEST_STATUSES.has(input.status) ? input.status : 'draft'
+  const stageOrderInput = Array.isArray(input.stageOrder) ? input.stageOrder.map(stage => sanitizeQuestSlug(String(stage || ''))) : []
+  const stageOrder = stageOrderInput.filter(stage => stage && QUEST_STAGE_ORDER.includes(stage))
+  const finalStageOrder = stageOrder.length ? stageOrder : QUEST_STAGE_ORDER
+  const metadata = sanitizeMetadata(input.metadata)
+
+  const objectives = Array.isArray(input.objectives)
+    ? input.objectives.map((obj, idx) => {
+        const id = sanitizeQuestId(obj?.id || obj?.objectiveId || `objective-${idx + 1}`)
+        const text = sanitizeQuestText(obj?.text || '', 500)
+        const stage = obj?.stage && QUEST_STAGE_ORDER.includes(String(obj.stage)) ? String(obj.stage) : null
+        if (!id || !text) {
+          errors.push(`Objective at position ${idx + 1} is invalid.`)
+          return null
+        }
+        return { id, text, stage }
+      }).filter(Boolean)
+    : []
+  if (!objectives.length) errors.push('At least one objective is required.')
+
+  const normalizePuzzle = (p, indexLabel = 'puzzle') => {
+    const id = sanitizeQuestId(p?.id || p?.puzzleId || `${indexLabel}`)
+    const type = sanitizeQuestText(p?.type || '', 60) || 'cipher'
+    const prompt = sanitizeQuestText(p?.prompt || '', 2000)
+    const solution = sanitizeQuestText(p?.solution || '', 200)
+    const reward = sanitizeQuestText(p?.reward || '', 400)
+    const hints = coerceStringArray(p?.hints, { maxItems: 6, maxLen: 400 })
+    if (!id || !prompt || !solution || !reward) {
+      errors.push(`Puzzle ${indexLabel} is missing required fields.`)
+      return null
+    }
+    return { id, type, prompt, solution, reward, hints }
+  }
+
+  const puzzles = Array.isArray(input.puzzles)
+    ? input.puzzles.map((p, idx) => normalizePuzzle(p, `puzzle-${idx + 1}`)).filter(Boolean)
+    : []
+  if (!puzzles.length) errors.push('Provide at least one puzzle.')
+
+  const finaleCipher = input.finaleCipher ? normalizePuzzle(input.finaleCipher, 'finale') : null
+  if (!finaleCipher) errors.push('Finale cipher definition is required.')
+
+  const puzzleIds = new Set(puzzles.map(p => p.id))
+  if (finaleCipher) {
+    if (puzzleIds.has(finaleCipher.id)) errors.push('Finale cipher id must be unique.')
+    puzzleIds.add(finaleCipher.id)
+  }
+
+  const nodes = Array.isArray(input.nodes)
+    ? input.nodes.map((node, idx) => {
+        const id = sanitizeQuestId(node?.id || node?.nodeId || `node-${idx + 1}`)
+        const label = sanitizeQuestText(node?.label || '', 160)
+        const description = sanitizeQuestText(node?.description || '', 1200)
+        const requiredTool = sanitizeQuestText(node?.requiredTool || '', 120)
+        const puzzleId = sanitizeQuestId(node?.puzzleId || node?.puzzleKey)
+        const exposures = coerceStringArray(node?.exposures, { maxItems: 5, maxLen: 300 })
+        if (!id || !label || !description || !requiredTool || !puzzleId) {
+          errors.push(`Node at position ${idx + 1} is missing required fields.`)
+          return null
+        }
+        if (puzzleId && !puzzleIds.has(puzzleId)) errors.push(`Node ${id} references unknown puzzle ${puzzleId}.`)
+        return { id, label, description, exposures, requiredTool, puzzleId }
+      }).filter(Boolean)
+    : []
+  if (!nodes.length) errors.push('Provide at least one node.')
+
+  if (errors.length) return { errors }
+
+  return {
+    quest: {
+      slug,
+      codename,
+      tagline,
+      summary: summary || null,
+      difficulty,
+      status,
+      stageOrder: finalStageOrder,
+      objectives,
+      nodes,
+      puzzles,
+      finaleCipher,
+      metadata
+    }
+  }
+}
+
+function questRecordToDefinition(record) {
+  if (!record) return null
+  if (record.finaleCipher) {
+    const finaleCipher = record.finaleCipher || null
+    const normalizedStageOrder = parseStringifiedArray(record.stageOrder, QUEST_STAGE_ORDER)
+    const normalizedMetadata = record.metadata && typeof record.metadata === 'string'
+      ? parseStringifiedObject(record.metadata)
+      : (record.metadata || null)
+    return {
+      ...record,
+      stageOrder: normalizedStageOrder,
+      metadata: normalizedMetadata,
+      finaleCipher,
+      createdAt: record.createdAt || new Date().toISOString(),
+      updatedAt: record.updatedAt || new Date().toISOString()
+    }
+  }
+
+  const stageOrder = parseStringifiedArray(record.stageOrder, QUEST_STAGE_ORDER)
+  const objectives = (record.objectives || []).map(obj => ({ id: obj.objectiveId, text: obj.text, stage: obj.stage || null }))
+  const nodes = (record.nodes || []).map(node => ({
+    id: node.nodeId,
+    label: node.label,
+    description: node.description,
+    exposures: parseStringifiedArray(node.exposures, []),
+    requiredTool: node.requiredTool,
+    puzzleId: node.puzzleKey
+  }))
+  const puzzlesWithFinale = (record.puzzles || []).map(puzzle => ({
+    id: puzzle.puzzleKey,
+    type: puzzle.type,
+    prompt: puzzle.prompt,
+    solution: puzzle.solution,
+    reward: puzzle.reward,
+    hints: parseStringifiedArray(puzzle.hints, []),
+    isFinale: puzzle.isFinale
+  }))
+  const finaleCipher = puzzlesWithFinale.find(p => p.isFinale)
+  const puzzles = puzzlesWithFinale.filter(p => !p.isFinale).map(({ isFinale, ...rest }) => rest)
+  return {
+    id: record.id,
+    slug: record.slug,
+    codename: record.codename,
+    tagline: record.tagline,
+    summary: record.summary || null,
+    difficulty: record.difficulty,
+    status: record.status,
+    stageOrder,
+    objectives,
+    nodes,
+    puzzles,
+    finaleCipher: finaleCipher ? (({ isFinale, ...rest }) => rest)(finaleCipher) : null,
+    metadata: parseStringifiedObject(record.metadata),
+    createdAt: record.createdAt ? new Date(record.createdAt).toISOString() : new Date().toISOString(),
+    updatedAt: record.updatedAt ? new Date(record.updatedAt).toISOString() : new Date().toISOString()
+  }
+}
+
+async function listQuestDefinitions(options = {}) {
+  const includeDrafts = !!options.includeDrafts
+  if (prisma) {
+    const quests = await prisma.questFlow.findMany({
+      where: includeDrafts ? {} : { status: 'published' },
+      orderBy: { createdAt: 'asc' },
+      include: questInclude
+    })
+    return quests.map(questRecordToDefinition)
+  }
+  const store = ensureQuestState()
+  const filtered = includeDrafts ? store : store.filter(q => q.status === 'published')
+  return filtered.map(q => JSON.parse(JSON.stringify(q)))
+}
+
+function localQuestId() {
+  ensureQuestState()
+  savedState.story.questCounter += 1
+  return savedState.story.questCounter
+}
+
+function buildQuestWhere(identifier) {
+  const raw = String(identifier ?? '').trim()
+  if (/^\d+$/.test(raw)) return { id: Number(raw) }
+  const slug = sanitizeQuestSlug(raw)
+  return { slug: slug || raw.toLowerCase() }
+}
+
+async function getQuestDefinition(identifier, { publishedOnly = false } = {}) {
+  if (prisma) {
+    const record = await prisma.questFlow.findUnique({ where: buildQuestWhere(identifier), include: questInclude })
+    if (!record) return null
+    if (publishedOnly && record.status !== 'published') return null
+    return questRecordToDefinition(record)
+  }
+  const store = ensureQuestState()
+  const target = String(identifier ?? '').trim()
+  const normalized = sanitizeQuestSlug(target)
+  const quest = store.find(q => String(q.id) === target || q.slug === normalized)
+  if (!quest) return null
+  if (publishedOnly && quest.status !== 'published') return null
+  return JSON.parse(JSON.stringify(quest))
+}
+
+function questPayloadToPrismaData(payload) {
+  const stageOrderString = JSON.stringify(payload.stageOrder || QUEST_STAGE_ORDER)
+  const metadataString = payload.metadata ? JSON.stringify(payload.metadata) : null
+  return {
+    slug: payload.slug,
+    codename: payload.codename,
+    tagline: payload.tagline,
+    summary: payload.summary,
+    difficulty: payload.difficulty,
+    status: payload.status,
+    stageOrder: stageOrderString,
+    metadata: metadataString,
+    objectives: {
+      create: payload.objectives.map((obj, idx) => ({
+        objectiveId: obj.id,
+        text: obj.text,
+        stage: obj.stage,
+        position: idx
+      }))
+    },
+    nodes: {
+      create: payload.nodes.map((node, idx) => ({
+        nodeId: node.id,
+        label: node.label,
+        description: node.description,
+        exposures: JSON.stringify(node.exposures || []),
+        requiredTool: node.requiredTool,
+        puzzleKey: node.puzzleId,
+        position: idx
+      }))
+    },
+    puzzles: {
+      create: [
+        ...payload.puzzles.map(puzzle => ({
+          puzzleKey: puzzle.id,
+          type: puzzle.type,
+          prompt: puzzle.prompt,
+          solution: puzzle.solution,
+          hints: JSON.stringify(puzzle.hints || []),
+          reward: puzzle.reward,
+          isFinale: false
+        })),
+        {
+          puzzleKey: payload.finaleCipher.id,
+          type: payload.finaleCipher.type,
+          prompt: payload.finaleCipher.prompt,
+          solution: payload.finaleCipher.solution,
+          hints: JSON.stringify(payload.finaleCipher.hints || []),
+          reward: payload.finaleCipher.reward,
+          isFinale: true
+        }
+      ]
+    }
+  }
+}
+
+async function createQuestDefinition(payload) {
+  if (prisma) {
+    const created = await prisma.questFlow.create({ data: questPayloadToPrismaData(payload), include: questInclude })
+    return questRecordToDefinition(created)
+  }
+  const store = ensureQuestState()
+  const quest = {
+    id: localQuestId(),
+    ...payload,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  store.push(JSON.parse(JSON.stringify(quest)))
+  await writeState(savedState)
+  return quest
+}
+
+async function replaceQuestDefinition(identifier, payload) {
+  if (prisma) {
+    const existing = await prisma.questFlow.findUnique({ where: buildQuestWhere(identifier) })
+    if (!existing) return null
+    await prisma.$transaction([
+      prisma.questObjective.deleteMany({ where: { questId: existing.id } }),
+      prisma.questNode.deleteMany({ where: { questId: existing.id } }),
+      prisma.questPuzzle.deleteMany({ where: { questId: existing.id } })
+    ])
+    const updated = await prisma.questFlow.update({
+      where: { id: existing.id },
+      data: questPayloadToPrismaData(payload),
+      include: questInclude
+    })
+    return questRecordToDefinition(updated)
+  }
+  const store = ensureQuestState()
+  const target = String(identifier ?? '').trim()
+  const normalized = sanitizeQuestSlug(target)
+  const idx = store.findIndex(q => String(q.id) === target || q.slug === normalized)
+  if (idx === -1) return null
+  const current = store[idx]
+  const next = {
+    id: current.id,
+    ...payload,
+    createdAt: current.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  store[idx] = JSON.parse(JSON.stringify(next))
+  await writeState(savedState)
+  return next
+}
+
+async function deleteQuestDefinition(identifier) {
+  if (prisma) {
+    const existing = await prisma.questFlow.findUnique({ where: buildQuestWhere(identifier), include: questInclude })
+    if (!existing) return null
+    await prisma.questFlow.delete({ where: { id: existing.id } })
+    return questRecordToDefinition(existing)
+  }
+  const store = ensureQuestState()
+  const target = String(identifier ?? '').trim()
+  const normalized = sanitizeQuestSlug(target)
+  const idx = store.findIndex(q => String(q.id) === target || q.slug === normalized)
+  if (idx === -1) return null
+  const [removed] = store.splice(idx, 1)
+  await writeState(savedState)
+  return removed
 }
 
 function sanitizeAboutField(value, fallback, maxLen = 1200) {
@@ -716,6 +1122,99 @@ app.delete('/api/changelog/:version', authMiddleware, requireAdmin, async (req, 
     res.json(buildChangelogResponse())
   } catch (e) {
     console.error('[api/changelog][delete] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Quest flow endpoints
+app.get('/api/quests', async (_req, res) => {
+  try {
+    const quests = await listQuestDefinitions({ includeDrafts: false })
+    res.json({ quests })
+  } catch (e) {
+    console.error('[api/quests][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/quests/:identifier', async (req, res) => {
+  try {
+    const quest = await getQuestDefinition(req.params.identifier, { publishedOnly: true })
+    if (!quest) return res.status(404).json({ message: 'Not found' })
+    res.json({ quest })
+  } catch (e) {
+    console.error('[api/quests/:identifier][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/admin/quests', authMiddleware, requireAdmin, async (_req, res) => {
+  try {
+    const quests = await listQuestDefinitions({ includeDrafts: true })
+    res.json({ quests })
+  } catch (e) {
+    console.error('[api/admin/quests][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/admin/quests/:identifier', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const quest = await getQuestDefinition(req.params.identifier, { publishedOnly: false })
+    if (!quest) return res.status(404).json({ message: 'Not found' })
+    res.json({ quest })
+  } catch (e) {
+    console.error('[api/admin/quests/:identifier][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+function extractQuestPayload(body) {
+  if (!body) return null
+  if (body.quest && typeof body.quest === 'object') return body.quest
+  return body
+}
+
+app.post('/api/admin/quests', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const payload = extractQuestPayload(req.body)
+    const { quest, errors } = normalizeQuestPayload(payload)
+    if (errors && errors.length) return res.status(400).json({ message: 'Invalid quest definition', errors })
+    const created = await createQuestDefinition(quest)
+    res.status(201).json({ quest: created })
+  } catch (e) {
+    if (e?.code === 'P2002') {
+      return res.status(409).json({ message: 'Slug already exists.' })
+    }
+    console.error('[api/admin/quests][post] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.put('/api/admin/quests/:identifier', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const payload = extractQuestPayload(req.body)
+    const { quest, errors } = normalizeQuestPayload(payload)
+    if (errors && errors.length) return res.status(400).json({ message: 'Invalid quest definition', errors })
+    const updated = await replaceQuestDefinition(req.params.identifier, quest)
+    if (!updated) return res.status(404).json({ message: 'Not found' })
+    res.json({ quest: updated })
+  } catch (e) {
+    if (e?.code === 'P2002') {
+      return res.status(409).json({ message: 'Slug already exists.' })
+    }
+    console.error('[api/admin/quests/:identifier][put] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.delete('/api/admin/quests/:identifier', authMiddleware, requireAdmin, async (req, res) => {
+  try {
+    const removed = await deleteQuestDefinition(req.params.identifier)
+    if (!removed) return res.status(404).json({ message: 'Not found' })
+    res.json({ quest: removed })
+  } catch (e) {
+    console.error('[api/admin/quests/:identifier][delete] error', e)
     res.status(500).json({ message: 'Server error' })
   }
 })

@@ -43,3 +43,64 @@ model Message {
   user      User?    @relation("UserMessages", fields: [userId], references: [id])
   userId    Int?
 }
+
+model QuestFlow {
+  id         Int              @id @default(autoincrement())
+  slug       String           @unique
+  codename   String
+  tagline    String
+  summary    String?
+  difficulty String           @default("standard")
+  status     String           @default("draft")
+  stageOrder String?
+  metadata   String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  objectives QuestObjective[]
+  nodes      QuestNode[]
+  puzzles    QuestPuzzle[]
+}
+
+model QuestObjective {
+  id          Int       @id @default(autoincrement())
+  quest       QuestFlow @relation(fields: [questId], references: [id], onDelete: Cascade)
+  questId     Int
+  objectiveId String
+  text        String
+  position    Int
+  stage       String?
+
+  @@unique([questId, objectiveId])
+  @@index([questId, position])
+}
+
+model QuestNode {
+  id           Int       @id @default(autoincrement())
+  quest        QuestFlow @relation(fields: [questId], references: [id], onDelete: Cascade)
+  questId      Int
+  nodeId       String
+  label        String
+  description  String
+  exposures    String
+  requiredTool String
+  puzzleKey    String
+  position     Int
+
+  @@unique([questId, nodeId])
+  @@index([questId, position])
+}
+
+model QuestPuzzle {
+  id        Int       @id @default(autoincrement())
+  quest     QuestFlow @relation(fields: [questId], references: [id], onDelete: Cascade)
+  questId   Int
+  puzzleKey String
+  type      String
+  prompt    String
+  solution  String
+  hints     String
+  reward    String
+  isFinale  Boolean   @default(false)
+
+  @@unique([questId, puzzleKey])
+}
