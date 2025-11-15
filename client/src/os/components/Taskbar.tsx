@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, UserManagementIcon } from './Icons'
+import { TerminalIcon, FolderIcon, NotepadIcon, BrowserIcon, RecycleBinIcon, MailIcon, MusicIcon, SettingsIcon, ChatIcon, StoreIcon, UserManagementIcon, QuestIcon } from './Icons'
 import Icon from './icons/Icon'
 import { NotificationPanel } from './NotificationPanel'
 import { useNotifications } from '../NotificationContext'
@@ -75,6 +75,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
     const list = [...baseApps]
     if (isAdmin) {
       list.push({ type: 'usermgmt', name: 'User Management', icon: <UserManagementIcon size={20} />, defaultOpts: { title: 'User Management', width: 900, height: 650 } })
+      list.push({ type: 'quest-designer', name: 'Quest Designer', icon: <QuestIcon size={20} />, defaultOpts: { title: 'Quest Designer', width: 1200, height: 800 } })
     }
     return list
   }, [isAdmin])

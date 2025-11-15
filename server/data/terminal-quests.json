@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "quests": [
+    {
+      "id": "intro_001_wipe_evidence",
+      "title": "Wipe the Evidence",
+      "description": "Your handler wants a trace log erased from a remote machine.",
+      "trigger": {
+        "type": "ON_FIRST_TERMINAL_OPEN"
+      },
+      "default_system_id": "atlas_relay",
+      "steps": [
+        {
+          "id": "step1_scan_host",
+          "type": "SCAN_HOST",
+          "params": {
+            "target_ip": "10.23.4.8"
+          },
+          "hints": {
+            "prompt": "Use the scan tool on this ip 10.23.4.8",
+            "command_example": "scan 10.23.4.8"
+          },
+          "auto_advance": true
+        },
+        {
+          "id": "step2_connect_host",
+          "type": "CONNECT_HOST",
+          "params": {
+            "target_ip": "10.23.4.8"
+          },
+          "hints": {
+            "prompt": "Now connect to that host.",
+            "command_example": "connect 10.23.4.8"
+          },
+          "auto_advance": true
+        },
+        {
+          "id": "step3_delete_file",
+          "type": "DELETE_FILE",
+          "params": {
+            "target_ip": "10.23.4.8",
+            "file_path": "/var/logs/evidence.log"
+          },
+          "hints": {
+            "prompt": "Navigate to /var/logs and delete evidence.log.",
+            "command_example": "cd /var/logs && rm evidence.log"
+          },
+          "auto_advance": true
+        },
+        {
+          "id": "step4_disconnect",
+          "type": "DISCONNECT_HOST",
+          "params": {
+            "target_ip": "10.23.4.8"
+          },
+          "hints": {
+            "prompt": "Disconnect to finish the job.",
+            "command_example": "disconnect"
+          },
+          "auto_advance": true
+        }
+      ],
+      "rewards": {
+        "xp": 50,
+        "flags": [
+          "quest_intro_001_completed"
+        ],
+        "unlocks_commands": []
+      },
+      "requirements": {
+        "required_flags": [],
+        "required_quests": []
+      }
+    }
+  ],
+  "lastUpdated": "2025-11-15T18:43:49.460Z"
+}

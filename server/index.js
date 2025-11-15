@@ -12,6 +12,8 @@ const { OAuth2Client } = require('google-auth-library')
 const cookieParser = require('cookie-parser')
 const rateLimit = require('express-rate-limit')
 const { loadChangelogFromFile, readChangelogMarkdown } = require('./utils/markdownChangelog')
+const terminalQuestStore = require('./terminalQuestsStore')
+const systemProfilesStore = require('./systemProfilesStore')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 const CHANGELOG_MD_PATH = path.join(__dirname, '..', 'CHANGELOG.md')
@@ -1215,6 +1217,153 @@ app.delete('/api/admin/quests/:identifier', authMiddleware, requireAdmin, async 
     res.json({ quest: removed })
   } catch (e) {
     console.error('[api/admin/quests/:identifier][delete] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Terminal system profiles (remote host definitions)
+app.get('/api/terminal-systems', (_req, res) => {
+  try {
+    const payload = systemProfilesStore.listAll()
+    res.json(payload)
+  } catch (err) {
+    console.error('[api/terminal-systems][list] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/terminal-systems/:id', (req, res) => {
+  try {
+    const { template } = req.query || {}
+    const profile = template === 'true'
+      ? systemProfilesStore.getTemplateById(req.params.id)
+      : systemProfilesStore.getProfileById(req.params.id)
+    if (!profile) return res.status(404).json({ message: 'Not found' })
+    res.json({ profile })
+  } catch (err) {
+    console.error('[api/terminal-systems/:id][get] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/terminal-systems', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.profile || req.body
+    const template = Boolean(req.body?.template)
+    const result = systemProfilesStore.createProfile(payload, { template })
+    if (result.errors) {
+      return res.status(400).json({ errors: result.errors })
+    }
+    res.status(201).json({ profile: result.profile })
+  } catch (err) {
+    console.error('[api/terminal-systems][post] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.put('/api/terminal-systems/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.profile || req.body
+    if (!payload.id) payload.id = req.params.id
+    const template = Boolean(req.body?.template)
+    const result = systemProfilesStore.updateProfile(req.params.id, payload, { template })
+    if (result.errors) {
+      const code = result.errors.includes('Profile not found.') ? 404 : 400
+      return res.status(code).json({ errors: result.errors })
+    }
+    res.json({ profile: result.profile })
+  } catch (err) {
+    console.error('[api/terminal-systems/:id][put] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.delete('/api/terminal-systems/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const template = req.query?.template === 'true'
+    const result = systemProfilesStore.deleteProfile(req.params.id, { template })
+    if (result.errors) {
+      return res.status(404).json({ errors: result.errors })
+    }
+    res.json({ profile: result.profile })
+  } catch (err) {
+    console.error('[api/terminal-systems/:id][delete] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+// Terminal quest definitions (hacking terminal)
+app.get('/api/terminal-quests', (_req, res) => {
+  try {
+    const quests = terminalQuestStore.listQuests()
+    res.json({ quests })
+  } catch (err) {
+    console.error('[api/terminal-quests][list] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/terminal-quests/:id', (req, res) => {
+  try {
+    const quest = terminalQuestStore.getQuestById(req.params.id)
+    if (!quest) return res.status(404).json({ message: 'Not found' })
+    res.json({ quest })
+  } catch (err) {
+    console.error('[api/terminal-quests/:id][get] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/terminal-quests', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.quest || req.body
+    const result = terminalQuestStore.createQuest(payload)
+    if (result.errors) {
+      return res.status(400).json({ errors: result.errors })
+    }
+    res.status(201).json({ quest: result.quest, warnings: result.warnings || [] })
+  } catch (err) {
+    console.error('[api/terminal-quests][post] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.put('/api/terminal-quests/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.quest || req.body
+    if (!payload.id) payload.id = req.params.id
+    const result = terminalQuestStore.updateQuest(req.params.id, payload)
+    if (result.errors) {
+      const code = result.errors.includes('Quest not found.') ? 404 : 400
+      return res.status(code).json({ errors: result.errors })
+    }
+    res.json({ quest: result.quest, warnings: result.warnings || [] })
+  } catch (err) {
+    console.error('[api/terminal-quests/:id][put] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.delete('/api/terminal-quests/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const result = terminalQuestStore.deleteQuest(req.params.id)
+    if (result.errors) {
+      return res.status(404).json({ errors: result.errors })
+    }
+    res.json({ quest: result.quest })
+  } catch (err) {
+    console.error('[api/terminal-quests/:id][delete] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/terminal-quests/validate', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.quest || req.body
+    const result = terminalQuestStore.validateQuestStandalone(payload)
+    res.json({ errors: result.errors || [], warnings: result.warnings || [], quest: result.quest })
+  } catch (err) {
+    console.error('[api/terminal-quests/validate][post] error', err)
     res.status(500).json({ message: 'Server error' })
   }
 })

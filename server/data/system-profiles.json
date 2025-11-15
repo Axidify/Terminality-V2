@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "atlas_relay",
+      "label": "Atlas Relay",
+      "identifiers": {
+        "ips": ["10.23.4.8"],
+        "hostnames": []
+      },
+      "metadata": {
+        "username": "guest",
+        "startingPath": "/home/guest",
+        "footprint": "Legacy relay maintained by an unknown broker."
+      },
+      "filesystem": {
+        "/": {
+          "type": "dir",
+          "name": "",
+          "path": "/",
+          "children": [
+            "/home",
+            "/var",
+            "/etc"
+          ]
+        },
+        "/home": {
+          "type": "dir",
+          "name": "home",
+          "path": "/home",
+          "children": [
+            "/home/guest"
+          ]
+        },
+        "/home/guest": {
+          "type": "dir",
+          "name": "guest",
+          "path": "/home/guest",
+          "children": [
+            "/home/guest/readme.txt"
+          ]
+        },
+        "/home/guest/readme.txt": {
+          "type": "file",
+          "name": "readme.txt",
+          "path": "/home/guest/readme.txt",
+          "content": "Guest shell. Check /var/logs for rotating captures."
+        },
+        "/var": {
+          "type": "dir",
+          "name": "var",
+          "path": "/var",
+          "children": [
+            "/var/logs"
+          ]
+        },
+        "/var/logs": {
+          "type": "dir",
+          "name": "logs",
+          "path": "/var/logs",
+          "children": [
+            "/var/logs/system.log",
+            "/var/logs/evidence.log"
+          ]
+        },
+        "/var/logs/system.log": {
+          "type": "file",
+          "name": "system.log",
+          "path": "/var/logs/system.log",
+          "content": "[2025-11-10] Relay heartbeat OK."
+        },
+        "/var/logs/evidence.log": {
+          "type": "file",
+          "name": "evidence.log",
+          "path": "/var/logs/evidence.log",
+          "content": "Traceroute stack: playerid=*** :: flagged for purge."
+        },
+        "/etc": {
+          "type": "dir",
+          "name": "etc",
+          "path": "/etc",
+          "children": [
+            "/etc/motd"
+          ]
+        },
+        "/etc/motd": {
+          "type": "file",
+          "name": "motd",
+          "path": "/etc/motd",
+          "content": "Atlas Relay MOTD: unauthorized access prohibited."
+        }
+      }
+    }
+  ],
+  "templates": [
+    {
+      "id": "log_server_with_evidence",
+      "label": "Log Server (Evidence)",
+      "description": "Contains /var/logs with evidence.log file.",
+      "filesystem": {
+        "/": {
+          "type": "dir",
+          "name": "",
+          "path": "/",
+          "children": [
+            "/home",
+            "/var",
+            "/etc"
+          ]
+        },
+        "/home": {
+          "type": "dir",
+          "name": "home",
+          "path": "/home",
+          "children": [
+            "/home/guest"
+          ]
+        },
+        "/home/guest": {
+          "type": "dir",
+          "name": "guest",
+          "path": "/home/guest",
+          "children": [
+            "/home/guest/readme.txt"
+          ]
+        },
+        "/home/guest/readme.txt": {
+          "type": "file",
+          "name": "readme.txt",
+          "path": "/home/guest/readme.txt",
+          "content": "Guest shell. Check /var/logs for rotating captures."
+        },
+        "/var": {
+          "type": "dir",
+          "name": "var",
+          "path": "/var",
+          "children": [
+            "/var/logs"
+          ]
+        },
+        "/var/logs": {
+          "type": "dir",
+          "name": "logs",
+          "path": "/var/logs",
+          "children": [
+            "/var/logs/system.log",
+            "/var/logs/evidence.log"
+          ]
+        },
+        "/var/logs/system.log": {
+          "type": "file",
+          "name": "system.log",
+          "path": "/var/logs/system.log",
+          "content": "[2025-11-10] Relay heartbeat OK."
+        },
+        "/var/logs/evidence.log": {
+          "type": "file",
+          "name": "evidence.log",
+          "path": "/var/logs/evidence.log",
+          "content": "Traceroute stack: playerid=*** :: flagged for purge."
+        },
+        "/etc": {
+          "type": "dir",
+          "name": "etc",
+          "path": "/etc",
+          "children": [
+            "/etc/motd"
+          ]
+        },
+        "/etc/motd": {
+          "type": "file",
+          "name": "motd",
+          "path": "/etc/motd",
+          "content": "Atlas Relay MOTD: unauthorized access prohibited."
+        }
+      }
+    }
+  ],
+  "lastUpdated": "2025-11-16T00:00:00.000Z"
+}

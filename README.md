@@ -19,6 +19,24 @@ Open http://localhost:5173 in your browser.
 - `src/services` – API/auth/state persistence services
 - `src/test` – Integration and component tests (Vitest + Testing Library)
 
+## Terminal Quest Designer (Admin)
+
+The ops terminal now consumes live quest definitions from `/api/terminal-quests`. Admin users can open the **Quest Designer** program (desktop icon or Start menu) to create, edit, and delete quests via a form-based workflow:
+
+- **Quest Info** – id, title, description, trigger type (`ON_FIRST_TERMINAL_OPEN`).
+- **Steps** – ordered cards for the supported terminal-only step types (`SCAN_HOST`, `CONNECT_HOST`, `DELETE_FILE`, `DISCONNECT_HOST`) with contextual parameter editors, hints, reordering, duplicate/delete controls, and `auto_advance` toggles.
+- **Requirements & Rewards** – multi-select/tag inputs for prerequisite quests/flags plus rewards (`xp`, flags, future unlockable commands).
+- **Connections** – read-only lists showing which quests depend on the selected quest or any of its reward flags.
+
+The editor persists directly to `server/data/terminal-quests.json` via the new REST endpoints:
+
+- `GET /api/terminal-quests` – public read for the runtime and preview tools.
+- `POST /api/terminal-quests` – create (admin only).
+- `PUT /api/terminal-quests/:id` – update/rename (admin only).
+- `DELETE /api/terminal-quests/:id` – remove (admin only).
+
+Saving validates required fields (ids, params, at least one step) and surfaces warnings for missing dependencies (e.g., referencing a flag that no quest emits). The terminal app automatically hydrates these quest definitions at runtime and persists quest progress through `saveService`.
+
 ## Cyberpunk Terminal Design Language
 
 Terminality uses a consistent retro-futuristic aesthetic inspired by classic terminal UIs and cyberpunk media. When designing new components or apps, follow these principles:

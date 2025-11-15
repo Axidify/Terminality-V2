@@ -90,6 +90,16 @@ export const StoreIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColo
   </svg>
 )
 
+export const QuestIcon: React.FC<IconProps> = ({ size = 24, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="3" width="6" height="6" rx="1" stroke={color} strokeWidth="1.5"/>
+    <rect x="15" y="3" width="6" height="6" rx="1" stroke={color} strokeWidth="1.5"/>
+    <rect x="3" y="15" width="6" height="6" rx="1" stroke={color} strokeWidth="1.5"/>
+    <rect x="15" y="15" width="6" height="6" rx="1" stroke={color} strokeWidth="1.5"/>
+    <path d="M9 6H15M6 9V15M18 9V15M9 18H15" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+)
+
 // Generic context/action icons
 export const RefreshIcon: React.FC<IconProps> = ({ size = 16, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

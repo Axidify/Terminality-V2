@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react'
 import { sounds } from './SoundEffects'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 
-export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt' | 'modular' | 'modular-plugin'
+export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt' | 'modular' | 'modular-plugin' | 'quest-designer'
 
 export interface WindowInstance {
   id: string

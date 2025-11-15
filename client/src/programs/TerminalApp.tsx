@@ -1,333 +1,499 @@
 import React, { useEffect, useRef, useState } from 'react'
 
-// useWindowManager intentionally not used in TerminalApp
-import { fs } from './FileSystem'
 import './TerminalApp.css'
-import { ContextMenuPortal } from '../os/components/ContextMenuPortal'
-import { CopyIcon, PasteIcon, ClearIcon, InfoIcon } from '../os/components/Icons'
-import { useContextMenuPosition } from '../os/hooks/useContextMenuPosition'
-import { apiRequest } from '../services/api'
-import { createInitialGameState, getNodeById, getPuzzleById, formatIntel, createNote, TerminalStage } from './terminalGameData'
-
-// Use centralized API client for auth and error handling
+import {
+  changeDirectory,
+  createHostRuntime,
+  getHostByIp,
+  HostRuntime,
+  listDirectory,
+  readFile,
+  removeFile,
+  RemoteNode,
+  setSystemProfiles,
+  SystemProfile
+} from './terminalHosts'
+import {
+  createQuestEngineState,
+  getInboxEntries,
+  hydrateQuestState,
+  processQuestEvent,
+  QuestEngineState,
+  QuestEventType,
+  SerializedQuestState,
+  serializeQuestState,
+  setQuestDefinitions
+} from './questSystem'
+import { getCachedDesktop, hydrateFromServer, saveDesktopState } from '../services/saveService'
+import { listTerminalQuests } from '../services/terminalQuests'
+import { listSystemProfiles as fetchSystemProfiles, SystemProfilesResponse } from '../services/systemProfiles'
 
 type Line = { role: 'system' | 'user'; text: string }
+type TerminalContext = 'local' | 'remote'
+
+interface RemoteSession {
+  hostIp: string
+  username: string
+  cwd: string
+  runtime: HostRuntime
+}
+
+interface TerminalSnapshot {
+  lines?: Line[]
+  buffer?: string
+  questState?: SerializedQuestState | null
+}
+
+interface CommandDescriptor {
+  name: string
+  description: string
+}
+
+const PLAYER_ID = 'player-1'
+
+const LOCAL_COMMANDS: CommandDescriptor[] = [
+  { name: 'help', description: 'Show locally available commands' },
+  { name: 'inbox', description: 'Review mission messages' },
+  { name: 'scan <ip>', description: 'Probe a host for reachability' },
+  { name: 'connect <ip>', description: 'Open a remote shell' },
+  { name: 'exit', description: 'Close the terminal session' }
+]
+
+const REMOTE_COMMANDS: CommandDescriptor[] = [
+  { name: 'help', description: 'Show remote commands' },
+  { name: 'ls', description: 'List directory contents' },
+  { name: 'cd <path>', description: 'Change working directory' },
+  { name: 'cat <file>', description: 'Print a file' },
+  { name: 'rm <file>', description: 'Delete a file' },
+  { name: 'disconnect', description: 'Close the current connection' }
+]
+
+const formatCommandList = (commands: CommandDescriptor[]) => (
+  ['Available commands:'].concat(commands.map(entry => `${entry.name.padEnd(18, ' ')}${entry.description}`)).join('\n')
+)
 
 export const TerminalApp: React.FC = () => {
-  // Keep useWindowManager import commented out for potential future use
-  const [lines, setLines] = useState<Line[]>([
-    { role: 'system', text: 'Terminal ready. Type help.' }
-  ])
-  const [cwd, setCwd] = useState('/home/player')
+  const [questState, setQuestState] = useState(createQuestEngineState)
+  const [lines, setLines] = useState<Line[]>([{ role: 'system', text: 'Terminal ready. Type help.' }])
   const [buffer, setBuffer] = useState('')
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const [game, setGame] = useState(createInitialGameState)
+  const [session, setSession] = useState<RemoteSession | null>(null)
+  const [systemsReady, setSystemsReady] = useState(false)
+  const [definitionsReady, setDefinitionsReady] = useState(false)
+  const [hydrationComplete, setHydrationComplete] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
-  const { ref: menuRef, pos: menuPos } = useContextMenuPosition(contextMenu?.x ?? 0, contextMenu?.y ?? 0)
+  const questIntroPrinted = useRef(false)
+  const pendingSnapshotRef = useRef<TerminalSnapshot | null>(null)
+  const questStateInitializedRef = useRef(false)
+  const lastNotificationRef = useRef<string | null>(null)
+  const persistenceReady = definitionsReady && hydrationComplete
 
-  const mission = game.mission
-  const totalNodes = mission.nodes.length || 1
-  const solvedPct = Math.round((game.solvedNodeIds.length / totalNodes) * 100)
-  const activePuzzle = getPuzzleById(mission, game.activePuzzleId)
+  const context: TerminalContext = session ? 'remote' : 'local'
+  const prompt = session ? `${session.hostIp}:${session.cwd}$` : '>'
+
+  const print = (text: string, role: Line['role'] = 'system') => {
+    setLines(prev => [...prev, { role, text }])
+  }
+
+  const emitEvent = (type: QuestEventType, payload: { target_ip?: string; file_path?: string } = {}) => {
+    setQuestState(prev => {
+      const event = { type, payload: { playerId: PLAYER_ID, ...payload } }
+      const { state, notifications } = processQuestEvent(prev, event)
+      notifications.forEach(note => {
+        const key = `${event.type}:${event.payload.target_ip || 'local'}:${note}`
+        if (lastNotificationRef.current === key) return
+        lastNotificationRef.current = key
+        console.debug?.('[quest-notify]', key)
+        print(`[quest] ${note}`)
+      })
+      return state
+    })
+  }
 
   useEffect(() => { inputRef.current?.focus() }, [])
-
   useEffect(() => {
     outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' })
   }, [lines])
 
   useEffect(() => {
-    const intelDir = '/home/player/cases'
-    try {
-      if (!fs.exists(intelDir)) fs.mkdir(intelDir)
-      const briefingPath = `${intelDir}/touchstone.txt`
-      if (!fs.exists(briefingPath)) {
-        fs.touch(briefingPath)
-        fs.write(briefingPath, [
-          'OPERATION TOUCHSTONE',
-          'Hack-for-hire broker using our sandbox as a dead-drop.',
-          'Available command: scan (use scan to map the relay chain).'
-        ].join('\n'))
+    let cancelled = false
+    const loadSystems = async () => {
+      try {
+        const payload: SystemProfilesResponse = await fetchSystemProfiles()
+        if (cancelled) return
+        const normalized: SystemProfile[] = (payload.profiles || []).map(profile => ({
+          ...profile,
+          identifiers: {
+            ips: profile.identifiers?.ips || [],
+            hostnames: profile.identifiers?.hostnames || []
+          },
+          metadata: profile.metadata,
+          filesystem: profile.filesystem
+        }))
+        setSystemProfiles(normalized)
+      } catch (err) {
+        console.warn('[terminal] failed to load system profiles, using fallback', err)
+        setSystemProfiles(undefined)
+      } finally {
+        if (!cancelled) {
+          setSystemsReady(true)
+        }
       }
-    } catch { /* ignore seed errors */ }
+    }
+    void loadSystems()
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (contextMenu) {
-      const handler = () => setContextMenu(null)
-      window.addEventListener('click', handler)
-      return () => window.removeEventListener('click', handler)
-    }
-  }, [contextMenu])
+    let cancelled = false
 
-  const print = (role: Line['role'], text: string) => setLines(l => [...l, { role, text }])
-
-  const printBlock = (role: Line['role'], text: string) => {
-    text.split('\n').forEach(line => print(role, line))
-  }
-
-  const help = [
-    'Core: help, ls, cat <file>, edit <file>, touch <file>, mkdir <dir>, rm <path>, cd <dir>, api <command>',
-    'Discovery: find <path>, grep <pattern> <file>, file <path>, strings <file>, ps, netstat',
-    'Story: scan'
-  ].join('\n')
-
-  const handleGameCommand = async (command: string) => {
-    if (command !== 'scan') {
-      return false
+    const cached = getCachedDesktop()
+    if (cached?.terminalState) {
+      pendingSnapshotRef.current = cached.terminalState
     }
 
-    mission.nodes.forEach(node => {
-      const solved = game.solvedNodeIds.includes(node.id)
-      const status = solved ? 'CLEAR' : 'UNRESOLVED'
-      print('system', `${node.id.padEnd(15, ' ')} :: ${node.label} :: ${status}`)
+    const hydrate = async () => {
+      try {
+        const unified = await hydrateFromServer()
+        if (!cancelled) {
+          const snapshot = (unified.desktop?.terminalState as TerminalSnapshot | undefined) || null
+          if (snapshot) {
+            pendingSnapshotRef.current = snapshot
+          }
+        }
+      } finally {
+        if (!cancelled) {
+          setHydrationComplete(true)
+        }
+      }
+    }
+
+    void hydrate()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!definitionsReady) return
+    if (pendingSnapshotRef.current) {
+      const snapshot = pendingSnapshotRef.current
+      pendingSnapshotRef.current = null
+      if (Array.isArray(snapshot.lines)) {
+        setLines([...snapshot.lines])
+      }
+      if (typeof snapshot.buffer === 'string') {
+        setBuffer(snapshot.buffer)
+      }
+      if (snapshot.questState) {
+        setQuestState(hydrateQuestState(snapshot.questState))
+      } else {
+        setQuestState(createQuestEngineState())
+      }
+      questStateInitializedRef.current = true
+      return
+    }
+    if (!questStateInitializedRef.current) {
+      setQuestState(createQuestEngineState())
+      questStateInitializedRef.current = true
+    }
+  }, [definitionsReady, hydrationComplete])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadDefinitions = async (markReady = false) => {
+      try {
+        const defs = await listTerminalQuests()
+        if (cancelled) return
+        setQuestDefinitions(defs)
+      } catch (err) {
+        console.warn('[terminal] failed to load quest definitions, using fallback', err)
+        setQuestDefinitions([])
+      } finally {
+        if (markReady && !cancelled) {
+          setDefinitionsReady(true)
+        }
+      }
+    }
+
+    void loadDefinitions(true)
+
+    if (typeof window !== 'undefined') {
+      const handler = () => { void loadDefinitions() }
+      window.addEventListener('terminalQuestsUpdated', handler)
+      return () => {
+        cancelled = true
+        window.removeEventListener('terminalQuestsUpdated', handler)
+      }
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!persistenceReady) return
+    if (typeof window === 'undefined') return
+
+    const timer = window.setTimeout(() => {
+      void saveDesktopState({
+        terminalState: {
+          lines,
+          buffer,
+          questState: serializeQuestState(questState),
+          savedAt: new Date().toISOString()
+        }
+      })
+    }, 500)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [lines, buffer, questState, persistenceReady])
+
+  useEffect(() => {
+    if (questIntroPrinted.current) return
+    questIntroPrinted.current = true
+    const inbox = getInboxEntries(questState)
+    inbox.forEach(entry => {
+      print(`[inbox] ${entry.title}: ${entry.description}`)
     })
-    return true
-  }
+  }, [questState])
 
-  const resolve = (p: string) => {
-    if (!p.startsWith('/')) p = (cwd.replace(/\/$/, '')) + '/' + p
-    // collapse .. and .
-    const parts = [] as string[]
-    for (const part of p.split('/')) {
-      if (!part || part === '.') continue
-      if (part === '..') parts.pop(); else parts.push(part)
+  const showInbox = () => {
+    const entries = getInboxEntries(questState)
+    if (!entries.length) {
+      print('Inbox empty. Await new directives.')
+      return
     }
-    return '/' + parts.join('/')
+    entries.forEach(entry => {
+      print(`[${entry.questId}] ${entry.title}`)
+      print(`    ${entry.description}`)
+      print(`    ${entry.progress}`)
+      if (entry.hint) {
+        print(`    Hint: ${entry.hint}`)
+      }
+    })
   }
 
-  const handleLocal = async (cmd: string) => {
-    const [rawName, ...rest] = cmd.split(/\s+/)
-    const name = (rawName || '').toLowerCase()
-    const arg = rest.join(' ')
-    if (!name) return
-    if (await handleGameCommand(name)) return
-    switch (name) {
-      case 'help': print('system', help); break
-      case 'ls': {
-        fs.ensurePath(cwd + '/dummy') // ensure path except file part
-        const list = fs.list(cwd)
-        print('system', list.map(n => n.type === 'dir' ? n.name + '/' : n.name).join('  '));
+  const handleLocalCommand = async (command: string, args: string) => {
+    switch (command) {
+      case 'help':
+        print(formatCommandList(LOCAL_COMMANDS))
+        break
+      case 'inbox':
+        showInbox()
+        break
+      case 'scan': {
+        if (!args) {
+          print('Usage: scan <ip>')
+          return
+        }
+        if (!systemsReady) {
+          print('[scan] Ops database still syncing. Try again in a moment.')
+          return
+        }
+        const host = getHostByIp(args)
+        if (!host) {
+          print(`[scan] ${args} not found in ops database.`)
+          return
+        }
+        if (!host.online) {
+          print(`[scan] ${host.ip} appears offline.`)
+          return
+        }
+        print(`[scan] ${host.ip} is online`)
+        print(`       open ports: ${host.openPorts.join(', ')}`)
+        emitEvent('SCAN_COMPLETED', { target_ip: host.ip })
         break
       }
+      case 'connect': {
+        if (!args) {
+          print('Usage: connect <ip>')
+          return
+        }
+        if (!systemsReady) {
+          print('[connect] Host registry still loading, stand by...')
+          return
+        }
+        if (session) {
+          print('Already connected. Disconnect first.')
+          return
+        }
+        const host = getHostByIp(args)
+        if (!host || !host.online) {
+          print(`[connect] Unable to reach ${args}.`)
+          return
+        }
+        const runtime = createHostRuntime(host)
+        const nextSession: RemoteSession = {
+          hostIp: host.ip,
+          username: host.username,
+          cwd: host.startingPath || '/',
+          runtime
+        }
+        setSession(nextSession)
+        print(`[connect] connected to ${host.ip} as '${host.username}'`)
+        emitEvent('SESSION_CONNECTED', { target_ip: host.ip })
+        break
+      }
+      case 'exit':
+        print('[exit] Close the window to terminate the session.')
+        break
+      default:
+        print(`Unknown command: ${command}`)
+    }
+  }
+
+  const renderDirEntries = (runtime: HostRuntime, path: string) => {
+    const entries = listDirectory(runtime, path)
+    if (entries === null) {
+      print('ls: not a directory')
+      return
+    }
+    if (!entries.length) {
+      print('(empty)')
+      return
+    }
+    const rendered = entries.map((node: RemoteNode) => {
+      if (node.type === 'dir') {
+        const label = node.name || '/'
+        return `${label}/`
+      }
+      return node.name
+    })
+    print(rendered.join('  '))
+  }
+
+  const handleRemoteCommand = async (command: string, args: string) => {
+    if (!session) {
+      print('No active remote session.')
+      return
+    }
+    const { runtime, cwd, hostIp } = session
+    switch (command) {
+      case 'help':
+        print(formatCommandList(REMOTE_COMMANDS))
+        break
+      case 'ls':
+        renderDirEntries(runtime, cwd)
+        break
       case 'cd': {
-        if (!arg) return print('system', 'cd: missing path')
-        const target = resolve(arg)
-        const dir = fs.list(target) // list returns [] if not dir or missing
-        if (dir.length || target === '/' || fs.exists(target)) {
-          setCwd(target)
-        } else print('system', 'cd: no such directory')
+        if (!args) {
+          print('Usage: cd <path>')
+          return
+        }
+        const nextPath = changeDirectory(runtime, cwd, args)
+        if (!nextPath) {
+          print('cd: path not found')
+          return
+        }
+        setSession({ ...session, cwd: nextPath })
         break
       }
       case 'cat': {
-        if (!arg) return print('system', 'cat: file required')
-        const file = fs.read(resolve(arg))
-        if (!file) return print('system', 'cat: not a file')
-        print('system', file.content || '(empty)')
-        break
-      }
-      case 'edit': {
-        if (!arg) return print('system', 'edit: file required')
-        const path = resolve(arg)
-        if (!fs.exists(path)) fs.touch(path)
-        const file = fs.read(path)!
-        const newContent = prompt(`Edit ${path}`, file.content)
-        if (newContent !== null) { fs.write(path, newContent); print('system', 'saved.') }
-        break
-      }
-      case 'touch': if (arg) { fs.touch(resolve(arg)); print('system', 'ok') } else print('system', 'touch: file required'); break
-      case 'mkdir': if (arg) { fs.mkdir(resolve(arg)); print('system', 'ok') } else print('system', 'mkdir: dir required'); break
-      case 'rm': if (arg) { fs.remove(resolve(arg)); print('system', 'ok') } else print('system', 'rm: path required'); break
-      case 'api': {
-        const command = arg
-        if (!command) return print('system', 'api: command required')
-        try {
-          const data = await apiRequest<{ output: string }>(
-            '/api/command',
-            { method: 'POST', auth: true, body: { player_name: 'player1', session_id: null, command } }
-          )
-          print('system', data.output)
-        } catch (e: any) {
-          print('system', `api error: ${e?.message || 'unknown'}`)
+        if (!args) {
+          print('Usage: cat <file>')
+          return
         }
-        break
-      }
-      case 'find': {
-        const searchPath = arg || cwd
-        const results: string[] = []
-        const search = (path: string) => {
-          try {
-            const items = fs.list(path)
-            items.forEach(item => {
-              results.push(item.path)
-              if (item.type === 'dir') search(item.path)
-            })
-          } catch { /* ignore: permission or path errors */ }
+        const result = readFile(runtime, cwd, args)
+        if (!result) {
+          print('cat: file not found')
+          return
         }
-        search(resolve(searchPath))
-        if (results.length === 0) {
-          print('system', 'find: no files found')
-        } else {
-          print('system', results.slice(0, 50).join('\n') + (results.length > 50 ? `\n... (${results.length - 50} more)` : ''))
+        print(result.content)
+        break
+      }
+      case 'rm': {
+        if (!args) {
+          print('Usage: rm <file>')
+          return
         }
-        break
-      }
-      case 'grep': {
-        const parts = rest
-        if (parts.length < 2) return print('system', 'grep: usage: grep <pattern> <file>')
-        const pattern = parts[0]
-        const filePath = resolve(parts[1])
-        const file = fs.read(filePath)
-        if (!file) return print('system', 'grep: file not found')
-        const lines = file.content.split('\n')
-        const matches = lines.filter(line => line.toLowerCase().includes(pattern.toLowerCase()))
-        if (matches.length === 0) {
-          print('system', 'grep: no matches found')
-        } else {
-          print('system', matches.join('\n'))
+        const removal = removeFile(runtime, cwd, args)
+        if (!removal.success || !removal.path) {
+          print('rm: file not found')
+          return
         }
+        print(`[rm] deleted ${removal.path}`)
+        emitEvent('FILE_DELETED', { target_ip: hostIp, file_path: removal.path })
         break
       }
-      case 'file': {
-        if (!arg) return print('system', 'file: path required')
-        const path = resolve(arg)
-        const file = fs.read(path)
-        if (!file) {
-          const dir = fs.list(path)
-          if (dir.length > 0 || path === '/') {
-            print('system', `${path}: directory`)
-          } else {
-            print('system', 'file: not found')
-          }
-        } else {
-          const hasScript = file.content.includes('#!/')
-          const hasBinary = file.content.includes('\x00') || file.name.endsWith('.bin')
-          const type = hasScript ? 'executable script' : hasBinary ? 'binary data' : 'text file'
-          print('system', `${path}: ${type}`)
-        }
+      case 'disconnect':
+        setSession(null)
+        print('[disconnect] Session closed.')
+        emitEvent('SESSION_DISCONNECTED', { target_ip: hostIp })
         break
-      }
-      case 'strings': {
-        if (!arg) return print('system', 'strings: file required')
-        const file = fs.read(resolve(arg))
-        if (!file) return print('system', 'strings: file not found')
-        const strings = file.content.split(/[\n\r]+/).filter(s => s.length >= 4)
-        print('system', strings.join('\n'))
-        break
-      }
-      case 'ps': {
-        const processes = [
-          'PID  USER     COMMAND',
-          '1    root     /sbin/init',
-          '42   root     /usr/sbin/sshd',
-          '103  player   /bin/bash',
-          '234  player   terminal',
-          '421  root     /usr/bin/netmon',
-          '422  root     /usr/sbin/firewalld',
-          '500  ???      /usr/bin/.hidden_proc'
-        ]
-        print('system', processes.join('\n'))
-        break
-      }
-      case 'netstat': {
-        const connections = [
-          'Active Internet connections',
-          'Proto Local Address      Foreign Address    State',
-          'tcp   127.0.0.1:8000     0.0.0.0:*          LISTEN',
-          'tcp   0.0.0.0:22         0.0.0.0:*          LISTEN',
-          'tcp   192.168.1.100:45234 192.168.1.1:80    ESTABLISHED',
-          'tcp   192.168.1.100:52891 192.168.1.254:??? SYN_SENT',
-          'udp   0.0.0.0:53         0.0.0.0:*          '
-        ]
-        print('system', connections.join('\n'))
-        break
-      }
       default:
-        print('system', `Unknown command: ${name}`)
+        print(`Unknown command: ${command}`)
     }
   }
 
-  const run = async () => {
-    const cmd = buffer.trim()
-    if (!cmd) return
+  const handleCommand = async () => {
+    const input = buffer.trim()
+    if (!input) return
     setBuffer('')
-    
-    print('user', cmd)
-    await handleLocal(cmd)
-  }
-
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY })
-  }
-
-  const handleCopy = async () => {
-    const selected = window.getSelection()?.toString()
-    if (selected) {
-      await navigator.clipboard.writeText(selected)
-      print('system', 'Copied to clipboard')
+    print(input, 'user')
+    const [command, ...rest] = input.split(/\s+/)
+    const args = rest.join(' ').trim()
+    if (context === 'local') {
+      await handleLocalCommand(command, args)
+    } else {
+      await handleRemoteCommand(command, args)
     }
-    setContextMenu(null)
   }
 
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText()
-      setBuffer(prev => prev + text)
-      inputRef.current?.focus()
-    } catch {
-      print('system', 'Paste failed')
+  const handleKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void handleCommand()
     }
-    setContextMenu(null)
-  }
-
-  const handleClear = () => {
-    setLines([{ role: 'system', text: 'Terminal ready. Type help.' }])
-    setContextMenu(null)
   }
 
   return (
-    <div className="terminal-container" onContextMenu={handleContextMenu}>
-      <div className="terminal-output">
-        {lines.map((l, i) => (
-          <div key={i} className={`terminal-line ${l.role}`}>
-            {l.text}
+    <div className="terminal-container">
+      <div className="terminal-frame" onClick={() => inputRef.current?.focus()}>
+        <div className="terminal-header">
+          <div className="terminal-title">ops console</div>
+          <div className="terminal-indicators">
+            <span className="indicator">mode {context}</span>
+            {session && <span className="indicator">host {session.hostIp}</span>}
           </div>
-        ))}
-      </div>
-      <div className="terminal-input-row">
-        <span className="terminal-prompt">{cwd}$</span>
-        <input 
-          ref={inputRef} 
-          value={buffer} 
-          onChange={e => setBuffer(e.target.value)} 
-          onKeyDown={e => { if (e.key === 'Enter') run() }} 
-          className="terminal-input"
+        </div>
+        <div className="terminal-screen" ref={outputRef} role="log" aria-live="polite">
+          {lines.map((line, idx) => (
+            <div key={idx} className={`terminal-line ${line.role}`}>
+              {line.text}
+            </div>
+          ))}
+          <div className="terminal-line current">
+            <span className="terminal-prompt">{prompt}</span>
+            <span className="terminal-buffer">
+              {buffer || '\u00a0'}
+              <span className="terminal-caret" />
+            </span>
+          </div>
+        </div>
+        <div className="terminal-footer">
+          <div className="footer-left">
+            {context === 'local' ? 'LOCAL :: inbox, scan, connect' : `REMOTE :: ${session?.cwd}`}
+          </div>
+          <div className="footer-right">
+            {getInboxEntries(questState).map(entry => entry.title).join(' | ') || 'Awaiting directives'}
+          </div>
+        </div>
+        <input
+          ref={inputRef}
+          className="terminal-hidden-input"
+          value={buffer}
+          onChange={e => setBuffer(e.target.value)}
+          onKeyDown={handleKey}
+          tabIndex={-1}
+          aria-label="Terminal command input"
         />
       </div>
-
-      {contextMenu && (
-        <ContextMenuPortal>
-          <div
-            ref={menuRef}
-            className="terminal-context-menu"
-            style={{
-              position: 'fixed',
-              left: menuPos.left,
-              top: menuPos.top,
-              zIndex: 10001
-            }}
-          >
-            <div className="terminal-context-item" onClick={handleCopy}><CopyIcon size={14}/> Copy</div>
-            <div className="terminal-context-item" onClick={handlePaste}><PasteIcon size={14}/> Paste</div>
-            <div className="terminal-context-divider" />
-            <div className="terminal-context-item" onClick={handleClear}><ClearIcon size={14}/> Clear Terminal</div>
-            <div className="terminal-context-divider" />
-            <div className="terminal-context-item" onClick={() => { alert('Terminality Terminal v1.0\nSecure command-line interface'); setContextMenu(null) }}><InfoIcon size={14}/> About</div>
-          </div>
-        </ContextMenuPortal>
-      )}
     </div>
   )
 }

@@ -38,6 +38,22 @@ export interface DesktopState {
   soundEffectsEnabled?: boolean
   // Lock screen persisted flag
   isLocked?: boolean
+  // Terminal session snapshot
+  terminalState?: {
+    lines?: Array<{ role: 'system' | 'user'; text: string }>
+    buffer?: string
+    questState?: {
+      active?: Array<{ questId: string; currentStepIndex: number }>
+      completedIds?: string[]
+      flags?: string[]
+    }
+    session?: {
+      hostIp: string
+      username?: string
+      cwd?: string
+    }
+    savedAt?: string
+  }
 }
 
 export interface UnifiedState {
