@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react'
-import DOMPurify from 'dompurify'
 
 import { useTheme, themes } from '../os/ThemeContext'
 import { useWindowManager } from '../os/WindowManager'
 import { useUser } from '../os/UserContext'
 import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 import { VERSION, BUILD_DATE } from '../version'
-import { fetchAndParseChangelog, ParsedChangelog } from '../services/changelogParser'
 import { fetchAboutContent, updateAboutContent, FALLBACK_ABOUT_CONTENT, AboutContent } from '../services/aboutService'
+import { fetchChangelog, createChangelogEntry, updateChangelogEntry, deleteChangelogEntry, createEmptyChangelogEntry } from '../services/changelogService'
+import type { ChangelogEntry, ChangelogResponse, ChangelogSections } from '../services/changelogService'
 import './SystemSettingsApp.css'
 
 type Tab = 'themes' | 'wallpapers' | 'specs' | 'about'
+type ChangelogFilter = 'all' | 'added' | 'changed' | 'fixed' | 'breaking'
+type ChangelogSectionKey = keyof ChangelogSections
 
 interface ComputerSpecs {
   cpu: { name: string; level: number; maxLevel: number; speed: string }
@@ -29,6 +31,58 @@ const wallpapers = [
   { id: 'minimal', name: 'Minimal Dark', gradient: 'linear-gradient(180deg, #050505 0%, #000000 100%)' },
   { id: 'retro', name: 'Retro Wave', gradient: 'linear-gradient(180deg, #150028 0%, #280018 50%, #0d0000 100%)' }
 ]
+
+const sectionMeta: Record<ChangelogSectionKey, { label: string; accent: string; icon: JSX.Element }> = {
+  added: {
+    label: 'Added',
+    accent: 'var(--color-primary)',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="16" />
+        <line x1="8" y1="12" x2="16" y2="12" />
+      </svg>
+    )
+  },
+  changed: {
+    label: 'Changed',
+    accent: 'var(--color-secondary)',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M4 7h16M4 12h16M4 17h16" />
+      </svg>
+    )
+  },
+  fixed: {
+    label: 'Fixed',
+    accent: 'var(--color-accent, #00eaff)',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12.3V21H3V3h9.7" />
+      </svg>
+    )
+  },
+  breaking: {
+    label: 'Breaking',
+    accent: '#ff4d4d',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M10 2l2 7 5 2-5 2-2 7-2-7-5-2 5-2z" />
+      </svg>
+    )
+  }
+}
+
+const changelogFilters: Array<{ key: ChangelogFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'added', label: 'Added' },
+  { key: 'changed', label: 'Changed' },
+  { key: 'fixed', label: 'Fixed' },
+  { key: 'breaking', label: 'Breaking' }
+]
+
+const changelogSectionKeys: ChangelogSectionKey[] = ['added', 'changed', 'fixed', 'breaking']
 
 const getInitialSpecs = (): ComputerSpecs => {
   const cached = getCachedDesktop()?.computerSpecs
@@ -81,11 +135,19 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [previewTheme, setPreviewTheme] = useState<string>(themeName)
   const [wallpaper, setWallpaper] = useState(() => getCachedDesktop()?.wallpaper || 'default')
   const [specs, _setSpecs] = useState<ComputerSpecs>(getInitialSpecs)
-  const [changelog, setChangelog] = useState<ParsedChangelog>({ entries: [], latest: null })
+  const [changelog, setChangelog] = useState<ChangelogResponse>({ entries: [], latest: null })
+  const [isChangelogLoading, setIsChangelogLoading] = useState<boolean>(false)
+  const [changelogError, setChangelogError] = useState('')
+  const [changelogFilter, setChangelogFilter] = useState<ChangelogFilter>('all')
+  const [selectedChangelogVersion, setSelectedChangelogVersion] = useState<'new' | string>('new')
+  const [draftChangelogEntry, setDraftChangelogEntry] = useState<ChangelogEntry>(() => createEmptyChangelogEntry())
+  const [changelogEditorBusy, setChangelogEditorBusy] = useState(false)
+  const [changelogEditorFeedback, setChangelogEditorFeedback] = useState('')
   const [copyFeedback, setCopyFeedback] = useState<string>('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const aboutEditingRef = useRef(false)
+  const changelogEditorRef = useRef<HTMLDivElement | null>(null)
   const [aboutContent, setAboutContent] = useState<AboutContent>(FALLBACK_ABOUT_CONTENT)
   const [aboutStatus, setAboutStatus] = useState<'idle' | 'loading' | 'error'>('loading')
   const [aboutError, setAboutError] = useState('')
@@ -151,12 +213,35 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
     saveDesktopState({ computerSpecs: specs }).catch(() => {})
   }, [specs])
 
-  // Load changelog on component mount
+  const applyChangelogData = React.useCallback((data: ChangelogResponse) => {
+    setChangelog(data)
+    if (selectedChangelogVersion === 'new') return
+    const match = data.entries.find((entry: ChangelogEntry) => entry.version === selectedChangelogVersion)
+    if (match) {
+      setDraftChangelogEntry(match)
+    } else {
+      setSelectedChangelogVersion('new')
+      setDraftChangelogEntry(createEmptyChangelogEntry())
+    }
+  }, [selectedChangelogVersion])
+
+  const loadChangelog = React.useCallback(async () => {
+    setIsChangelogLoading(true)
+    setChangelogError('')
+    try {
+      const data = await fetchChangelog()
+      applyChangelogData(data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load changelog'
+      setChangelogError(message)
+    } finally {
+      setIsChangelogLoading(false)
+    }
+  }, [applyChangelogData])
+
   useEffect(() => {
-    fetchAndParseChangelog().then(data => {
-      setChangelog(data)
-    })
-  }, [])
+    loadChangelog()
+  }, [loadChangelog])
 
   const copyVersionInfo = async () => {
     const versionInfo = `Terminality OS v${VERSION} (Built: ${BUILD_DATE})`
@@ -173,16 +258,291 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   const [updateFeedback, setUpdateFeedback] = useState<string>('')
   const [contributors, setContributors] = useState<string[]>([]) // scaffold for contributors list
 
+  const heroTitleSource = (aboutContent.heroTitle || 'Terminality OS').trim() || 'Terminality OS'
+  const [heroPrimaryWordRaw, ...heroSecondaryWords] = heroTitleSource.split(/\s+/)
+  const heroPrimaryWordmark = (heroPrimaryWordRaw || 'Terminality').toUpperCase()
+  const heroSecondaryWordmarkSource = heroSecondaryWords.length
+    ? heroSecondaryWords.join(' ')
+    : (heroPrimaryWordmark === 'TERMINALITY' ? 'OS' : '')
+  const heroSecondaryWordmark = heroSecondaryWordmarkSource ? heroSecondaryWordmarkSource.toUpperCase() : ''
+  const shouldRenderSecondaryWordmark = Boolean(heroSecondaryWordmark && heroSecondaryWordmark !== 'OS')
+
+  const systemInfoItems = [
+    { label: 'Version', value: VERSION },
+    { label: 'Build Date', value: BUILD_DATE },
+    { label: 'Architecture', value: 'Web-Based (x64 Simulation)' },
+    { label: 'Frontend', value: 'React 18 + TypeScript + Vite' },
+    { label: 'Backend', value: 'Node.js + Express + Prisma' },
+    { label: 'Database', value: 'SQLite with JWT Auth' },
+    { label: 'License', value: 'MIT License' }
+  ]
+
+  const featureItems: Array<{ key: string; title: string; description: string; icon: React.ReactNode }> = [
+    {
+      key: 'multi-window',
+      title: 'Multi-Window System',
+      description: 'Drag, resize, minimize, and maximize windows with full desktop management',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M9 3v18" />
+        </svg>
+      )
+    },
+    {
+      key: 'filesystem',
+      title: 'Virtual Filesystem',
+      description: 'Navigate folders, create files, and manage your virtual storage',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <polyline points="13 2 13 9 20 9" />
+        </svg>
+      )
+    },
+    {
+      key: 'terminal',
+      title: 'Terminal Emulator',
+      description: 'Execute commands, run scripts, and explore the command-line interface',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+      )
+    },
+    {
+      key: 'browser',
+      title: 'Web Browser',
+      description: 'Browse simulated websites with realistic social media and news platforms',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+      )
+    },
+    {
+      key: 'music',
+      title: 'Music Player',
+      description: 'Play tracks, create playlists, and control playback across the desktop',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      )
+    },
+    {
+      key: 'themes',
+      title: '17 Color Themes',
+      description: 'Customize your experience with classic green, cyber blue, neon pink, and more',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2" />
+        </svg>
+      )
+    }
+  ]
+
+  const projectFacts: Array<{ key: string; label: string; value: string; icon: React.ReactNode }> = [
+    {
+      key: 'creator',
+      label: 'Created by:',
+      value: 'Axidify',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+      )
+    },
+    {
+      key: 'repository',
+      label: 'Repository:',
+      value: 'github.com/Axidify/Terminality-V2',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+        </svg>
+      )
+    },
+    {
+      key: 'license',
+      label: 'License:',
+      value: 'MIT License - Open source and free to use',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      )
+    }
+  ]
+
+  const supportActions: Array<{ key: string; label: string; icon: React.ReactNode; action: () => void }> = [
+    {
+      key: 'docs',
+      label: 'Documentation',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+      ),
+      action: () => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })
+    },
+    {
+      key: 'issues',
+      label: 'Report an Issue',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      ),
+      action: () => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })
+    },
+    {
+      key: 'contribute',
+      label: 'Contribute',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
+        </svg>
+      ),
+      action: () => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })
+    },
+    {
+      key: 'terminal',
+      label: 'Open Terminal',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+      ),
+      action: () => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })
+    }
+  ]
+
   const checkForUpdates = async () => {
     setUpdateFeedback('Checking...')
     try {
-      const data = await fetchAndParseChangelog()
-      setChangelog(data)
-      setUpdateFeedback(data.latest ? `Latest: v${data.latest.version}` : 'No updates found')
-    } catch (err) {
+      const data = await fetchChangelog()
+      applyChangelogData(data)
+      setUpdateFeedback(data.latest ? `Latest: v${data.latest.version}` : 'No releases yet')
+    } catch (_err) {
       setUpdateFeedback('Failed to check updates')
     }
     setTimeout(() => setUpdateFeedback(''), 2000)
+  }
+
+  const jumpToLatestChangelogEntry = () => {
+    if (!changelog.latest) return
+    handleSelectChangelogVersion(changelog.latest.version)
+    requestAnimationFrame(() => {
+      changelogEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  const handleChangelogFieldChange = (field: keyof ChangelogEntry, value: string) => {
+    setDraftChangelogEntry((prev: ChangelogEntry) => ({ ...prev, [field]: value }))
+  }
+
+  const handleChangelogTagsChange = (value: string) => {
+    const tags = value
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean)
+    setDraftChangelogEntry((prev: ChangelogEntry) => ({ ...prev, tags }))
+  }
+
+  const handleChangelogSectionChange = (section: ChangelogSectionKey, raw: string) => {
+    const items = raw
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+    setDraftChangelogEntry((prev: ChangelogEntry) => ({
+      ...prev,
+      sections: {
+        ...prev.sections,
+        [section]: items
+      }
+    }))
+  }
+
+  const handleSelectChangelogVersion = (value: string) => {
+    setChangelogEditorFeedback('')
+    if (value === 'new') {
+      setSelectedChangelogVersion('new')
+      setDraftChangelogEntry(createEmptyChangelogEntry())
+      return
+    }
+    const existing = changelog.entries.find((entry: ChangelogEntry) => entry.version === value)
+    if (existing) {
+      setSelectedChangelogVersion(value)
+      setDraftChangelogEntry(existing)
+    } else {
+      setSelectedChangelogVersion('new')
+      setDraftChangelogEntry(createEmptyChangelogEntry())
+    }
+  }
+
+  const handleResetChangelogDraft = () => {
+    setSelectedChangelogVersion('new')
+    setDraftChangelogEntry(createEmptyChangelogEntry())
+    setChangelogEditorFeedback('Draft cleared')
+    setTimeout(() => setChangelogEditorFeedback(''), 2000)
+  }
+
+  const handleSaveChangelogEntry = async () => {
+    if (!draftChangelogEntry.version.trim()) {
+      setChangelogEditorFeedback('Version is required')
+      return
+    }
+    setChangelogEditorBusy(true)
+    setChangelogEditorFeedback('')
+    try {
+      const response = selectedChangelogVersion === 'new'
+        ? await createChangelogEntry(draftChangelogEntry)
+        : await updateChangelogEntry(selectedChangelogVersion, draftChangelogEntry)
+      applyChangelogData({ entries: response.entries, latest: response.latest })
+      setDraftChangelogEntry(response.entry)
+      setSelectedChangelogVersion(response.entry.version)
+      setChangelogEditorFeedback('Changelog saved')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save changelog'
+      setChangelogEditorFeedback(message)
+    } finally {
+      setChangelogEditorBusy(false)
+    }
+  }
+
+  const handleDeleteChangelogEntry = async () => {
+    if (selectedChangelogVersion === 'new') {
+      setChangelogEditorFeedback('Select a version to delete')
+      return
+    }
+    setChangelogEditorBusy(true)
+    setChangelogEditorFeedback('')
+    try {
+      const data = await deleteChangelogEntry(selectedChangelogVersion)
+      applyChangelogData(data)
+      setSelectedChangelogVersion('new')
+      setDraftChangelogEntry(createEmptyChangelogEntry())
+      setChangelogEditorFeedback('Entry deleted')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete entry'
+      setChangelogEditorFeedback(message)
+    } finally {
+      setChangelogEditorBusy(false)
+    }
   }
 
   const handleDraftChange = (field: keyof AboutContent, value: string) => {
@@ -533,7 +893,13 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <line x1="30" y1="45" x2="50" y2="30" stroke="currentColor" strokeWidth="1.5" />
                 <circle cx="50" cy="45" r="8" fill="currentColor" />
               </svg>
-              <h1>{aboutContent.heroTitle}</h1>
+              <h1 className="about-wordmark" aria-label={aboutContent.heroTitle}>
+                <span className="wordmark-primary">{heroPrimaryWordmark}</span>
+                {shouldRenderSecondaryWordmark && (
+                  <span className="wordmark-secondary">{heroSecondaryWordmark}</span>
+                )}
+              </h1>
+              <div className="wordmark-caption">Operating System</div>
               <div className="version-info">
                 <p className="version">Version {VERSION}</p>
                 <button className="copy-version-btn" onClick={copyVersionInfo} title="Copy version info to clipboard">
@@ -656,102 +1022,27 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
               <div className="about-section about-system-info">
                 <h2>System Information</h2>
                 <div className="info-table">
-                  <div className="info-row">
-                    <span className="info-label">Version</span>
-                    <span className="info-value">{VERSION}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Build Date</span>
-                    <span className="info-value">{BUILD_DATE}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Architecture</span>
-                    <span className="info-value">Web-Based (x64 Simulation)</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Frontend</span>
-                    <span className="info-value">React 18 + TypeScript + Vite</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Backend</span>
-                    <span className="info-value">Node.js + Express + Prisma</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Database</span>
-                    <span className="info-value">SQLite with JWT Auth</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">License</span>
-                    <span className="info-value">MIT License</span>
-                  </div>
+                  {systemInfoItems.map((item) => (
+                    <div className="info-row" key={item.label}>
+                      <span className="info-label">{item.label}</span>
+                      <span className="info-value">{item.value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="about-section about-features">
                 <h2>Key Features</h2>
                 <div className="features-grid">
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/>
-                      <path d="M9 3v18"/>
-                    </svg>
-                    <div>
-                      <strong>Multi-Window System</strong>
-                      <p>Drag, resize, minimize, and maximize windows with full desktop management</p>
+                  {featureItems.map((feature) => (
+                    <div className="feature-item" key={feature.key}>
+                      {feature.icon}
+                      <div>
+                        <strong>{feature.title}</strong>
+                        <p>{feature.description}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                      <polyline points="13 2 13 9 20 9"/>
-                    </svg>
-                    <div>
-                      <strong>Virtual Filesystem</strong>
-                      <p>Navigate folders, create files, and manage your virtual storage</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="4 17 10 11 4 5"/>
-                      <line x1="12" y1="19" x2="20" y2="19"/>
-                    </svg>
-                    <div>
-                      <strong>Terminal Emulator</strong>
-                      <p>Execute commands, run scripts, and explore the command-line interface</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="2" y="3" width="20" height="14" rx="2"/>
-                      <line x1="8" y1="21" x2="16" y2="21"/>
-                      <line x1="12" y1="17" x2="12" y2="21"/>
-                    </svg>
-                    <div>
-                      <strong>Web Browser</strong>
-                      <p>Browse simulated websites with realistic social media and news platforms</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 18V5l12-2v13"/>
-                      <circle cx="6" cy="18" r="3"/>
-                      <circle cx="18" cy="16" r="3"/>
-                    </svg>
-                    <div>
-                      <strong>Music Player</strong>
-                      <p>Play tracks, create playlists, and control playback across the desktop</p>
-                    </div>
-                  </div>
-                  <div className="feature-item">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="3"/>
-                      <path d="M12 1v6m0 6v6m5.2-13.2l-4.2 4.2m0 6l4.2 4.2M23 12h-6m-6 0H1m18.2 5.2l-4.2-4.2m0-6l4.2-4.2"/>
-                    </svg>
-                    <div>
-                      <strong>17 Color Themes</strong>
-                      <p>Customize your experience with classic green, cyber blue, neon pink, and more</p>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -760,26 +1051,12 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                 <div className="resources-content">
                   <div className="resource-group">
                     <h3>Project Information</h3>
-                    <p>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                        <circle cx="12" cy="7" r="4"/>
-                      </svg>
-                      <strong>Created by:</strong> Axidify
-                    </p>
-                    <p>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                      </svg>
-                      <strong>Repository:</strong> github.com/Axidify/Terminality-V2
-                    </p>
-                    <p>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '8px' }}>
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                      </svg>
-                      <strong>License:</strong> MIT License - Open source and free to use
-                    </p>
+                    {projectFacts.map((fact) => (
+                      <p key={fact.key}>
+                        {fact.icon}
+                        <strong>{fact.label}</strong> {fact.value}
+                      </p>
+                    ))}
                     <p className="copyright">
                       © 2025 Terminality OS. Designed with passion for retro computing.
                     </p>
@@ -791,110 +1068,262 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                       For documentation, updates, and support, visit our GitHub repository.
                     </p>
                     <div className="support-links">
-                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Browser - Documentation', width: 1200, height: 800, payload: { initialUrl: 'https://home.axi' } })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                          <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                        Documentation
-                      </button>
-                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'GitHub - Issues', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2/issues' } })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <line x1="12" y1="8" x2="12" y2="12"/>
-                          <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        Report an Issue
-                      </button>
-                      <button className="support-btn" onClick={() => wm.open('browser', { title: 'Contribute - GitHub', width: 1000, height: 700, payload: { initialUrl: 'https://github.com/Axidify/Terminality-V2' } })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
-                        </svg>
-                        Contribute
-                      </button>
-                      <button className="support-btn" onClick={() => wm.open('terminal', { title: 'Terminal', width: 800, height: 600 })}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="4 17 10 11 4 5"/>
-                          <line x1="12" y1="19" x2="20" y2="19"/>
-                        </svg>
-                        Open Terminal
-                      </button>
+                      {supportActions.map((action) => (
+                        <button className="support-btn" key={action.key} onClick={action.action}>
+                          {action.icon}
+                          {action.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Dynamically render changelog from CHANGELOG.md */}
-            {changelog.entries.length > 0 ? (
-              changelog.entries.map((entry, idx) => (
-                <div className="changelog-section" key={entry.version}>
-                  <h2>What&apos;s New in v{entry.version}</h2>
-                  <div className="changelog-content compact">
-                    {entry.added.length > 0 && (
-                      <>
-                        {entry.added.map((item, i) => (
-                          <div className="changelog-item" key={`added-${i}`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                            <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
+            <div className="changelog-panel">
+              <div className="changelog-panel-header">
+                <div>
+                  <h2>Changelog & Release Notes</h2>
+                  <p>Live release history pulled from the backend changelog registry.</p>
+                </div>
+                <div className="changelog-panel-actions">
+                  {isAdmin && changelog.latest && (
+                    <button
+                      className="support-btn ghost"
+                      type="button"
+                      onClick={jumpToLatestChangelogEntry}
+                    >
+                      Edit Latest
+                    </button>
+                  )}
+                  <button className="support-btn" onClick={checkForUpdates} disabled={isChangelogLoading}>
+                    {isChangelogLoading ? 'Refreshing…' : 'Refresh'}
+                  </button>
+                  {updateFeedback && <span className="changelog-status-text">{updateFeedback}</span>}
+                </div>
+              </div>
+
+              {changelogError && (
+                <div className="changelog-alert error">{changelogError}</div>
+              )}
+              {isChangelogLoading && !changelog.entries.length && !changelogError && (
+                <div className="changelog-alert">Loading changelog…</div>
+              )}
+
+              {changelog.latest && (
+                <div className="changelog-highlight-card">
+                  <div className="highlight-meta">
+                    <span className="highlight-badge">Latest Release</span>
+                    <div>
+                      <h3>v{changelog.latest.version}</h3>
+                      <p className="highlight-date">Released on {changelog.latest.date}</p>
+                    </div>
+                  </div>
+                  <p className="highlight-summary">
+                    {changelog.latest.summary || 'This release is ready for prime time.'}
+                  </p>
+                  <div className="highlight-grid">
+                    {changelogSectionKeys.map((section) => {
+                      const items = changelog.latest?.sections?.[section] || []
+                      if (!items.length) return null
+                      return (
+                        <div className="highlight-section" key={`highlight-${String(section)}`}>
+                          <div className="highlight-section-title" style={{ color: sectionMeta[section].accent }}>
+                            {sectionMeta[section].icon}
+                            <span>{sectionMeta[section].label}</span>
                           </div>
-                        ))}
-                      </>
-                    )}
-                    {entry.changed.length > 0 && (
-                      <>
-                        {entry.changed.map((item, i) => (
-                          <div className="changelog-item" key={`changed-${i}`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M4 7h16M4 12h16M4 17h16"/>
-                            </svg>
-                            <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
-                          </div>
-                        ))}
-                      </>
-                    )}
-                    {entry.fixed.length > 0 && (
-                      <>
-                        {entry.fixed.map((item, i) => (
-                          <div className="changelog-item" key={`fixed-${i}`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 2l3 7h7l-5 4 2 7-6-4-6 4 2-7-5-4h7z"/>
-                            </svg>
-                            <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(item) }} />
-                          </div>
-                        ))}
-                      </>
-                    )}
+                          <ul>
+                            {items.slice(0, 2).map((item: string, idx: number) => (
+                              <li key={`highlight-${String(section)}-${idx}`}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="changelog-section">
-                <h2>Changelog</h2>
-                <p style={{ color: 'var(--color-textDim)', fontSize: '14px' }}>Loading changelog...</p>
-              </div>
-            )}
+              )}
 
-            <div className="changelog-section">
-              <h2>Version History</h2>
+              <div className="changelog-filter-bar">
+                <span>Filter updates</span>
+                <div className="changelog-filters">
+                  {changelogFilters.map(filter => (
+                    <button
+                      key={filter.key}
+                      className={filter.key === changelogFilter ? 'active' : ''}
+                      onClick={() => setChangelogFilter(filter.key)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="changelog-grid">
+                {changelog.entries.length === 0 && !isChangelogLoading ? (
+                  <div className="changelog-empty">No releases recorded yet.</div>
+                ) : (
+                  changelog.entries.map((entry: ChangelogEntry) => (
+                    <div className="changelog-card" key={entry.version}>
+                      <div className="card-header">
+                        <div>
+                          <h3>v{entry.version}</h3>
+                          <p>{entry.date}</p>
+                        </div>
+                        {entry.tags && entry.tags.length > 0 && (
+                          <div className="changelog-tags">
+                            {entry.tags.map((tag: string) => (
+                              <span key={`${entry.version}-${tag}`}>{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <p className="card-summary">
+                        {entry.summary || 'No summary provided yet.'}
+                      </p>
+                      <div className="card-sections">
+                        {changelogSectionKeys.map((section) => {
+                          if (changelogFilter !== 'all' && changelogFilter !== section) return null
+                          const items = entry.sections?.[section] || []
+                          if (!items.length) return null
+                          return (
+                            <div className="changelog-section-block" key={`${entry.version}-${String(section)}`}>
+                              <div className="section-block-heading" style={{ color: sectionMeta[section].accent }}>
+                                {sectionMeta[section].icon}
+                                <span>{sectionMeta[section].label}</span>
+                              </div>
+                              <ul>
+                                {items.map((item: string, idx: number) => (
+                                  <li key={`${entry.version}-${String(section)}-${idx}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {entry.links && entry.links.length > 0 && (
+                        <div className="changelog-links">
+                          {entry.links.map((link: { label: string; url: string }) => (
+                            <a key={`${entry.version}-${link.url}`} href={link.url} target="_blank" rel="noreferrer">{link.label}</a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
               <div className="version-history">
-                {changelog.entries.map(entry => (
-                  <div className="version-item" key={entry.version}>
-                    <strong>v{entry.version}</strong> <span className="version-date">({entry.date})</span>
-                    <p>
-                      {entry.added.length > 0 && `${entry.added.length} additions`}
-                      {entry.added.length > 0 && (entry.changed.length > 0 || entry.fixed.length > 0) && ', '}
-                      {entry.changed.length > 0 && `${entry.changed.length} changes`}
-                      {entry.changed.length > 0 && entry.fixed.length > 0 && ', '}
-                      {entry.fixed.length > 0 && `${entry.fixed.length} fixes`}
-                    </p>
-                  </div>
-                ))}
+                <h3>Version History</h3>
+                <div className="version-list">
+                  {changelog.entries.map((entry: ChangelogEntry) => {
+                    const counts: Record<ChangelogSectionKey, number> = {
+                      added: entry.sections?.added?.length || 0,
+                      changed: entry.sections?.changed?.length || 0,
+                      fixed: entry.sections?.fixed?.length || 0,
+                      breaking: entry.sections?.breaking?.length || 0
+                    }
+                    const summary = changelogSectionKeys
+                      .map(section => {
+                        const value = counts[section]
+                        return value ? `${value} ${String(section)}` : null
+                      })
+                      .filter(Boolean)
+                      .join(' · ')
+                    return (
+                      <div className="version-item" key={`history-${entry.version}`}>
+                        <div>
+                          <strong>v{entry.version}</strong>
+                          <span className="version-date">{entry.date}</span>
+                        </div>
+                        <p>{summary || 'No notes yet.'}</p>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
+
+            {isAdmin && (
+              <div className="changelog-editor-panel" ref={changelogEditorRef}>
+                <div className="changelog-editor-header">
+                  <div>
+                    <h3>Changelog Editor</h3>
+                    <p>Publish updates without touching the codebase.</p>
+                  </div>
+                  {changelogEditorFeedback && (
+                    <span className="changelog-editor-feedback">{changelogEditorFeedback}</span>
+                  )}
+                </div>
+                <div className="changelog-editor-grid">
+                  <label>
+                    <span>Target Entry</span>
+                    <select value={selectedChangelogVersion} onChange={(e) => handleSelectChangelogVersion(e.target.value)}>
+                      <option value="new">Create new release</option>
+                      {changelog.entries.map((entry: ChangelogEntry) => (
+                        <option key={`select-${entry.version}`} value={entry.version}>v{entry.version}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Version (semver)</span>
+                    <input value={draftChangelogEntry.version} onChange={(e) => handleChangelogFieldChange('version', e.target.value)} placeholder="0.0.0" />
+                  </label>
+                  <label>
+                    <span>Release Date</span>
+                    <input type="date" value={draftChangelogEntry.date} onChange={(e) => handleChangelogFieldChange('date', e.target.value)} />
+                  </label>
+                  <label className="wide">
+                    <div className="label-heading">
+                      <span>Summary</span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={draftChangelogEntry.summary}
+                      onChange={(e) => handleChangelogFieldChange('summary', e.target.value)}
+                    />
+                  </label>
+                  <label className="wide">
+                    <div className="label-heading">
+                      <span>Highlight (optional)</span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={draftChangelogEntry.highlight}
+                      onChange={(e) => handleChangelogFieldChange('highlight', e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Tags (comma separated)</span>
+                    <input value={(draftChangelogEntry.tags || []).join(', ')} onChange={(e) => handleChangelogTagsChange(e.target.value)} placeholder="major, ui" />
+                  </label>
+                </div>
+                <div className="changelog-editor-sections">
+                  {changelogSectionKeys.map((section) => (
+                    <label key={`editor-${String(section)}`}>
+                      <div className="label-heading">
+                        <span>{sectionMeta[section].label}</span>
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={(draftChangelogEntry.sections?.[section] || []).join('\n')}
+                        onChange={(e) => handleChangelogSectionChange(section, e.target.value)}
+                        placeholder={`One ${sectionMeta[section].label.toLowerCase()} per line`}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="changelog-editor-actions">
+                  <button onClick={handleSaveChangelogEntry} disabled={changelogEditorBusy}>
+                    {changelogEditorBusy ? 'Saving…' : 'Save Entry'}
+                  </button>
+                  <button className="ghost" onClick={handleResetChangelogDraft} disabled={changelogEditorBusy}>Reset Draft</button>
+                  <button className="danger" onClick={handleDeleteChangelogEntry} disabled={changelogEditorBusy || selectedChangelogVersion === 'new'}>
+                    Delete Entry
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -17,7 +17,7 @@ function topChangelogVersion(filePath) {
 try {
   const versionFile = path.join(__dirname, '../client/src/version.ts')
   const rootChangelog = path.join(__dirname, '../CHANGELOG.md')
-  const publicChangelog = path.join(__dirname, '../client/public/CHANGELOG.md')
+  const stateFile = path.join(__dirname, '../server/state.json')
 
   const version = extractVersionFromVersionFile(versionFile)
   if (!version) throw new Error('Could not read version from client/src/version.ts')
@@ -26,11 +26,12 @@ try {
   if (!rootTop) throw new Error('Could not find top changelog entry in CHANGELOG.md')
   if (rootTop !== version) throw new Error(`CHANGELOG.md top entry (${rootTop}) does not match version ${version}`)
 
-  const publicTop = topChangelogVersion(publicChangelog)
-  if (!publicTop) throw new Error('Could not find top changelog entry in client/public/CHANGELOG.md')
-  if (publicTop !== version) throw new Error(`client/public/CHANGELOG.md top entry (${publicTop}) does not match version ${version}`)
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+  const stateTop = state?.changelog?.entries?.[0]?.version
+  if (!stateTop) throw new Error('server/state.json is missing changelog entries')
+  if (stateTop !== version) throw new Error(`server/state.json top entry (${stateTop}) does not match version ${version}`)
 
-  console.log(`Changelog check passed: version ${version} matches top entries`) 
+  console.log(`Changelog check passed: version ${version} matches CHANGELOG.md and server/state.json`)
   process.exit(0)
 } catch (e) {
   console.error('Changelog validation failed:', e.message || e)

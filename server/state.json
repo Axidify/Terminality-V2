@@ -104,5 +104,273 @@
       }
     }
   },
-  "story": {}
+  "story": {},
+  "changelog": {
+    "entries": [
+      {
+        "version": "0.5.6",
+        "date": "2025-11-13",
+        "summary": "**Backend Status Indicator**: Added a health/status indicator on the Home page status bar to show if the backend API is reachable; it polls `/health` periodically and changes the indicator color to reflect online, offline, or unknown states. This helps users know if the server is available and provides friendly feedback when the service is down.",
+        "highlight": "**Backend Status Indicator**: Added a health/status indicator on the Home page status bar to show if the backend API is reachable; it polls `/health` periodically and changes the indicator color to reflect online, offline, or unknown states. This helps users know if the server is available and provides friendly feedback when the service is down. • **Home Page**: Updated `HomePage` to include real-time backend connectivity check and updated rendering for the status bar.",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Backend Status Indicator**: Added a health/status indicator on the Home page status bar to show if the backend API is reachable; it polls `/health` periodically and changes the indicator color to reflect online, offline, or unknown states. This helps users know if the server is available and provides friendly feedback when the service is down."
+          ],
+          "changed": [
+            "**Home Page**: Updated `HomePage` to include real-time backend connectivity check and updated rendering for the status bar."
+          ],
+          "fixed": [],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.5.5",
+        "date": "2025-11-12",
+        "summary": "**Proxy Chain Icon**: Replaced placeholder network symbol with a system-style SVG to match the UI iconography.",
+        "highlight": "**Proxy Chain Icon**: Replaced placeholder network symbol with a system-style SVG to match the UI iconography. • **Store Search**: Centered the search input horizontally and vertically; constrained input width on large viewports and restored left-aligned placeholder text for readability.",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Proxy Chain Icon**: Replaced placeholder network symbol with a system-style SVG to match the UI iconography."
+          ],
+          "changed": [
+            "**Store Search**: Centered the search input horizontally and vertically; constrained input width on large viewports and restored left-aligned placeholder text for readability.",
+            "**App Store**: Background effects (grid, scanlines, particles) are now confined to the app window (position: absolute) to avoid overlapping other windows and desktop widgets; categories wrap to avoid a scrollbar; featured section margin adjusted to prevent overlap with categories.",
+            "**About Page**: Updated to reflect the latest release and show an updated 'What's New' highlight that pulls from the changelog."
+          ],
+          "fixed": [
+            "**Layout Overlap**: Fixed featured items overlapping the categories row and the appstore background bleeding outside the app window.",
+            "**System Monitor stacking**: Ensured System Monitor stays behind other windows and uses a lower z-index."
+          ],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.5.4",
+        "date": "2025-11-12",
+        "summary": "**About Page Designer**: A complete aesthetic upgrade adding grid background, scanlines, particles, floating logo, and pulsing brackets to match the App Store and system-wide visual language.",
+        "highlight": "**About Page Designer**: A complete aesthetic upgrade adding grid background, scanlines, particles, floating logo, and pulsing brackets to match the App Store and system-wide visual language. • **Music Player UI**: Matched progress bar, volume slider, and track scrollbar colors to the App Store system theme; made control buttons smaller and inline; standardized icon and slider colors to use `--color-primary` and `--color-primary-rgb` variables.",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**About Page Designer**: A complete aesthetic upgrade adding grid background, scanlines, particles, floating logo, and pulsing brackets to match the App Store and system-wide visual language."
+          ],
+          "changed": [
+            "**Music Player UI**: Matched progress bar, volume slider, and track scrollbar colors to the App Store system theme; made control buttons smaller and inline; standardized icon and slider colors to use `--color-primary` and `--color-primary-rgb` variables.",
+            "**About Page**: Upgraded panels and sections to use the cyberpunk terminal aesthetic (sharper cards, glows, hover effects, enhanced headings, elevated copy/version/tags).",
+            "**Color Consistency**: Replaced remaining hardcoded green values with theme variables across several apps for consistent theme adaptation."
+          ],
+          "fixed": [
+            "**Scrollbar & Slider Visuals**: Removed dark borders around slider thumbs, aligned their glows and hover states to the system theme color.",
+            "**Accessibility**: Improved contrast for headings, info rows, and interactive controls."
+          ],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.5.3",
+        "date": "2025-11-12",
+        "summary": "**Changelog System**: Centralized version tracking and changelog management",
+        "highlight": "**Changelog System**: Centralized version tracking and changelog management • **Version File**: Automated version management in `client/src/version.ts` • **ProfileApp**: Updated to use CSS variables for theme integration",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Changelog System**: Centralized version tracking and changelog management",
+            "**Version File**: Automated version management in `client/src/version.ts`",
+            "**ProfileApp UI Redesign**: Complete redesign matching system design language",
+            "**UserManagementApp UI Redesign**: Complete redesign matching system design language"
+          ],
+          "changed": [
+            "**ProfileApp**: Updated to use CSS variables for theme integration",
+            "**UserManagementApp**: Updated to use CSS variables for theme integration",
+            "**Color Consistency**: Both apps now automatically adapt to theme changes",
+            "**Typography**: Standardized font sizes, letter spacing, and weights across apps",
+            "**Glassmorphism**: Consistent backdrop-filter and border styling"
+          ],
+          "fixed": [
+            "**About Page**: Fixed desktop context menu \"About\" button to properly open System Settings",
+            "**Theme Integration**: Apps now correctly use --color-primary, --color-text, --color-surface variables"
+          ],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.5.2",
+        "date": "2025-11-10",
+        "summary": "**Login Screen Particles**: 40 ambient particle effects on login screen for immersive atmosphere",
+        "highlight": "**Login Screen Particles**: 40 ambient particle effects on login screen for immersive atmosphere • **Audio Context**: Improved error handling for audio context initialization",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Login Screen Particles**: 40 ambient particle effects on login screen for immersive atmosphere"
+          ],
+          "changed": [
+            "**Audio Context**: Improved error handling for audio context initialization"
+          ],
+          "fixed": [],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.5.1",
+        "date": "2025-11-10",
+        "summary": "**System Monitor**: Collapse/expand feature for system monitor",
+        "highlight": "**System Monitor**: Collapse/expand feature for system monitor • **Z-Index Management**: Improved layering for system components • **System Monitor**: Streamlined with compact width and minimal design",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**System Monitor**: Collapse/expand feature for system monitor",
+            "**Z-Index Management**: Improved layering for system components"
+          ],
+          "changed": [
+            "**System Monitor**: Streamlined with compact width and minimal design"
+          ],
+          "fixed": [],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.4.0",
+        "date": "2025-11-10",
+        "summary": "**Immersive Article System**: Full article pages with detailed content on Home website",
+        "highlight": "**Immersive Article System**: Full article pages with detailed content on Home website • **Category Navigation**: Dedicated pages for World, Tech, Business, Gaming categories • **News Website**: Enhanced with breaking news, trending topics, weather widget, and market overview",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Immersive Article System**: Full article pages with detailed content on Home website",
+            "**Category Navigation**: Dedicated pages for World, Tech, Business, Gaming categories",
+            "**Browser Scroll Behavior**: Auto scroll to top on navigation"
+          ],
+          "changed": [
+            "**News Website**: Enhanced with breaking news, trending topics, weather widget, and market overview"
+          ],
+          "fixed": [],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.3.0",
+        "date": "2025-11-10",
+        "summary": "**Home Website**: New fake news homepage with comprehensive content",
+        "highlight": "**Home Website**: New fake news homepage with comprehensive content • **Modern File Explorer**: Windows/Mac-style UI with large folder/file icons",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Home Website**: New fake news homepage with comprehensive content",
+            "**Modern File Explorer**: Windows/Mac-style UI with large folder/file icons",
+            "**SVG Icon System**: Complete monotone SVG icon replacement across all applications",
+            "**Navigation Controls**: Back/refresh buttons in File Explorer"
+          ],
+          "changed": [],
+          "fixed": [
+            "**Sticky Headers**: All website headers now properly stick to top while scrolling",
+            "**Browser Layout**: Fixed toolbar and bookmark bar staying fixed while viewport scrolls",
+            "**ThreadIt Alignment**: Create Post and Log In buttons properly aligned to right edge"
+          ],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.2.0",
+        "date": "2025-11-08",
+        "summary": "**Multi-window Management**: Drag, resize, minimize, and maximize windows",
+        "highlight": "**Multi-window Management**: Drag, resize, minimize, and maximize windows • **Terminal Emulator**: Command execution with virtual filesystem • **Window Memory**: Persistent window positions and sizes across sessions",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Multi-window Management**: Drag, resize, minimize, and maximize windows",
+            "**Terminal Emulator**: Command execution with virtual filesystem",
+            "**Music Player**: Playlist support with now playing bar",
+            "**Email & Chat Apps**: Communication interfaces",
+            "**Social Apps**: Instagram and Reddit website simulations",
+            "**Theme System**: Multiple color themes with live preview"
+          ],
+          "changed": [
+            "**Window Memory**: Persistent window positions and sizes across sessions",
+            "**Desktop Icons**: Auto-arrange functionality"
+          ],
+          "fixed": [],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.1.0",
+        "date": "2025-11-01",
+        "summary": "Initial release of Terminality OS",
+        "highlight": "Initial release of Terminality OS • Basic desktop environment",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "Initial release of Terminality OS",
+            "Basic desktop environment",
+            "Lock screen with authentication",
+            "Window management system",
+            "File explorer foundation",
+            "Notepad application",
+            "Basic browser functionality",
+            "Settings panel",
+            "--",
+            "**v0.5.6** (Nov 13, 2025) - Backend status indicator on Home page"
+          ],
+          "changed": [],
+          "fixed": [],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      },
+      {
+        "version": "0.5.7",
+        "date": "2025-11-14",
+        "summary": "**Online Chat improvements**: Desktop notifications now include actionable intents. Clicking a chat system notification opens and focuses the Online Chat window and jumps to the specific room or DM the notification applies to.",
+        "highlight": "**Online Chat improvements**: Desktop notifications now include actionable intents. Clicking a chat system notification opens and focuses the Online Chat window and jumps to the specific room or DM the notification applies to. • - Chat messages now include lightweight intents that open and focus the correct chat room (or DM) when used with desktop notifications. • **Chat UI**: Notifications toggle updated to an icon-only style and chat message bubbles, header, and sidebar were streamlined for denser chat use. Smaller fonts and compact control sizes make the chat app feel more like a rapid messaging client while keeping our visual language.",
+        "spotlight": "",
+        "sections": {
+          "added": [
+            "**Online Chat improvements**: Desktop notifications now include actionable intents. Clicking a chat system notification opens and focuses the Online Chat window and jumps to the specific room or DM the notification applies to.",
+            "- Chat messages now include lightweight intents that open and focus the correct chat room (or DM) when used with desktop notifications.",
+            "- First-class Online Chat: room-based chat and DMs with presence indicators and client-side notifications."
+          ],
+          "changed": [
+            "**Chat UI**: Notifications toggle updated to an icon-only style and chat message bubbles, header, and sidebar were streamlined for denser chat use. Smaller fonts and compact control sizes make the chat app feel more like a rapid messaging client while keeping our visual language."
+          ],
+          "fixed": [
+            "**Notification handling**: Improved robustness when Notification permission is unavailable in the client; fallback to in-app banners continues to work.",
+            "- Minor UI polish: streamlined chat header and notification toggle to icon-only in some layouts.",
+            "**v0.5.5** (Nov 12, 2025) - Proxy chain icon, app store layout",
+            "**v0.5.4** (Nov 12, 2025) - UI improvements and About Page Designer",
+            "**v0.5.3** (Nov 12, 2025) - UI redesign, changelog system, version management",
+            "**v0.5.2** (Nov 10, 2025) - Login screen particles, audio improvements",
+            "**v0.5.1** (Nov 10, 2025) - System monitor enhancements",
+            "**v0.4.0** (Nov 10, 2025) - Article system, category navigation",
+            "**v0.3.0** (Nov 10, 2025) - Home website, modern file explorer, SVG icons",
+            "**v0.2.0** (Nov 08, 2025) - Core applications and theme system",
+            "**v0.1.0** (Nov 01, 2025) - Initial release"
+          ],
+          "breaking": []
+        },
+        "tags": [],
+        "links": []
+      }
+    ]
+  }
 }
