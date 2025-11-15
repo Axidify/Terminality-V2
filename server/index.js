@@ -11,8 +11,10 @@ const jwt = require('jsonwebtoken')
 const { OAuth2Client } = require('google-auth-library')
 const cookieParser = require('cookie-parser')
 const rateLimit = require('express-rate-limit')
+const { loadChangelogFromFile, readChangelogMarkdown } = require('./utils/markdownChangelog')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
+const CHANGELOG_MD_PATH = path.join(__dirname, '..', 'CHANGELOG.md')
 // Use Prisma for persistence when available
 let prisma = null
 try {
@@ -47,6 +49,7 @@ function getPresenceMap(room) {
 }
 
 let savedState = null
+let markdownChangelogCache = { mtimeMs: 0, entries: [] }
 
 const DEFAULT_ABOUT_CONTENT = {
   heroTitle: 'Terminality OS',
@@ -232,7 +235,27 @@ function deleteChangelogEntry(version) {
   return true
 }
 
+function getMarkdownChangelogEntries() {
+  try {
+    if (!fs.existsSync(CHANGELOG_MD_PATH)) return []
+    const stats = fs.statSync(CHANGELOG_MD_PATH)
+    const needsRefresh = markdownChangelogCache.mtimeMs !== stats.mtimeMs
+    if (needsRefresh) {
+      const entries = loadChangelogFromFile(CHANGELOG_MD_PATH)
+      markdownChangelogCache = { mtimeMs: stats.mtimeMs, entries }
+    }
+    return markdownChangelogCache.entries || []
+  } catch (err) {
+    console.warn('[changelog] Failed to read markdown changelog:', err)
+    return markdownChangelogCache.entries || []
+  }
+}
+
 function buildChangelogResponse() {
+  const markdownEntries = getMarkdownChangelogEntries()
+  if (markdownEntries.length > 0) {
+    return { entries: markdownEntries, latest: markdownEntries[0] || null }
+  }
   const { entries } = getChangelogState()
   return { entries, latest: entries[0] || null }
 }
@@ -519,11 +542,23 @@ app.get('/api/changelog', (_req, res) => {
   }
 })
 
+app.get('/api/changelog/markdown', (_req, res) => {
+  try {
+    const markdown = readChangelogMarkdown(CHANGELOG_MD_PATH)
+    if (!markdown) return res.status(404).json({ message: 'Changelog file not found' })
+    res.type('text/markdown').send(markdown)
+  } catch (e) {
+    console.error('[api/changelog/markdown][get] error', e)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
 app.get('/api/changelog/:version', (req, res) => {
   try {
     const { version } = req.params
-    const changelog = getChangelogState()
-    const entry = changelog.entries.find(item => item.version === version)
+    const markdownEntries = getMarkdownChangelogEntries()
+    const sourceEntries = markdownEntries.length > 0 ? markdownEntries : getChangelogState().entries
+    const entry = sourceEntries.find(item => item.version === version)
     if (!entry) return res.status(404).json({ message: 'Not found' })
     res.json({ entry })
   } catch (e) {
