@@ -75,11 +75,14 @@
       "status": "published"
     },
     {
-      "id": "quest_1763243129732",
+      "id": "quest_1763270097682",
       "title": "Untitled Quest",
       "description": "Describe this operation.",
       "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
+        "type": "ON_QUEST_COMPLETION",
+        "quest_ids": [
+          "intro_001_wipe_evidence"
+        ]
       },
       "steps": [
         {
@@ -87,10 +90,10 @@
           "type": "SCAN_HOST",
           "target_system_id": "atlas_relay",
           "params": {
-            "target_ip": "10.10.10.10"
+            "target_ip": "dfgdfgfd"
           },
           "hints": {
-            "prompt": "scan 10.10.10.10",
+            "prompt": "dfgdfgdf",
             "command_example": "scan 10.10.10.10"
           },
           "auto_advance": true
@@ -102,190 +105,13 @@
       },
       "requirements": {
         "required_flags": [],
-        "required_quests": []
-      },
-      "status": "published"
-    },
-    {
-      "id": "quest_flag_test1",
-      "title": "Test quest quest_flag_test1",
-      "description": "Integration test quest",
-      "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
-      },
-      "steps": [
-        {
-          "id": "s1",
-          "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
-          "params": {
-            "target_ip": "10.23.4.8"
-          },
-          "auto_advance": true
-        }
-      ],
-      "rewards": {
-        "flags": [],
-        "unlocks_commands": []
-      },
-      "requirements": {
-        "required_flags": [],
-        "required_quests": []
+        "required_quests": [
+          "intro_001_wipe_evidence"
+        ]
       },
       "default_system_id": "atlas_relay",
-      "completion_flag": "unit_completed_1",
-      "status": "published"
-    },
-    {
-      "id": "quest_flag_test_a",
-      "title": "Test quest quest_flag_test_a",
-      "description": "Integration test quest",
-      "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
-      },
-      "steps": [
-        {
-          "id": "s1",
-          "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
-          "params": {
-            "target_ip": "10.23.4.8"
-          },
-          "auto_advance": true
-        }
-      ],
-      "rewards": {
-        "flags": [],
-        "unlocks_commands": []
-      },
-      "requirements": {
-        "required_flags": [],
-        "required_quests": []
-      },
-      "default_system_id": "atlas_relay",
-      "completion_flag": "shared_flag",
-      "status": "published"
-    },
-    {
-      "id": "quest_flag_test_b",
-      "title": "Test quest quest_flag_test_b",
-      "description": "Integration test quest",
-      "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
-      },
-      "steps": [
-        {
-          "id": "s1",
-          "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
-          "params": {
-            "target_ip": "10.23.4.8"
-          },
-          "auto_advance": true
-        }
-      ],
-      "rewards": {
-        "flags": [],
-        "unlocks_commands": []
-      },
-      "requirements": {
-        "required_flags": [],
-        "required_quests": []
-      },
-      "default_system_id": "atlas_relay",
-      "completion_flag": "shared_flag",
-      "status": "published"
-    },
-    {
-      "id": "quest_flag_test1_1763259800582",
-      "title": "Test quest quest_flag_test1_1763259800582",
-      "description": "Integration test quest",
-      "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
-      },
-      "steps": [
-        {
-          "id": "s1",
-          "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
-          "params": {
-            "target_ip": "10.23.4.8"
-          },
-          "auto_advance": true
-        }
-      ],
-      "rewards": {
-        "flags": [],
-        "unlocks_commands": []
-      },
-      "requirements": {
-        "required_flags": [],
-        "required_quests": []
-      },
-      "default_system_id": "atlas_relay",
-      "completion_flag": "unit_completed_1",
-      "status": "published"
-    },
-    {
-      "id": "quest_flag_test_a_1763259801666",
-      "title": "Test quest quest_flag_test_a_1763259801666",
-      "description": "Integration test quest",
-      "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
-      },
-      "steps": [
-        {
-          "id": "s1",
-          "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
-          "params": {
-            "target_ip": "10.23.4.8"
-          },
-          "auto_advance": true
-        }
-      ],
-      "rewards": {
-        "flags": [],
-        "unlocks_commands": []
-      },
-      "requirements": {
-        "required_flags": [],
-        "required_quests": []
-      },
-      "default_system_id": "atlas_relay",
-      "completion_flag": "shared_flag",
-      "status": "published"
-    },
-    {
-      "id": "quest_flag_test_b_1763259801686",
-      "title": "Test quest quest_flag_test_b_1763259801686",
-      "description": "Integration test quest",
-      "trigger": {
-        "type": "ON_FIRST_TERMINAL_OPEN"
-      },
-      "steps": [
-        {
-          "id": "s1",
-          "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
-          "params": {
-            "target_ip": "10.23.4.8"
-          },
-          "auto_advance": true
-        }
-      ],
-      "rewards": {
-        "flags": [],
-        "unlocks_commands": []
-      },
-      "requirements": {
-        "required_flags": [],
-        "required_quests": []
-      },
-      "default_system_id": "atlas_relay",
-      "completion_flag": "shared_flag",
-      "status": "published"
+      "status": "draft"
     }
   ],
-  "lastUpdated": "2025-11-16T02:23:21.697Z"
+  "lastUpdated": "2025-11-16T05:16:04.876Z"
 }
