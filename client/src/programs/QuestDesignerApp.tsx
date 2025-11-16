@@ -1308,6 +1308,7 @@ export const QuestDesignerApp: React.FC = () => {
                 <button type="button" onClick={handleSave} disabled={saving || publishing}>{saving ? 'Saving…' : 'Save Draft'}</button>
                 <button
                   type="button"
+                  className="publish"
                   onClick={handlePublish}
                   disabled={publishing || saving || draft.status === 'published'}
                 >
