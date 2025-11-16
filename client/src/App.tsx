@@ -9,10 +9,12 @@ import { ThemeProvider } from './os/ThemeContext'
 import { UserProvider } from './os/UserContext'
 import { WindowManagerProvider } from './os/WindowManager'
 import { PluginManagerProvider } from './modular-apps/PluginManager'
+import { ToastProvider } from './os/ToastContext'
 import { HomePage } from './pages/HomePage'
 import ResetPage from './pages/ResetPage'
 import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
 import { isLoggedIn } from './services/auth'
+import { SessionActivityProvider } from './os/SessionActivityContext'
 
 type AppView = 'lock' | 'onboarding' | 'desktop'
 type AppPage = 'home' | 'os' | 'reset'
@@ -51,31 +53,35 @@ function OSApp() {
 
   return (
     <ThemeProvider>
-      <NotificationProvider>
-        <UserProvider>
-  <PluginManagerProvider>
-  <WindowManagerProvider>
-          {/* Global session expiry UI */}
-          <SessionExpiredOverlay />
-          {view === 'lock' && (
-            <LockScreen 
-              onUnlock={() => setView('desktop')} 
-              onRegister={() => setView('onboarding')}
-            />
-          )}
-          {view === 'onboarding' && (
-            <OnboardingPage 
-              onComplete={() => setView('desktop')}
-              onBack={() => setView('lock')}
-            />
-          )}
-          {view === 'desktop' && (
-            <Desktop onLock={() => setView('lock')} />
-          )}
-  </WindowManagerProvider>
-  </PluginManagerProvider>
-        </UserProvider>
-      </NotificationProvider>
+      <ToastProvider>
+        <NotificationProvider>
+          <UserProvider>
+            <PluginManagerProvider>
+              <WindowManagerProvider>
+                <SessionActivityProvider>
+                  {/* Global session expiry UI */}
+                  <SessionExpiredOverlay />
+                  {view === 'lock' && (
+                    <LockScreen 
+                      onUnlock={() => setView('desktop')} 
+                      onRegister={() => setView('onboarding')}
+                    />
+                  )}
+                  {view === 'onboarding' && (
+                    <OnboardingPage 
+                      onComplete={() => setView('desktop')}
+                      onBack={() => setView('lock')}
+                    />
+                  )}
+                  {view === 'desktop' && (
+                    <Desktop onLock={() => setView('lock')} />
+                  )}
+                </SessionActivityProvider>
+              </WindowManagerProvider>
+            </PluginManagerProvider>
+          </UserProvider>
+        </NotificationProvider>
+      </ToastProvider>
     </ThemeProvider>
   )
 }
@@ -113,11 +119,13 @@ export default function App() {
   if (currentPage === 'home') {
     return (
       <ThemeProvider>
-        <NotificationProvider>
-          <UserProvider>
+        <ToastProvider>
+          <NotificationProvider>
+            <UserProvider>
             <HomePage />
-          </UserProvider>
-        </NotificationProvider>
+            </UserProvider>
+          </NotificationProvider>
+        </ToastProvider>
       </ThemeProvider>
     )
   }
@@ -125,11 +133,13 @@ export default function App() {
   if (currentPage === 'reset') {
     return (
       <ThemeProvider>
-        <NotificationProvider>
-          <UserProvider>
+        <ToastProvider>
+          <NotificationProvider>
+            <UserProvider>
             <ResetPage />
-          </UserProvider>
-        </NotificationProvider>
+            </UserProvider>
+          </NotificationProvider>
+        </ToastProvider>
       </ThemeProvider>
     )
   }

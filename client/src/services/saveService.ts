@@ -51,6 +51,25 @@ export interface DesktopState {
     }
     savedAt?: string
   }
+  sessionLayout?: {
+    windows: Array<{
+      id: string
+      type: string
+      title: string
+      x: number
+      y: number
+      width: number
+      height: number
+      z: number
+      focused: boolean
+      minimized: boolean
+      maximized: boolean
+      payload?: Record<string, any>
+      prevBounds?: { x: number; y: number; width: number; height: number }
+    }>
+    lastFocusedId?: string
+    savedAt?: string
+  }
 }
 
 export interface UnifiedState {
