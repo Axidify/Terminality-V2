@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useId } from 'react'
+
 import './UserManagementApp.css'
-import { apiRequest } from '../services/api'
 import { useUser } from '../os/UserContext'
+import { apiRequest } from '../services/api'
 
 interface User {
   id: number
@@ -27,6 +28,7 @@ export const UserManagementApp: React.FC = () => {
   const [newPassword, setNewPassword] = useState('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const roleSelectId = useId()
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -317,7 +319,6 @@ export const UserManagementApp: React.FC = () => {
                 value={createUsername}
                 onChange={e => setCreateUsername(e.target.value)}
                 placeholder="USERNAME"
-                autoFocus
               />
               <input
                 type="email"
@@ -334,8 +335,12 @@ export const UserManagementApp: React.FC = () => {
                 placeholder="PASSWORD"
               />
               <div style={{ marginTop: 8 }}>
-                <label style={{ marginRight: 8 }}>Role:</label>
-                <select value={createRole} onChange={e => setCreateRole(e.target.value as 'user' | 'admin')}>
+                <label style={{ marginRight: 8 }} htmlFor={roleSelectId}>Role:</label>
+                <select
+                  id={roleSelectId}
+                  value={createRole}
+                  onChange={e => setCreateRole(e.target.value as 'user' | 'admin')}
+                >
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -378,7 +383,6 @@ export const UserManagementApp: React.FC = () => {
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
                 placeholder="NEW PASSWORD"
-                autoFocus
               />
               <div className="dialog-actions">
                 <button 

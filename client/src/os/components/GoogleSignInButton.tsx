@@ -31,12 +31,16 @@ const GoogleSignInButton: React.FC<Props> = ({ onSuccess, onError, disabled }) =
           callback: (res: any) => {
             try {
               if (res && res.credential) {
-                onSuccessRef.current && onSuccessRef.current(res.credential)
-              } else {
-                onErrorRef.current && onErrorRef.current(new Error('No credential returned'))
+                if (onSuccessRef.current) {
+                  onSuccessRef.current(res.credential)
+                }
+              } else if (onErrorRef.current) {
+                onErrorRef.current(new Error('No credential returned'))
               }
             } catch (e) {
-              onErrorRef.current && onErrorRef.current(e)
+              if (onErrorRef.current) {
+                onErrorRef.current(e)
+              }
             }
           },
           auto_select: false
@@ -47,7 +51,9 @@ const GoogleSignInButton: React.FC<Props> = ({ onSuccess, onError, disabled }) =
           window.google.accounts.id.renderButton(containerRef.current, { theme: 'outline', size: 'large' })
         }
       } catch (e) {
-        onErrorRef.current && onErrorRef.current(e)
+        if (onErrorRef.current) {
+          onErrorRef.current(e)
+        }
       }
     }
     if (window.google && window.google.accounts && containerRef.current) {
@@ -59,7 +65,11 @@ const GoogleSignInButton: React.FC<Props> = ({ onSuccess, onError, disabled }) =
     s.async = true
     s.defer = true
     s.onload = () => render()
-    s.onerror = (e) => onErrorRef.current && onErrorRef.current(e)
+    s.onerror = (e) => {
+      if (onErrorRef.current) {
+        onErrorRef.current(e)
+      }
+    }
     document.head.appendChild(s)
     return () => {
       // remove script? keep it

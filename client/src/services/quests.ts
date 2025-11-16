@@ -1,4 +1,5 @@
 import { apiRequest } from './api'
+
 import type { TerminalObjective, TerminalNode, TerminalPuzzle } from '../programs/terminalGameData'
 
 export type QuestDifficulty = 'story' | 'standard' | 'elite'

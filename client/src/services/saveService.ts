@@ -1,5 +1,6 @@
 import { apiRequest } from './api'
 import { isLoggedIn as hasToken } from './auth'
+
 import type { SerializedQuestState } from '../programs/questSystem'
 
 export interface DesktopState {

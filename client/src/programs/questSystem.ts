@@ -3,7 +3,6 @@ import type {
   QuestLifecycleStatus,
   QuestRewardFlag,
   QuestStep,
-  QuestStepType,
   QuestTrigger
 } from './terminalQuests/types'
 

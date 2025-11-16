@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { ModularAppManifest } from '../types'
-import { apiRequest, getApiBase, getToken } from '../../services/api'
-import { useUser } from '../../os/UserContext'
+import React, { useEffect, useState, useRef, useMemo, useCallback, useId } from 'react'
+
+import { ONLINE_CHAT_FOCUS_EVENT, OnlineChatFocusPayload } from './onlineChatEvents'
 import { useNotifications } from '../../os/NotificationContext'
 import { sounds } from '../../os/SoundEffects'
-import { ONLINE_CHAT_FOCUS_EVENT, OnlineChatFocusPayload } from './onlineChatEvents'
+import { useUser } from '../../os/UserContext'
+import { apiRequest, getApiBase, getToken } from '../../services/api'
+import { ModularAppManifest } from '../types'
 
 import './OnlineChatPlugin.css'
 
@@ -14,6 +15,9 @@ const PUBLIC_ROOMS = ['general', 'random', 'help'] as const
 const NOTIFY_OPT_IN_KEY = 'onlineChat:nativeNotify'
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const logChatWarning = (context: string, err: unknown) => {
+  console.warn(`[chat] ${context}`, err)
+}
 
 const BellIcon: React.FC<{ active: boolean }> = ({ active }) => (
   <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -61,13 +65,7 @@ export const OnlineChat: React.FC = () => {
   const [typingUsers, setTypingUsers] = useState<Array<{ id: number; username: string }>>([])
   const nextTypingAt = useRef(0)
   const { user } = useUser()
-  let notificationsApi: ReturnType<typeof useNotifications> | null = null
-  try {
-    notificationsApi = useNotifications()
-  } catch {
-    notificationsApi = null
-  }
-  const addNotification = notificationsApi?.addNotification ?? (() => {})
+  const { addNotification } = useNotifications()
   const messagesContainerRef = useRef<HTMLDivElement | null>(null)
   const suppressAutoScrollRef = useRef(false)
   const [dmPeer, setDmPeer] = useState<{ id: number; username: string } | null>(null)
@@ -87,6 +85,7 @@ export const OnlineChat: React.FC = () => {
     if (typeof window === 'undefined') return false
     try { return window.localStorage.getItem(NOTIFY_OPT_IN_KEY) === '1' } catch { return false }
   })
+  const roomSelectId = useId()
   const particleConfigs = useMemo(() => (
     Array.from({ length: 8 }).map((_, idx) => ({
       key: idx,
@@ -144,7 +143,11 @@ export const OnlineChat: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    try { window.localStorage.setItem(NOTIFY_OPT_IN_KEY, desktopNotifyOptIn ? '1' : '0') } catch {}
+    try {
+      window.localStorage.setItem(NOTIFY_OPT_IN_KEY, desktopNotifyOptIn ? '1' : '0')
+    } catch (err) {
+      logChatWarning('persisting notification preference failed', err)
+    }
   }, [desktopNotifyOptIn])
 
   useEffect(() => {
@@ -185,7 +188,9 @@ export const OnlineChat: React.FC = () => {
     if (Notification.permission !== 'granted') return
     try {
       new Notification(title, { body, tag, silent: true })
-    } catch {}
+    } catch (err) {
+      logChatWarning('displaying native notification failed', err)
+    }
   }, [desktopNotifyOptIn])
 
   const maybeNotifyForMessage = useCallback((targetRoom: string, message: ChatMessage) => {
@@ -245,7 +250,11 @@ export const OnlineChat: React.FC = () => {
       if (typeof window !== 'undefined' && typeof Notification !== 'undefined') {
         permission = Notification.permission
         if (permission === 'default') {
-          try { permission = await Notification.requestPermission() } catch {}
+          try {
+            permission = await Notification.requestPermission()
+          } catch (err) {
+            logChatWarning('requesting notification permission failed', err)
+          }
         }
       }
 
@@ -298,7 +307,7 @@ export const OnlineChat: React.FC = () => {
     }
   }, [maybeNotifyForMessage, scheduleCacheSave])
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const afterId = lastIdRef.current || 0
       const res = await apiRequest(`/api/chat/messages?room=${encodeURIComponent(room)}&afterId=${afterId}&limit=50`, { auth: true })
@@ -330,10 +339,10 @@ export const OnlineChat: React.FC = () => {
         latestByRoom.current[room] = Math.max(latestByRoom.current[room] || 0, last)
         scheduleCacheSave()
       }
-    } catch (e) {
-      // ignore for now
+    } catch (err) {
+      logChatWarning('fetching messages failed', err)
     }
-  }
+  }, [room, maybeNotifyForMessage, scheduleCacheSave])
 
   const sendMessage = async () => {
     if (!content.trim()) return
@@ -352,7 +361,11 @@ export const OnlineChat: React.FC = () => {
     const now = Date.now()
     if (now < nextTypingAt.current) return
     nextTypingAt.current = now + 1500
-    try { await apiRequest('/api/chat/typing', { method: 'POST', auth: true, body: { room } }) } catch {}
+    try {
+      await apiRequest('/api/chat/typing', { method: 'POST', auth: true, body: { room } })
+    } catch (err) {
+      logChatWarning('typing notification failed', err)
+    }
   }
 
   useEffect(() => {
@@ -369,7 +382,9 @@ export const OnlineChat: React.FC = () => {
             latestByRoom.current = snapshot.latestIds || {}
           }
         }
-      } catch {}
+      } catch (err) {
+        logChatWarning('hydrating cached chat snapshot failed', err)
+      }
       lastReadHydratedRef.current = true
     }
 
@@ -398,7 +413,9 @@ export const OnlineChat: React.FC = () => {
           (Array.isArray(u) ? (u as any) : []).forEach((usr: any) => { lastSeenRef.current[usr.id] = Number(new Date().getTime()) })
           setUsers(Array.isArray(u) ? (u as any) : [])
         }
-      } catch {}
+      } catch (err) {
+        logChatWarning('loading room roster failed', err)
+      }
     }
 
     const usersId = setInterval(loadUsers, 10000)
@@ -449,7 +466,9 @@ export const OnlineChat: React.FC = () => {
         }
         es.onerror = () => { /* silently rely on polling */ }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      logChatWarning('initializing EventSource stream failed', err)
+    }
 
     const pruneTypingId = setInterval(() => {
       const cutoff = Date.now() - 2500
@@ -465,7 +484,7 @@ export const OnlineChat: React.FC = () => {
       clearInterval(pruneTypingId)
       if (es) es.close()
     }
-  }, [room])
+  }, [room, fetchMessages, maybeNotifyForMessage, scheduleCacheSave])
 
   // Auto-scroll to bottom when new messages arrive unless suppressed (e.g., after loading older)
   useEffect(() => {
@@ -484,11 +503,15 @@ export const OnlineChat: React.FC = () => {
       if (last && last.id) {
         lastReadByRoom.current[room] = Math.max(lastReadByRoom.current[room] || 0, last.id)
         latestByRoom.current[room] = Math.max(latestByRoom.current[room] || 0, last.id)
-        try { localStorage.setItem('onlineChat:lastRead', JSON.stringify(lastReadByRoom.current)) } catch {}
+        try {
+          localStorage.setItem('onlineChat:lastRead', JSON.stringify(lastReadByRoom.current))
+        } catch (err) {
+          logChatWarning('persisting last-read pointers failed', err)
+        }
         scheduleCacheSave()
       }
     }
-  }, [messages.length])
+  }, [messages, room, scheduleCacheSave])
 
   // Background poll to update latest message ids for public rooms to compute unread counts
   useEffect(() => {
@@ -503,7 +526,9 @@ export const OnlineChat: React.FC = () => {
           latestByRoom.current[r] = Math.max(latestByRoom.current[r] || 0, last.id || 0)
           scheduleCacheSave()
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        logChatWarning('fetching latest message metadata failed', err)
+      }
     }
     const tick = () => {
       if (stopped) return
@@ -516,7 +541,7 @@ export const OnlineChat: React.FC = () => {
     tick()
     const id = setInterval(tick, 8000)
     return () => { stopped = true; clearInterval(id) }
-  }, [room])
+  }, [room, scheduleCacheSave])
 
   const unreadForRoom = (r: string) => {
     const latest = latestByRoom.current[r] || 0
@@ -538,12 +563,14 @@ export const OnlineChat: React.FC = () => {
           }
           scheduleCacheSave()
         }
-      } catch {}
+      } catch (err) {
+        logChatWarning('loading DM list failed', err)
+      }
     }
     void load()
     const id = setInterval(load, 10000)
     return () => { stop = true; clearInterval(id) }
-  }, [])
+  }, [scheduleCacheSave])
 
   useEffect(() => {
     const prefetchTargets = () => {
@@ -586,8 +613,8 @@ export const OnlineChat: React.FC = () => {
         <div className="online-chat-header">
         {!room.startsWith('dm:') ? (
           <div className="room-select">
-            <label>Room:</label>
-            <select value={room} onChange={e => { setRoom(e.target.value); }}>
+            <label htmlFor={roomSelectId}>Room:</label>
+            <select id={roomSelectId} value={room} onChange={e => { setRoom(e.target.value); }}>
               {PUBLIC_ROOMS.map(rm => (
                 <option key={rm} value={rm}>#{rm}{unreadForRoom(rm) ? ` (${unreadForRoom(rm)})` : ''}</option>
               ))}
@@ -595,7 +622,7 @@ export const OnlineChat: React.FC = () => {
           </div>
         ) : (
           <div className="room-select">
-            <label>Direct:</label>
+            <span className="static-label">Direct:</span>
             <div>
               {dmPeer ? `@${dmPeer.username}` : 'Direct Message'}
               <button style={{ marginLeft: 8 }} onClick={() => setRoom('general')}>Back to #general</button>
@@ -698,7 +725,9 @@ export const OnlineChat: React.FC = () => {
                   }
                 })
               }
-            } catch {}
+            } catch (err) {
+              logChatWarning('loading older chat messages failed', err)
+            }
           }}>Load older</button>
         </div>
         {messages.map(m => (

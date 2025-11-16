@@ -1,4 +1,5 @@
 import React from 'react'
+
 import { ModularAppManifest } from '../types'
 
 // Simple placeholder component for mockup apps

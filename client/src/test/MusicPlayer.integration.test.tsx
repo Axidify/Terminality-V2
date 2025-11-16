@@ -1,7 +1,8 @@
-import React from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import React from 'react'
 import { describe, it, vi, beforeEach, expect } from 'vitest'
+
 import { MusicPlayerApp } from '../programs/MusicPlayerApp'
 
 vi.mock('../services/saveService', () => {

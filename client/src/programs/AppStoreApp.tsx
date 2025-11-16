@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+
 import { usePluginManager } from '../modular-apps/PluginManager'
 import { useWindowManager } from '../os/WindowManager'
 import './AppStoreApp.css'

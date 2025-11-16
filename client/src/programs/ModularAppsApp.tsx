@@ -1,4 +1,5 @@
 import React from 'react'
+
 import { usePluginManager } from '../modular-apps/PluginManager'
 import { useWindowManager } from '../os/WindowManager'
 import './ModularAppsApp.css'
