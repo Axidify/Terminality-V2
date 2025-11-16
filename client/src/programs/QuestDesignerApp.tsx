@@ -1,7 +1,14 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import './QuestDesignerApp.css'
-import type { FileSystemNode, QuestDefinition, QuestLifecycleStatus, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
+import { FilesystemOverrideEditor } from './filesystem/FilesystemOverrideEditor'
+import { cloneFilesystemMap, createEmptyFilesystemMap, FilesystemMap, normalizeFilesystemMap } from './filesystemUtils'
+import { applyQuestOrderFromStorage, DesignerQuest, reorderQuestSequence } from './questOrdering'
+import { signalSessionActivity } from '../os/SessionActivityContext'
+import { useToasts } from '../os/ToastContext'
+import { useUser } from '../os/UserContext'
+import { getCachedDesktop, hydrateFromServer } from '../services/saveService'
+import { deleteSystemProfile, listSystemProfiles, saveSystemProfile, SystemProfileDTO, SystemProfilesResponse, updateSystemProfile } from '../services/systemProfiles'
 import {
   listTerminalQuests,
   createTerminalQuest,
@@ -9,14 +16,9 @@ import {
   deleteTerminalQuest,
   validateTerminalQuest
 } from '../services/terminalQuests'
-import { listSystemProfiles, SystemProfileDTO, SystemProfilesResponse } from '../services/systemProfiles'
-import { useUser } from '../os/UserContext'
-import type { SerializedQuestState } from './questSystem'
-import { getCachedDesktop, hydrateFromServer } from '../services/saveService'
 
-interface DesignerQuest extends QuestDefinition {
-  __unsaved?: boolean
-}
+import type { SerializedQuestState } from './questSystem'
+import type { QuestDefinition, QuestLifecycleStatus, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
 
 interface TagInputProps {
   values: string[]
@@ -50,6 +52,23 @@ const STATUS_FILTERS: Array<{ value: StatusFilterValue; label: string; lifecycle
   { value: 'not_started', label: 'Not Started', lifecycle: 'not_started' }
 ]
 
+const QUEST_ORDER_STORAGE_KEY = 'terminality:quest-order'
+
+const slugifyTemplateId = (value: string): string => {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+const sanitizeSystemId = (value: string): string => {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
 const FIELD_HINTS = {
   questId: 'Unique quest identifier referenced by automation and saves; keep stable once published.',
   questTitle: 'Player-facing title that appears in the terminal quest list.',
@@ -78,6 +97,59 @@ const FIELD_HINTS = {
   stepHintPrompt: 'Hint text surfaced when the player requests help.',
   stepCommandExample: 'Optional concrete command example shown with the hint.'
 } as const
+
+const StatusIcon: React.FC<{ status: StatusFilterValue }> = ({ status }) => {
+  switch (status) {
+    case 'in_progress':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" opacity="0.3" />
+          <path d="M12 3a9 9 0 0 1 9 9" strokeWidth="2.5">
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 12 12"
+              to="360 12 12"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </path>
+          <circle cx="12" cy="12" r="3" fill="currentColor" />
+        </svg>
+      )
+    case 'completed':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" opacity="0.3" />
+          <path d="M7 13l3 3 7-7" />
+        </svg>
+      )
+    case 'not_started':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" opacity="0.3" />
+          <circle cx="12" cy="12" r="4" strokeWidth="2.5" />
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      )
+    case 'all':
+    default:
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" opacity="0.3" />
+          <line x1="8" y1="9" x2="16" y2="9" strokeWidth="2.5" />
+          <line x1="8" y1="12" x2="16" y2="12" strokeWidth="2.5" />
+          <line x1="8" y1="15" x2="13" y2="15" strokeWidth="2.5" />
+        </svg>
+      )
+  }
+}
+
+type Operation = QuestDefinition
+type OperationTrigger = QuestTrigger
+type OperationTriggerType = QuestTriggerType
+type OperationStep = QuestStep
+type StepType = QuestStepType
 
 const sanitizeRewardFlagEntry = (entry?: QuestRewardFlag | string | null): QuestRewardFlag | null => {
   if (!entry) return null
@@ -113,26 +185,40 @@ const sanitizeRewardFlags = (flags?: Array<QuestRewardFlag | string>): QuestRewa
   })
   return normalized.slice(0, 25)
 }
-const STEP_TYPES: QuestStepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST']
-type SystemTemplateDTO = SystemProfilesResponse['templates'][number]
 
-const sanitizeTrigger = (trigger?: QuestTrigger): QuestTrigger => {
-  const type = trigger?.type || DEFAULT_TRIGGER
+const STEP_TYPES: StepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST']
+type SystemTemplateDTO = SystemProfilesResponse['templates'][number]
+type SystemEditorMode = 'create' | 'edit'
+type SystemEditorDraft = {
+  id: string
+  label: string
+  username: string
+  startingPath: string
+  footprint: string
+  ip: string
+}
+
+const createSystemEditorDraft = (profile?: SystemProfileDTO): SystemEditorDraft => ({
+  id: profile?.id || '',
+  label: profile?.label || '',
+  username: profile?.metadata?.username || 'guest',
+  startingPath: profile?.metadata?.startingPath || '/',
+  footprint: profile?.metadata?.footprint || '',
+  ip: profile?.identifiers?.ips?.[0] || ''
+})
+type TemplateDraft = { label: string; description: string }
+
+const sanitizeTrigger = (raw?: OperationTrigger | null): OperationTrigger => {
+  const type = raw?.type || DEFAULT_TRIGGER
   if (type === 'ON_QUEST_COMPLETION') {
-    const questIds = Array.isArray(trigger?.quest_ids)
-      ? trigger.quest_ids.filter(id => !!id?.trim()).map(id => id.trim())
-      : []
-    const unique = Array.from(new Set(questIds))
-    return { type, quest_ids: unique.slice(0, 5) }
+    const quest_ids = Array.from(new Set((raw?.quest_ids || []).map(id => id.trim()).filter(Boolean)))
+    return quest_ids.length ? { type, quest_ids } : { type }
   }
   if (type === 'ON_FLAG_SET') {
-    const key = trigger?.flag_key?.trim()
-    const value = trigger?.flag_value?.trim()
-    return {
-      type,
-      ...(key ? { flag_key: key } : {}),
-      ...(value ? { flag_value: value } : {})
-    }
+    const flag_key = raw?.flag_key?.trim() || ''
+    const flag_value = raw?.flag_value?.trim()
+    if (!flag_key) return { type }
+    return flag_value ? { type, flag_key, flag_value } : { type, flag_key }
   }
   return { type }
 }
@@ -152,7 +238,7 @@ const createEmptyQuest = (): DesignerQuest => ({
   __unsaved: true
 })
 
-const normalizeQuest = (quest: QuestDefinition | DesignerQuest): DesignerQuest => ({
+const normalizeQuest = (quest: Operation | DesignerQuest): DesignerQuest => ({
   ...(quest as DesignerQuest),
   steps: quest.steps.map(step => ({
     ...step,
@@ -176,7 +262,7 @@ const normalizeQuest = (quest: QuestDefinition | DesignerQuest): DesignerQuest =
   __unsaved: (quest as DesignerQuest).__unsaved
 })
 
-const questToPayload = (quest: DesignerQuest): QuestDefinition => ({
+const questToPayload = (quest: DesignerQuest): Operation => ({
   id: quest.id.trim(),
   title: quest.title,
   description: quest.description,
@@ -203,7 +289,7 @@ const questToPayload = (quest: DesignerQuest): QuestDefinition => ({
   completion_flag: quest.completion_flag?.trim() || undefined,
   status: quest.status === 'published' ? 'published' : 'draft'
 })
-
+  
 const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: TagInputProps) => {
   const [input, setInput] = useState('')
   const listId = useId()
@@ -267,17 +353,17 @@ const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: 
 }
 
 const StepCard: React.FC<{ 
-  step: QuestStep
+  step: OperationStep
   index: number
   total: number
-  onChange: (next: QuestStep) => void
+  onChange: (next: OperationStep) => void
   onMove: (dir: -1 | 1) => void
   onDuplicate: () => void
   onDelete: () => void
   systemOptions: Array<{ id: string; label: string }>
   defaultSystemId?: string | null
 }> = ({ step, index, total, onChange, onMove, onDuplicate, onDelete, systemOptions, defaultSystemId }) => {
-  const updateStep = (patch: Partial<QuestStep>) => {
+  const updateStep = (patch: Partial<OperationStep>) => {
     onChange({ ...step, ...patch })
   }
 
@@ -307,7 +393,7 @@ const StepCard: React.FC<{
         </label>
         <label data-tooltip={FIELD_HINTS.stepType}>
           Step Type
-          <select value={step.type} onChange={e => updateStep({ type: e.target.value as QuestStepType })}>
+          <select value={step.type} onChange={e => updateStep({ type: e.target.value as StepType })}>
             {STEP_TYPES.map(type => (
               <option key={type} value={type}>{type}</option>
             ))}
@@ -400,6 +486,7 @@ const validateQuestDraft = (quest?: DesignerQuest): string[] => {
 
 export const QuestDesignerApp: React.FC = () => {
   const { isAdmin } = useUser()
+  const { push: pushToast } = useToasts()
   const [quests, setQuests] = useState<DesignerQuest[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<DesignerQuest | null>(null)
@@ -413,17 +500,53 @@ export const QuestDesignerApp: React.FC = () => {
   const [search, setSearch] = useState('')
   const [systemProfilesState, setSystemProfilesState] = useState<SystemProfileDTO[]>([])
   const [systemTemplates, setSystemTemplates] = useState<SystemTemplateDTO[]>([])
+  const [systemEditorVisible, setSystemEditorVisible] = useState(false)
+  const [systemEditorMode, setSystemEditorMode] = useState<SystemEditorMode>('create')
+  const [systemEditorDraft, setSystemEditorDraft] = useState<SystemEditorDraft>(createSystemEditorDraft())
+  const [systemEditorOriginalId, setSystemEditorOriginalId] = useState<string | null>(null)
+  const [systemEditorSaving, setSystemEditorSaving] = useState(false)
+  const [systemEditorError, setSystemEditorError] = useState<string | null>(null)
+  const [templateDrafts, setTemplateDrafts] = useState<Record<string, TemplateDraft>>({})
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false)
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
   const [systemsLoading, setSystemsLoading] = useState(true)
-  const [fsDrafts, setFsDrafts] = useState<Record<string, string>>({})
+  const [fsDrafts, setFsDrafts] = useState<Record<string, FilesystemMap>>({})
   const [playerQuestStatuses, setPlayerQuestStatuses] = useState<Record<string, QuestLifecycleStatus>>({})
   const [questStatusTimestamp, setQuestStatusTimestamp] = useState<string | null>(null)
   const [questStateLoading, setQuestStateLoading] = useState(false)
   const [questStatusError, setQuestStatusError] = useState<string | null>(null)
+  const [savingTemplateSystem, setSavingTemplateSystem] = useState<string | null>(null)
   const [questStatusFilter, setQuestStatusFilter] = useState<StatusFilterValue>('all')
+  const [draggingQuestId, setDraggingQuestId] = useState<string | null>(null)
+  const [dragOverQuestId, setDragOverQuestId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteInProgress, setDeleteInProgress] = useState(false)
   const flagKeyListId = useId()
   const rewardFlagKeyListId = useId()
   const persistedIdRef = useRef<string | null>(null)
+  const questOrderRef = useRef<string[]>([])
+  const [questOrderHydrated, setQuestOrderHydrated] = useState(false)
   const tooltipNodeRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setQuestOrderHydrated(true)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(QUEST_ORDER_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          questOrderRef.current = parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        }
+      }
+    } catch (err) {
+      console.warn('[quest designer] unable to hydrate quest order', err)
+    } finally {
+      setQuestOrderHydrated(true)
+    }
+  }, [setDraft, setFsDrafts])
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -511,6 +634,48 @@ export const QuestDesignerApp: React.FC = () => {
     hideTooltip()
   }, [hideTooltip])
 
+  const persistQuestOrder = useCallback((order: string[]) => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(QUEST_ORDER_STORAGE_KEY, JSON.stringify(order))
+    } catch (err) {
+      console.warn('[quest designer] unable to persist quest order', err)
+    }
+  }, [])
+
+  const applyStoredQuestOrder = useCallback((entries: DesignerQuest[]) => (
+    applyQuestOrderFromStorage(entries, questOrderRef.current)
+  ), [])
+
+  const syncQuestList = useCallback((updater: (prev: DesignerQuest[]) => DesignerQuest[]) => {
+    setQuests(prev => {
+      const next = updater(prev)
+      if (next === prev) {
+        return prev
+      }
+      questOrderRef.current = next.map(q => q.id)
+      persistQuestOrder(questOrderRef.current)
+      return next
+    })
+  }, [persistQuestOrder])
+
+  const reorderQuestList = useCallback((sourceId: string, targetId: string | null) => {
+    syncQuestList(prev => reorderQuestSequence(prev, sourceId, targetId))
+  }, [syncQuestList])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !deleteDialogOpen) return undefined
+    const listener = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !deleteInProgress) {
+        setDeleteDialogOpen(false)
+      }
+    }
+    window.addEventListener('keydown', listener)
+    return () => {
+      window.removeEventListener('keydown', listener)
+    }
+  }, [deleteDialogOpen, deleteInProgress])
+
   const applyQuestSnapshot = useCallback((snapshot?: SerializedQuestState | null, savedAt?: string | null) => {
     if (!snapshot) return false
     setPlayerQuestStatuses(snapshot.statuses || {})
@@ -553,13 +718,18 @@ export const QuestDesignerApp: React.FC = () => {
   }, [loadQuestStatusSnapshot])
 
   useEffect(() => {
+    if (!questOrderHydrated) return undefined
     let cancelled = false
     const load = async () => {
       setLoading(true)
       try {
         const data = await listTerminalQuests({ includeDrafts: true })
         if (cancelled) return
-        setQuests(data.map(normalizeQuest))
+        const normalized = data.map(normalizeQuest)
+        const ordered = applyStoredQuestOrder(normalized)
+        questOrderRef.current = ordered.map(q => q.id)
+        setQuests(ordered)
+        persistQuestOrder(questOrderRef.current)
       } catch (err) {
         console.error('[quest designer] failed to load quests', err)
         if (!cancelled) setErrors(['Failed to load quests from server.'])
@@ -569,7 +739,7 @@ export const QuestDesignerApp: React.FC = () => {
     }
     void load()
     return () => { cancelled = true }
-  }, [])
+  }, [applyStoredQuestOrder, persistQuestOrder, questOrderHydrated])
 
   useEffect(() => {
     let cancelled = false
@@ -600,12 +770,14 @@ export const QuestDesignerApp: React.FC = () => {
       return
     }
     const overrides = draft.embedded_filesystems || {}
-    const snapshot: Record<string, string> = {}
+    const snapshot: Record<string, FilesystemMap> = {}
     Object.entries(overrides).forEach(([systemId, fsMap]) => {
-      snapshot[systemId] = JSON.stringify(fsMap, null, 2)
+      const normalized = normalizeFilesystemMap(fsMap)
+      snapshot[systemId] = normalized
     })
     setFsDrafts(snapshot)
-  }, [draft?.id])
+  }, [draft])
+
 
   const selectQuest = (quest: DesignerQuest) => {
     setSelectedKey(quest.id)
@@ -616,21 +788,82 @@ export const QuestDesignerApp: React.FC = () => {
     setValidationMessages([])
   }
 
+  const handleQuestSelection = (quest: DesignerQuest) => {
+    if (draggingQuestId) return
+    selectQuest(quest)
+  }
+
+  const handleQuestDragStart = (questId: string) => (event: React.DragEvent<HTMLButtonElement>) => {
+    if (quests.length <= 1) return
+    event.stopPropagation()
+    setDraggingQuestId(questId)
+    setDragOverQuestId(null)
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', questId)
+  }
+
+  const handleQuestDragOver = (questId: string) => (event: React.DragEvent<HTMLButtonElement>) => {
+    if (!draggingQuestId || draggingQuestId === questId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverQuestId !== questId) {
+      setDragOverQuestId(questId)
+    }
+  }
+
+  const handleQuestDragLeave = (questId: string) => () => {
+    if (dragOverQuestId === questId) {
+      setDragOverQuestId(null)
+    }
+  }
+
+  const handleQuestDrop = (questId: string) => (event: React.DragEvent<HTMLButtonElement>) => {
+    if (!draggingQuestId) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (draggingQuestId !== questId) {
+      reorderQuestList(draggingQuestId, questId)
+    }
+    setDragOverQuestId(null)
+    setDraggingQuestId(null)
+  }
+
+  const handleQuestDragEnd = () => {
+    setDraggingQuestId(null)
+    setDragOverQuestId(null)
+  }
+
+  const handleDropToEnd = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggingQuestId) return
+    event.preventDefault()
+    reorderQuestList(draggingQuestId, null)
+    setDraggingQuestId(null)
+    setDragOverQuestId(null)
+  }
+
+  const handleDropZoneDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggingQuestId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverQuestId(null)
+  }
+
   const handleCreateQuest = () => {
     const fresh = createEmptyQuest()
-    setQuests(prev => [...prev, fresh])
+    syncQuestList(prev => [fresh, ...prev])
     selectQuest(fresh)
+    signalSessionActivity('quest-create')
   }
 
   const updateCurrentQuest = (updater: (prev: DesignerQuest) => DesignerQuest) => {
     setDraft(prev => (prev ? updater(prev) : prev))
   }
 
-  const updateTrigger = (patch: Partial<QuestTrigger>) => {
+  const updateTrigger = (patch: Partial<OperationTrigger>) => {
     updateCurrentQuest(prev => {
       if (!prev) return prev
       const base = prev.trigger || { type: DEFAULT_TRIGGER }
-      const merged: QuestTrigger = { ...base, ...patch }
+      const merged: OperationTrigger = { ...base, ...patch }
       if (patch.quest_ids) {
         merged.quest_ids = patch.quest_ids.filter(id => id && id !== prev.id)
       }
@@ -641,7 +874,7 @@ export const QuestDesignerApp: React.FC = () => {
     })
   }
 
-  const updateStep = (index: number, next: QuestStep) => {
+  const updateStep = (index: number, next: OperationStep) => {
     updateCurrentQuest(prev => ({ ...prev, steps: prev.steps.map((step, idx) => (idx === index ? next : step)) }))
   }
 
@@ -654,7 +887,7 @@ export const QuestDesignerApp: React.FC = () => {
                   >
                     {publishing ? 'Publishing…' : 'Publish'}
                   </button>
-    const nextStep: QuestStep = {
+    const nextStep: OperationStep = {
       id: `step_${draft.steps.length + 1}`,
       type: 'SCAN_HOST',
       params: { target_ip: '' },
@@ -677,7 +910,7 @@ export const QuestDesignerApp: React.FC = () => {
   const duplicateStep = (index: number) => {
     if (!draft) return
     const step = draft.steps[index]
-    const clone: QuestStep = {
+    const clone: OperationStep = {
       ...step,
       id: `${step.id}_copy`,
       params: { ...step.params }
@@ -718,7 +951,12 @@ export const QuestDesignerApp: React.FC = () => {
       .map(q => q.title || q.id)
   }, [draft, quests])
 
-  const questIdSuggestions = useMemo(() => quests.map(q => q.id), [quests])
+  const questIdSuggestions = useMemo(() => {
+    const currentId = draft?.id
+    return quests
+      .filter(q => !currentId || q.id !== currentId)
+      .map(q => q.id)
+  }, [draft?.id, quests])
 
   const completionTriggerInput = useTagInput({
     values: draft?.trigger?.quest_ids || [],
@@ -792,6 +1030,8 @@ export const QuestDesignerApp: React.FC = () => {
     if (!normalizedSearch) return true
     return quest.title.toLowerCase().includes(normalizedSearch) || quest.id.toLowerCase().includes(normalizedSearch)
   })
+  const allowQuestReorder = quests.length > 1
+  const dropZoneVisible = allowQuestReorder && !!draggingQuestId
 
   const questStatusCounters = useMemo(() => {
     const counters: Record<QuestLifecycleStatus, number> = {
@@ -820,6 +1060,8 @@ export const QuestDesignerApp: React.FC = () => {
     }).filter(entry => entry.quests.length)
     return { questLinks, flagDependents }
   }, [draft, quests])
+
+  const pendingDeleteQuest = deleteDialogOpen && draft && !draft.__unsaved ? draft : null
 
   const systemOptions = useMemo(() => (
     systemProfilesState.map(profile => ({
@@ -851,24 +1093,49 @@ export const QuestDesignerApp: React.FC = () => {
     return Array.from(ids)
   }, [draft])
 
-  const handleFilesystemDraftChange = (systemId: string, value: string) => {
-    setFsDrafts(prev => ({ ...prev, [systemId]: value }))
-  }
+  useEffect(() => {
+    if (!systemIdsInUse.length) return
+    setFsDrafts(prev => {
+      let changed = false
+      const next: Record<string, FilesystemMap> = { ...prev }
+      systemIdsInUse.forEach(systemId => {
+        if (!next[systemId]) {
+          changed = true
+          next[systemId] = createEmptyFilesystemMap()
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [systemIdsInUse])
+
+  useEffect(() => {
+    setTemplateDrafts(prev => {
+      const next = { ...prev }
+      let changed = false
+      Object.keys(next).forEach(key => {
+        if (!systemIdsInUse.includes(key)) {
+          delete next[key]
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [systemIdsInUse])
 
   const applyFilesystemDraft = (systemId: string) => {
     if (!draft) return
-    try {
-      const parsed = JSON.parse(fsDrafts[systemId] || '{}')
-      updateCurrentQuest(prev => ({
-        ...prev,
-        embedded_filesystems: {
-          ...(prev.embedded_filesystems || {}),
-          [systemId]: parsed
-        }
-      }))
-    } catch (err) {
-      setErrors([`Filesystem override for ${systemId} is invalid JSON.`])
+    const working = fsDrafts[systemId]
+    if (!working) {
+      setErrors([`Filesystem override for ${systemId} has no changes to apply.`])
+      return
     }
+    updateCurrentQuest(prev => ({
+      ...prev,
+      embedded_filesystems: {
+        ...(prev.embedded_filesystems || {}),
+        [systemId]: working
+      }
+    }))
   }
 
   const removeFilesystemOverride = (systemId: string) => {
@@ -878,29 +1145,263 @@ export const QuestDesignerApp: React.FC = () => {
       delete next[systemId]
       return { ...prev, embedded_filesystems: next }
     })
-    setFsDrafts(prev => {
-      const next = { ...prev }
-      delete next[systemId]
-      return next
-    })
+    setFsDrafts(prev => ({
+      ...prev,
+      [systemId]: createEmptyFilesystemMap()
+    }))
   }
 
   const applyTemplateToSystem = (systemId: string, templateId: string) => {
     const template = systemTemplates.find(tpl => tpl.id === templateId)
     if (!template) return
-    const serialized = JSON.stringify(template.filesystem, null, 2)
-    setFsDrafts(prev => ({ ...prev, [systemId]: serialized }))
+    const normalized = normalizeFilesystemMap(template.filesystem)
+    setFsDrafts(prev => ({ ...prev, [systemId]: normalized }))
     updateCurrentQuest(prev => ({
       ...prev,
       embedded_filesystems: {
         ...(prev.embedded_filesystems || {}),
-        [systemId]: template.filesystem
+        [systemId]: normalized
       }
     }))
   }
 
+  const replaceSystemIdReferences = useCallback((fromId: string, toId: string) => {
+    if (!fromId || !toId || fromId === toId) return
+    setDraft(prev => {
+      if (!prev) return prev
+      let changed = false
+      let stepsChanged = false
+      const nextSteps = prev.steps.map(step => {
+        if (step.target_system_id === fromId) {
+          stepsChanged = true
+          return { ...step, target_system_id: toId }
+        }
+        return step
+      })
+      if (stepsChanged) changed = true
+      let nextEmbedded = prev.embedded_filesystems
+      if (prev.embedded_filesystems?.[fromId]) {
+        nextEmbedded = { ...(prev.embedded_filesystems || {}) }
+        nextEmbedded[toId] = nextEmbedded[fromId]
+        delete nextEmbedded[fromId]
+        changed = true
+      }
+      const defaultChanged = prev.default_system_id === fromId
+      if (defaultChanged) changed = true
+      if (!changed) return prev
+      return {
+        ...prev,
+        default_system_id: defaultChanged ? toId : prev.default_system_id,
+        steps: stepsChanged ? nextSteps : prev.steps,
+        embedded_filesystems: nextEmbedded
+      }
+    })
+    setFsDrafts(prev => {
+      if (!prev[fromId]) return prev
+      const next = { ...prev }
+      next[toId] = next[fromId]
+      delete next[fromId]
+      return next
+    })
+  }, [setDraft, setFsDrafts])
+
+  const openSystemEditor = useCallback((mode: SystemEditorMode, systemId?: string) => {
+    setSystemEditorMode(mode)
+    if (mode === 'edit') {
+      const targetId = systemId || draft?.default_system_id || systemProfilesState[0]?.id
+      if (!targetId) {
+        pushToast({ title: 'No System Selected', message: 'Select a system profile before editing.', kind: 'warning', dedupeKey: 'system-edit-missing' })
+        return
+      }
+      const profile = systemProfilesState.find(entry => entry.id === targetId)
+      if (!profile) {
+        pushToast({ title: 'System Not Found', message: 'Unable to load the requested system profile.', kind: 'error', dedupeKey: 'system-edit-not-found' })
+        return
+      }
+      setSystemEditorDraft(createSystemEditorDraft(profile))
+      setSystemEditorOriginalId(profile.id)
+    } else {
+      setSystemEditorDraft(createSystemEditorDraft())
+      setSystemEditorOriginalId(null)
+    }
+    setSystemEditorError(null)
+    setSystemEditorVisible(true)
+  }, [draft, pushToast, systemProfilesState])
+
+  const closeSystemEditor = () => {
+    setSystemEditorVisible(false)
+    setSystemEditorError(null)
+  }
+
+  const handleSystemEditorChange = (field: keyof SystemEditorDraft, value: string) => {
+    setSystemEditorDraft(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleSystemEditorSave = async () => {
+    const normalizedId = sanitizeSystemId(systemEditorDraft.id)
+    const label = systemEditorDraft.label.trim()
+    if (!normalizedId) {
+      setSystemEditorError('System ID is required and can only include letters, numbers, hyphens, or underscores.')
+      return
+    }
+    if (!label) {
+      setSystemEditorError('System label is required.')
+      return
+    }
+    const ip = systemEditorDraft.ip.trim()
+    const username = systemEditorDraft.username.trim() || 'guest'
+    const startingPath = systemEditorDraft.startingPath.trim() || '/'
+    const footprint = systemEditorDraft.footprint.trim()
+    const existingProfile = systemEditorMode === 'edit'
+      ? systemProfilesState.find(profile => profile.id === (systemEditorOriginalId || normalizedId))
+      : null
+    const payload: SystemProfileDTO = {
+      id: normalizedId,
+      label,
+      identifiers: {
+        ips: ip ? [ip] : (existingProfile?.identifiers?.ips?.length ? existingProfile.identifiers.ips : ['0.0.0.0']),
+        hostnames: existingProfile?.identifiers?.hostnames || []
+      },
+      metadata: {
+        username,
+        startingPath,
+        footprint
+      },
+      filesystem: existingProfile?.filesystem || createEmptyFilesystemMap()
+    }
+    setSystemEditorSaving(true)
+    try {
+      const response = systemEditorMode === 'edit' && systemEditorOriginalId
+        ? await updateSystemProfile(systemEditorOriginalId, payload)
+        : await saveSystemProfile(payload)
+      const savedProfile = response.profile
+      setSystemProfilesState(prev => {
+        const filtered = prev.filter(profile => profile.id !== savedProfile.id && profile.id !== systemEditorOriginalId)
+        return [...filtered, savedProfile].sort((a, b) => a.label.localeCompare(b.label))
+      })
+      if (!draft?.default_system_id) {
+        updateCurrentQuest(prev => ({ ...prev, default_system_id: savedProfile.id }))
+      } else if (systemEditorMode === 'edit' && systemEditorOriginalId && systemEditorOriginalId !== savedProfile.id) {
+        replaceSystemIdReferences(systemEditorOriginalId, savedProfile.id)
+      }
+      setSystemEditorVisible(false)
+      setSystemEditorError(null)
+      pushToast({ title: 'System Saved', message: `${savedProfile.label} is ready to use.`, kind: 'success', dedupeKey: `system-save-${savedProfile.id}` })
+    } catch (err: any) {
+      console.error('[quest designer] failed to save system profile', err)
+      const friendly = err?.message || 'Failed to save system profile.'
+      setSystemEditorError(friendly)
+      pushToast({ title: 'System Save Failed', message: friendly, kind: 'error', dedupeKey: 'system-save-error' })
+    } finally {
+      setSystemEditorSaving(false)
+    }
+  }
+
+  const updateTemplateDraft = useCallback((systemId: string, patch: Partial<TemplateDraft>) => {
+    setTemplateDrafts(prev => {
+      const existing = prev[systemId] || { label: '', description: '' }
+      const next = { ...existing, ...patch }
+      if (!next.label.trim() && !next.description.trim()) {
+        if (!prev[systemId]) return prev
+        const clone = { ...prev }
+        delete clone[systemId]
+        return clone
+      }
+      if (prev[systemId] && prev[systemId].label === next.label && prev[systemId].description === next.description) {
+        return prev
+      }
+      return { ...prev, [systemId]: next }
+    })
+  }, [])
+
+  const saveFilesystemTemplate = async (systemId: string) => {
+    const fsDraft = fsDrafts[systemId]
+    if (!fsDraft) {
+      pushToast({ title: 'No Filesystem Changes', message: 'Edit the filesystem before saving a template.', kind: 'warning', dedupeKey: `template-missing-${systemId}` })
+      return
+    }
+    const templateDraft = templateDrafts[systemId]
+    const label = templateDraft?.label?.trim()
+    if (!label) {
+      pushToast({ title: 'Template Name Required', message: 'Enter a template name before saving.', kind: 'error', dedupeKey: `template-label-${systemId}` })
+      return
+    }
+    const description = templateDraft?.description?.trim()
+    const normalized = normalizeFilesystemMap(fsDraft)
+    let templateId = slugifyTemplateId(label)
+    if (!templateId) {
+      templateId = `${systemId}_${Date.now()}`
+    }
+    if (systemTemplates.some(template => template.id === templateId)) {
+      templateId = `${templateId}_${Date.now()}`
+    }
+    const payload: SystemProfileDTO = {
+      id: templateId,
+      label,
+      identifiers: { ips: ['0.0.0.0'], hostnames: [] },
+      metadata: { username: 'template', startingPath: '/', footprint: description || '' },
+      filesystem: cloneFilesystemMap(normalized)
+    }
+    setSavingTemplateSystem(systemId)
+    try {
+      await saveSystemProfile(payload, { template: true })
+      const templateRecord: SystemTemplateDTO = {
+        id: payload.id,
+        label: payload.label,
+        description: description || undefined,
+        filesystem: normalized
+      }
+      setSystemTemplates(prev => {
+        const without = prev.filter(entry => entry.id !== templateRecord.id)
+        return [...without, templateRecord].sort((a, b) => a.label.localeCompare(b.label))
+      })
+      setTemplateDrafts(prev => {
+        if (!prev[systemId]) return prev
+        const clone = { ...prev }
+        delete clone[systemId]
+        return clone
+      })
+      pushToast({
+        title: 'Template Saved',
+        message: `${label} is now available for reuse.`,
+        kind: 'success',
+        dedupeKey: `template-save-success-${systemId}`
+      })
+    } catch (err: any) {
+      console.error('[quest designer] failed to save template', err)
+      pushToast({
+        title: 'Template Save Failed',
+        message: err?.message || 'Unable to save filesystem template.',
+        kind: 'error',
+        dedupeKey: `template-save-error-${systemId}`
+      })
+    } finally {
+      setSavingTemplateSystem(null)
+    }
+  }
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    const template = systemTemplates.find(entry => entry.id === templateId)
+    if (!template) return
+    const confirmed = typeof window === 'undefined' ? true : window.confirm(`Delete template "${template.label}"?`)
+    if (!confirmed) return
+    setDeletingTemplateId(templateId)
+    try {
+      await deleteSystemProfile(templateId, { template: true })
+      setSystemTemplates(prev => prev.filter(entry => entry.id !== templateId))
+      pushToast({ title: 'Template Deleted', message: `${template.label} removed from library.`, kind: 'success', dedupeKey: `template-delete-${templateId}` })
+    } catch (err: any) {
+      console.error('[quest designer] failed to delete template', err)
+      const friendly = err?.message || 'Failed to delete template.'
+      pushToast({ title: 'Delete Failed', message: friendly, kind: 'error', dedupeKey: `template-delete-error-${templateId}` })
+    } finally {
+      setDeletingTemplateId(null)
+    }
+  }
+
   const runSave = async (statusOverride?: 'draft' | 'published') => {
     if (!draft) return
+    signalSessionActivity('quest-save-attempt')
     const targetDraft = statusOverride ? { ...draft, status: statusOverride } : draft
     if (statusOverride) {
       setDraft(targetDraft)
@@ -908,6 +1409,12 @@ export const QuestDesignerApp: React.FC = () => {
     const validation = validateQuestDraft(targetDraft)
     if (validation.length) {
       setErrors(validation)
+      pushToast({
+        title: 'Fix Validation Issues',
+        message: validation[0],
+        kind: 'error',
+        dedupeKey: 'quest-save-error'
+      })
       return
     }
     const wasUnsaved = !!targetDraft.__unsaved
@@ -929,13 +1436,26 @@ export const QuestDesignerApp: React.FC = () => {
       }
       const savedQuest = normalizeQuest(response.quest)
       setWarnings(response.warnings || [])
-      setQuests(prev => {
-        const others = prev.filter(q => q.id !== (selectedKey || targetDraft.id))
-        return [...others, savedQuest]
+      syncQuestList(prev => {
+        const targetId = selectedKey || targetDraft.id
+        const index = prev.findIndex(q => q.id === targetId)
+        if (index === -1) {
+          return [...prev, savedQuest]
+        }
+        const next = [...prev]
+        next.splice(index, 1, savedQuest)
+        return next
       })
       setSelectedKey(savedQuest.id)
       persistedIdRef.current = savedQuest.id
       setDraft(savedQuest)
+      pushToast({
+        title: isPublishing ? 'Quest Published' : 'Draft Saved',
+        message: `${savedQuest.title || savedQuest.id} ${isPublishing ? 'is now live for players.' : 'changes saved successfully.'}`,
+        kind: 'success',
+        dedupeKey: isPublishing ? 'quest-publish-success' : 'quest-save-success'
+      })
+      signalSessionActivity(isPublishing ? 'quest-publish-success' : 'quest-save-success')
       if (typeof window !== 'undefined') {
         const action = isPublishing ? 'publish' : wasUnsaved ? 'create' : 'update'
         window.dispatchEvent(new CustomEvent('terminalQuestsUpdated', {
@@ -944,7 +1464,15 @@ export const QuestDesignerApp: React.FC = () => {
       }
     } catch (err: any) {
       console.error('[quest designer] save failed', err)
-      setErrors([err?.message || 'Failed to save quest.'])
+      const friendly = err?.message || 'Failed to save quest.'
+      setErrors([friendly])
+      pushToast({
+        title: isPublishing ? 'Publish Failed' : 'Save Failed',
+        message: friendly,
+        kind: 'error',
+        dedupeKey: isPublishing ? 'quest-publish-error' : 'quest-save-error'
+      })
+      signalSessionActivity('quest-save-error')
     } finally {
       if (isPublishing) {
         setPublishing(false)
@@ -973,31 +1501,68 @@ export const QuestDesignerApp: React.FC = () => {
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!draft) return
     if (draft.__unsaved) {
-      setQuests(prev => prev.filter(q => q.id !== draft.id))
+      syncQuestList(prev => prev.filter(q => q.id !== draft.id))
       setDraft(null)
       setSelectedKey(null)
       persistedIdRef.current = null
+      setDeleteDialogOpen(false)
+      pushToast({
+        title: 'Draft Discarded',
+        message: `${draft.title || draft.id} removed from the queue.`,
+        kind: 'info',
+        dedupeKey: 'quest-delete-success'
+      })
+      signalSessionActivity('quest-delete-draft')
       return
     }
-    if (!window.confirm(`Delete quest ${draft.title}?`)) return
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteQuest = async () => {
+    if (!draft || draft.__unsaved) return
+    const targetDraft = draft
+    setDeleteInProgress(true)
     try {
-      await deleteTerminalQuest(draft.id)
+      await deleteTerminalQuest(targetDraft.id)
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('terminalQuestsUpdated', {
-          detail: { action: 'delete', questId: draft.id }
+          detail: { action: 'delete', questId: targetDraft.id }
         }))
       }
-      setQuests(prev => prev.filter(q => q.id !== draft.id))
+      syncQuestList(prev => prev.filter(q => q.id !== targetDraft.id))
       setDraft(null)
       setSelectedKey(null)
       persistedIdRef.current = null
+      pushToast({
+        title: 'Quest Deleted',
+        message: `${targetDraft.title || targetDraft.id} removed.`,
+        kind: 'warning',
+        dedupeKey: 'quest-delete-success'
+      })
+      signalSessionActivity('quest-delete-success')
     } catch (err: any) {
       console.error('[quest designer] delete failed', err)
-      setErrors([err?.message || 'Failed to delete quest.'])
+      const friendly = err?.message || 'Failed to delete quest.'
+      setErrors([friendly])
+      pushToast({
+        title: 'Delete Failed',
+        message: friendly,
+        kind: 'error',
+        dedupeKey: 'quest-delete-error'
+      })
+      signalSessionActivity('quest-delete-error')
+    } finally {
+      setDeleteInProgress(false)
+      setDeleteDialogOpen(false)
     }
+  }
+
+  const cancelDeleteQuest = () => {
+    if (deleteInProgress) return
+    setDeleteDialogOpen(false)
   }
 
   if (!isAdmin) {
@@ -1010,13 +1575,14 @@ export const QuestDesignerApp: React.FC = () => {
   }
 
   return (
-    <div
-      className="quest-designer"
-      onMouseMove={handleTooltipMouseMove}
-      onMouseLeave={handleTooltipLeave}
-      onFocusCapture={handleTooltipFocus}
-      onBlurCapture={handleTooltipBlur}
-    >
+    <>
+      <div
+        className="quest-designer"
+        onMouseMove={handleTooltipMouseMove}
+        onMouseLeave={handleTooltipLeave}
+        onFocusCapture={handleTooltipFocus}
+        onBlurCapture={handleTooltipBlur}
+      >
       <aside className="quest-list">
         <div className="quest-list-header">
           <div>
@@ -1032,17 +1598,23 @@ export const QuestDesignerApp: React.FC = () => {
           onChange={e => setSearch(e.target.value)}
         />
         <div className="quest-status-filter" data-tooltip={FIELD_HINTS.questStatusFilter}>
+          <div className="legend-heading">Quest Lifecycle</div>
           {STATUS_FILTERS.map(option => {
             const count = option.lifecycle ? questStatusCounters[option.lifecycle] : quests.length
             return (
               <button
                 key={option.value}
                 type="button"
-                className={`status-filter-chip ${questStatusFilter === option.value ? 'active' : ''}`}
+                className={`status-filter-chip status-${option.value} ${questStatusFilter === option.value ? 'active' : ''}`}
                 onClick={() => setQuestStatusFilter(option.value)}
               >
-                <span>{option.label}</span>
-                <span className="chip-count">{count}</span>
+                <span className="status-icon-wrapper" aria-hidden="true">
+                  <StatusIcon status={option.value} />
+                </span>
+                <span className="status-text">
+                  <span className="status-label">{option.label}</span>
+                  <span className="chip-count">{count}</span>
+                </span>
               </button>
             )
           })}
@@ -1056,15 +1628,23 @@ export const QuestDesignerApp: React.FC = () => {
           </button>
         </div>
         {questStatusError && <div className="inline-alert error">{questStatusError}</div>}
-        <div className="quest-list-items">
+        <div className={`quest-list-items ${draggingQuestId ? 'drag-active' : ''}`}>
           {filteredQuests.map(quest => {
             const isActive = !!draft && (quest.id === draft.id || quest.id === (selectedKey || ''))
             const lifecycleStatus = playerQuestStatuses[quest.id] || DEFAULT_LIFECYCLE_STATUS
+            const lifecycleLabel = STATUS_LABELS[lifecycleStatus]
             return (
               <button
                 key={quest.id}
-                className={`quest-list-item ${isActive ? 'selected' : ''}`}
-                onClick={() => selectQuest(quest)}
+                type="button"
+                className={`quest-list-item ${isActive ? 'selected' : ''} ${draggingQuestId === quest.id ? 'dragging' : ''} ${dragOverQuestId === quest.id ? 'drag-over' : ''}`}
+                onClick={() => handleQuestSelection(quest)}
+                draggable={allowQuestReorder}
+                onDragStart={allowQuestReorder ? handleQuestDragStart(quest.id) : undefined}
+                onDragOver={allowQuestReorder ? handleQuestDragOver(quest.id) : undefined}
+                onDragLeave={allowQuestReorder ? handleQuestDragLeave(quest.id) : undefined}
+                onDrop={allowQuestReorder ? handleQuestDrop(quest.id) : undefined}
+                onDragEnd={allowQuestReorder ? handleQuestDragEnd : undefined}
               >
                 <div className="quest-item-header">
                   <strong>{quest.title}</strong>
@@ -1072,8 +1652,12 @@ export const QuestDesignerApp: React.FC = () => {
                     <span className={`tag quest-status ${quest.status}`}>
                       {quest.status === 'published' ? 'Published' : 'Draft'}
                     </span>
-                    <span className={`tag lifecycle-status ${lifecycleStatus}`}>
-                      {STATUS_LABELS[lifecycleStatus]}
+                    <span
+                      className={`tag lifecycle-status ${lifecycleStatus}`}
+                      aria-label={lifecycleLabel}
+                    >
+                      <span className="sr-only">{lifecycleLabel}</span>
+                      <StatusIcon status={lifecycleStatus} />
                     </span>
                   </div>
                 </div>
@@ -1083,6 +1667,16 @@ export const QuestDesignerApp: React.FC = () => {
             )
           })}
           {!filteredQuests.length && <div className="muted empty">No quests match this filter.</div>}
+          {dropZoneVisible && (
+            <div
+              className="quest-drop-zone active"
+              role="presentation"
+              onDragOver={handleDropZoneDragOver}
+              onDrop={handleDropToEnd}
+            >
+              Drop to move to end
+            </div>
+          )}
         </div>
       </aside>
       <section className="quest-editor">
@@ -1103,6 +1697,7 @@ export const QuestDesignerApp: React.FC = () => {
                 <button type="button" onClick={handleSave} disabled={saving || publishing}>{saving ? 'Saving…' : 'Save Draft'}</button>
                 <button
                   type="button"
+                  className="publish"
                   onClick={handlePublish}
                   disabled={publishing || saving || draft.status === 'published'}
                 >
@@ -1179,7 +1774,7 @@ export const QuestDesignerApp: React.FC = () => {
                   Trigger
                   <select
                     value={draft.trigger?.type || DEFAULT_TRIGGER}
-                    onChange={e => updateTrigger({ type: e.target.value as QuestTriggerType })}
+                    onChange={e => updateTrigger({ type: e.target.value as OperationTriggerType })}
                   >
                     {TRIGGER_OPTIONS.map(option => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -1233,6 +1828,76 @@ export const QuestDesignerApp: React.FC = () => {
                     ))}
                   </select>
                 </label>
+                <div className="system-manager-row">
+                  <button type="button" onClick={() => openSystemEditor('create')} disabled={systemEditorSaving || systemsLoading}>+ New System</button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => openSystemEditor('edit', draft.default_system_id || undefined)}
+                    disabled={systemProfilesState.length === 0 || systemEditorSaving}
+                  >
+                    Manage Systems
+                  </button>
+                </div>
+                {systemEditorVisible && (
+                  <div className="system-editor-panel">
+                    <div className="system-editor-header">
+                      <div>
+                        <strong>{systemEditorMode === 'create' ? 'Create System Profile' : 'Edit System Profile'}</strong>
+                        <p className="muted">IDs sanitize to lowercase alphanumeric with dashes/underscores.</p>
+                      </div>
+                      <button type="button" className="ghost" onClick={closeSystemEditor}>Close</button>
+                    </div>
+                    {systemProfilesState.length > 0 && (
+                      <div className="system-editor-chip-row">
+                        {systemProfilesState.map(profile => (
+                          <button
+                            type="button"
+                            key={profile.id}
+                            className={`system-chip ${systemEditorDraft.id === profile.id ? 'active' : ''}`}
+                            onClick={() => openSystemEditor('edit', profile.id)}
+                          >
+                            <span className="system-chip-label">{profile.label}</span>
+                            <span className="system-chip-id">{profile.id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="system-editor-grid">
+                      <label>
+                        System ID
+                        <input value={systemEditorDraft.id} onChange={e => handleSystemEditorChange('id', e.target.value)} placeholder="relay_alpha" />
+                      </label>
+                      <label>
+                        Display Label
+                        <input value={systemEditorDraft.label} onChange={e => handleSystemEditorChange('label', e.target.value)} placeholder="Atlas Relay" />
+                      </label>
+                      <label>
+                        Operator Username
+                        <input value={systemEditorDraft.username} onChange={e => handleSystemEditorChange('username', e.target.value)} placeholder="guest" />
+                      </label>
+                      <label>
+                        Starting Path
+                        <input value={systemEditorDraft.startingPath} onChange={e => handleSystemEditorChange('startingPath', e.target.value)} placeholder="/home/guest" />
+                      </label>
+                      <label>
+                        Primary IP
+                        <input value={systemEditorDraft.ip} onChange={e => handleSystemEditorChange('ip', e.target.value)} placeholder="10.0.0.5" />
+                      </label>
+                      <label className="full">
+                        Footprint / Notes
+                        <textarea value={systemEditorDraft.footprint} onChange={e => handleSystemEditorChange('footprint', e.target.value)} rows={2} placeholder="Relay maintained by Atlas." />
+                      </label>
+                    </div>
+                    {systemEditorError && <div className="inline-alert error">{systemEditorError}</div>}
+                    <div className="system-editor-actions">
+                      <button type="button" onClick={handleSystemEditorSave} disabled={systemEditorSaving}>
+                        {systemEditorSaving ? 'Saving…' : systemEditorMode === 'create' ? 'Create System' : 'Save System'}
+                      </button>
+                      <button type="button" className="ghost" onClick={closeSystemEditor}>Cancel</button>
+                    </div>
+                  </div>
+                )}
                 <label className="full" data-tooltip={FIELD_HINTS.description}>
                   Description
                   <textarea value={draft.description} onChange={e => updateCurrentQuest(prev => ({ ...prev, description: e.target.value }))} />
@@ -1276,15 +1941,28 @@ export const QuestDesignerApp: React.FC = () => {
             </section>
 
             <section>
-              <div className="section-header">
+              <div className="section-header fs-section-header">
                 <h3>Filesystem Overrides</h3>
-                {systemsLoading && <span className="muted">Loading systems…</span>}
+                <div className="fs-header-actions">
+                  {systemsLoading && <span className="muted">Loading systems…</span>}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => setTemplateManagerOpen(prev => !prev)}
+                    disabled={systemsLoading}
+                  >
+                    {templateManagerOpen ? 'Hide Templates' : 'Manage Templates'}
+                  </button>
+                </div>
               </div>
               {!systemsLoading && !systemIdsInUse.length && (
                 <div className="muted empty">Assign a default system or set per-step targets to customize filesystems.</div>
               )}
               {systemIdsInUse.map(systemId => {
                 const label = systemLookup.get(systemId)?.label || systemId
+                const templateDraft = templateDrafts[systemId] || { label: '', description: '' }
+                const templatePlaceholder = `${label} Snapshot`
+                const isSavingTemplate = savingTemplateSystem === systemId
                 return (
                   <div key={systemId} className="fs-override-card">
                     <div className="fs-override-header">
@@ -1308,14 +1986,73 @@ export const QuestDesignerApp: React.FC = () => {
                       <button type="button" onClick={() => applyFilesystemDraft(systemId)}>Apply Override</button>
                       <button type="button" className="ghost" onClick={() => removeFilesystemOverride(systemId)} disabled={!draft.embedded_filesystems?.[systemId]}>Remove Override</button>
                     </div>
-                    <textarea
-                      value={fsDrafts[systemId] ?? ''}
-                      onChange={e => handleFilesystemDraftChange(systemId, e.target.value)}
-                      placeholder={'{ "/path": { "type": "dir" } }'}
+                    <div className="fs-template-save">
+                      <div className="fs-template-fields">
+                        <label>
+                          Template Name
+                          <input
+                            value={templateDraft.label}
+                            placeholder={templatePlaceholder}
+                            onChange={e => updateTemplateDraft(systemId, { label: e.target.value })}
+                          />
+                        </label>
+                        <label>
+                          Description
+                          <input
+                            value={templateDraft.description}
+                            placeholder="Optional context"
+                            onChange={e => updateTemplateDraft(systemId, { description: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => saveFilesystemTemplate(systemId)}
+                        disabled={isSavingTemplate || !templateDraft.label.trim()}
+                      >
+                        {isSavingTemplate ? 'Saving…' : 'Save as Template'}
+                      </button>
+                    </div>
+                    <FilesystemOverrideEditor
+                      systemId={systemId}
+                      value={fsDrafts[systemId] || createEmptyFilesystemMap()}
+                      onChange={(next: FilesystemMap) => setFsDrafts(prev => ({ ...prev, [systemId]: next }))}
                     />
                   </div>
                 )
               })}
+              {templateManagerOpen && (
+                <div className="template-manager-panel">
+                  <div className="template-manager-header">
+                    <strong>Template Library</strong>
+                    <span className="muted">{systemTemplates.length} saved template{systemTemplates.length === 1 ? '' : 's'}</span>
+                  </div>
+                  {systemTemplates.length === 0 && <div className="muted empty">No filesystem templates yet. Save one above to get started.</div>}
+                  {systemTemplates.length > 0 && (
+                    <div className="template-manager-grid">
+                      {systemTemplates.map(template => (
+                        <div key={template.id} className="template-card">
+                          <div className="template-card-header">
+                            <div>
+                              <strong>{template.label}</strong>
+                              <span className="template-id">{template.id}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="ghost danger"
+                              onClick={() => handleDeleteTemplate(template.id)}
+                              disabled={deletingTemplateId === template.id}
+                            >
+                              {deletingTemplateId === template.id ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
+                          {template.description && <p className="muted">{template.description}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
             <section>
@@ -1423,5 +2160,49 @@ export const QuestDesignerApp: React.FC = () => {
         )}
       </section>
     </div>
+      {pendingDeleteQuest && (
+        <div
+          className="quest-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quest-delete-title"
+          onClick={cancelDeleteQuest}
+        >
+          <div className="quest-modal" onClick={event => event.stopPropagation()}>
+            <header className="quest-modal-header">
+              <div>
+                <p className="muted">Secure Control • Deletion Request</p>
+                <h2 id="quest-delete-title">Confirm Quest Deletion</h2>
+              </div>
+            </header>
+            <div className="quest-modal-body">
+              <p>
+                Removing <strong>{pendingDeleteQuest.title || pendingDeleteQuest.id}</strong> will immediately
+                purge it from the terminal roster. This action cannot be undone.
+              </p>
+              <div className="quest-modal-card">
+                <div>
+                  <span className="muted">Quest ID</span>
+                  <p className="quest-modal-mono">{pendingDeleteQuest.id}</p>
+                </div>
+                <div>
+                  <span className="muted">Status</span>
+                  <p className={`quest-modal-status ${pendingDeleteQuest.status}`}>
+                    {pendingDeleteQuest.status === 'published' ? 'Published' : 'Draft'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="quest-modal-actions">
+              <button type="button" className="ghost" onClick={cancelDeleteQuest} disabled={deleteInProgress}>Cancel</button>
+              <button type="button" className="danger" onClick={confirmDeleteQuest} disabled={deleteInProgress}>
+                {deleteInProgress ? 'Deleting…' : 'Delete Quest'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
+

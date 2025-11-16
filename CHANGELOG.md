@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed dangerous sanitization
 
+### Added
+- Added bold formatting
+
+### Changed
+- Changed rendering path
+
+### Fixed
+- Fixed dangerous sanitization
+
 ## [0.5.10] - 2025-11-15
 
 ### Added

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { getApiBase, apiRequest } from '../services/api'
 
+import GoogleSignInButton from '../os/components/GoogleSignInButton'
 import Icon from '../os/components/icons/Icon'
 import { useUser } from '../os/UserContext'
+import { apiRequest } from '../services/api'
 import { loginWithGoogle } from '../services/auth'
-import GoogleSignInButton from '../os/components/GoogleSignInButton'
-import { hydrateFromServer, saveDesktopState } from '../services/saveService'
+import { saveDesktopState } from '../services/saveService'
 
 import './HomePage.css'
 
@@ -34,7 +34,7 @@ export const HomePage: React.FC = () => {
       try {
         await apiRequest('/health')
         if (mounted) setBackendStatus('online')
-      } catch (e) {
+      } catch (_err) {
         if (mounted) setBackendStatus('offline')
       }
     }
@@ -70,7 +70,14 @@ export const HomePage: React.FC = () => {
           // Clean hash from URL to avoid repeated processing
           history.replaceState(null, document.title, window.location.pathname + window.location.search)
           // Lock state then navigate
-          ;(async () => { try { await saveDesktopState({ isLocked: true }) } catch {} setTimeout(() => { window.location.href = '/app' }, 400) })()
+          ;(async () => {
+            try {
+              await saveDesktopState({ isLocked: true })
+            } catch (err) {
+              console.warn('[home] failed to persist lock state before redirect', err)
+            }
+            setTimeout(() => { window.location.href = '/app' }, 400)
+          })()
         } catch (e) {
           console.error('[oauth][token][store] error', e)
         }
@@ -86,7 +93,7 @@ export const HomePage: React.FC = () => {
   const [hpPassword, setHpPassword] = useState('')
   const [hpBusy, setHpBusy] = useState(false)
   const [hpError, setHpError] = useState<string | null>(null)
-  const [hpGoogleBusy, setHpGoogleBusy] = useState(false)
+  const hpGoogleBusy = false
   const [hpGoogleError, setHpGoogleError] = useState<string | null>(null)
 
   const submitHomeLogin = async () => {
@@ -105,18 +112,16 @@ export const HomePage: React.FC = () => {
     }
   }
 
-  const submitHomeLoginWithGoogle = () => {
-    // Start OAuth redirect flow and animate out like LockScreen
-    setIsExiting(true)
-    setTimeout(() => { window.location.href = `${getApiBase()}/api/auth/oauth/google` }, 500)
-  }
-
   // Guard navigation to OS routes behind auth
   const guardNav = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
     if (!user) {
       e.preventDefault()
       setHpError('Please authenticate to access the system')
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch {}
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } catch (err) {
+        console.warn('[home] failed to scroll to top after auth guard', err)
+      }
     }
   }
 

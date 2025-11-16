@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { logout } from '../../services/auth'
 
 import { SettingsIcon } from './Icons'
+import { logout } from '../../services/auth'
+
 
 export const SessionExpiredOverlay: React.FC = () => {
   const [show, setShow] = useState(false)

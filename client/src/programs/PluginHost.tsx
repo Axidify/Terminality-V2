@@ -1,4 +1,5 @@
 import React from 'react'
+
 import { usePluginManager } from '../modular-apps/PluginManager'
 
 export const PluginHost: React.FC<{ pluginId?: string }> = ({ pluginId }) => {

@@ -1,10 +1,11 @@
-import React from 'react'
 import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import React from 'react'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { QuestDefinition, QuestLifecycleStatus } from './terminalQuests/types'
 import { QuestDesignerApp } from './QuestDesignerApp'
+
+import type { QuestDefinition, QuestLifecycleStatus } from './terminalQuests/types'
 
 const mockListTerminalQuests = vi.fn()
 const mockListSystemProfiles = vi.fn()

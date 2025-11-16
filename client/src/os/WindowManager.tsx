@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 
 import { sounds } from './SoundEffects'
-import { saveDesktopState, getCachedDesktop } from '../services/saveService'
+import { saveDesktopState, getCachedDesktop, hydrateFromServer } from '../services/saveService'
 
 export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt' | 'modular' | 'modular-plugin' | 'quest-designer'
 
@@ -34,6 +34,8 @@ interface WMContextValue {
   restore: (id: string) => void
   /** Persist current bounds of a window to memory/localStorage. Call on drag/resize end. */
   commitBounds: (id: string) => void
+  /** Close all windows and optionally persist the cleared layout. */
+  clearAll: () => void
 }
 
 const WindowManagerContext = createContext<WMContextValue | undefined>(undefined)
@@ -59,8 +61,112 @@ const saveWindowMemory = (type: WindowType, bounds: { x: number; y: number; widt
   } catch { /* ignore: save memory failed */ }
 }
 
+interface WindowSnapshot {
+  id: string
+  type: WindowType
+  title: string
+  x: number
+  y: number
+  width: number
+  height: number
+  z: number
+  focused: boolean
+  minimized: boolean
+  maximized: boolean
+  payload?: Record<string, unknown>
+  prevBounds?: { x: number; y: number; width: number; height: number }
+}
+
+interface SessionLayoutSnapshot {
+  windows: WindowSnapshot[]
+  lastFocusedId?: string
+  savedAt?: string
+}
+
+const serializeWindow = (win: WindowInstance): WindowSnapshot => ({
+  id: win.id,
+  type: win.type,
+  title: win.title,
+  x: win.x,
+  y: win.y,
+  width: win.width,
+  height: win.height,
+  z: win.z,
+  focused: win.focused,
+  minimized: win.minimized,
+  maximized: win.maximized,
+  payload: win.payload,
+  prevBounds: win.prevBounds
+})
+
+const deserializeWindows = (snapshots: WindowSnapshot[], lastFocusedId?: string): WindowInstance[] => {
+  if (!snapshots.length) return []
+  const highest = snapshots.reduce((prev, current) => (current.z > prev.z ? current : prev))
+  const preferredId = snapshots.some(s => s.id === lastFocusedId) ? lastFocusedId! : highest.id
+  return snapshots.map(snapshot => ({
+    ...snapshot,
+    focused: snapshot.id === preferredId,
+    isMinimizing: false
+  }))
+}
+
+const bumpZCounter = (wins: WindowInstance[]) => {
+  const maxZ = wins.reduce((max, win) => Math.max(max, win.z), zCounter)
+  zCounter = Math.max(zCounter, maxZ)
+}
+
 export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [windows, setWindows] = useState<WindowInstance[]>([])
+  const initialWindows = React.useMemo(() => {
+    try {
+      const cached = getCachedDesktop()
+      const layout = cached?.sessionLayout as SessionLayoutSnapshot | undefined
+      if (layout?.windows?.length) {
+        const restored = deserializeWindows(layout.windows, layout.lastFocusedId)
+        bumpZCounter(restored)
+        return restored
+      }
+    } catch { /* ignore */ }
+    return []
+  }, [])
+  const [windows, setWindows] = useState<WindowInstance[]>(initialWindows)
+  const [layoutHydrated, setLayoutHydrated] = useState<boolean>(() => initialWindows.length > 0)
+  const skipPersistRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (layoutHydrated) return undefined
+    hydrateFromServer().then(state => {
+      if (cancelled) return
+      const layout = state.desktop?.sessionLayout as SessionLayoutSnapshot | undefined
+      const snapshots = layout?.windows
+      if (snapshots?.length) {
+        const restored = deserializeWindows(snapshots, layout?.lastFocusedId)
+        bumpZCounter(restored)
+        skipPersistRef.current = true
+        setWindows(restored)
+      }
+    }).finally(() => {
+      if (!cancelled) setLayoutHydrated(true)
+    })
+    return () => { cancelled = true }
+  }, [layoutHydrated])
+
+  useEffect(() => {
+    if (!layoutHydrated) return
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false
+      return
+    }
+    const snapshot = windows.map(serializeWindow)
+    const payload = {
+      sessionLayout: {
+        windows: snapshot,
+        lastFocusedId: windows.find(w => w.focused)?.id,
+        savedAt: new Date().toISOString()
+      }
+    } as const
+    void saveDesktopState(payload)
+  }, [windows, layoutHydrated])
 
   const open = useCallback((type: WindowType, opts?: Partial<WindowInstance>) => {
     sounds.windowOpen()
@@ -194,8 +300,12 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch { /* ignore */ }
   }, [windows])
 
+  const clearAll = useCallback(() => {
+    setWindows([])
+  }, [])
+
   return (
-    <WindowManagerContext.Provider value={{ windows, open, close, focus, move, resize, minimize, maximize, restore, commitBounds }}>
+    <WindowManagerContext.Provider value={{ windows, open, close, focus, move, resize, minimize, maximize, restore, commitBounds, clearAll }}>
       {children}
     </WindowManagerContext.Provider>
   )

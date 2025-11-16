@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useId } from 'react'
+
 import { requestReset, confirmReset } from '../services/auth'
 
 export const ResetPage: React.FC = () => {
@@ -9,6 +10,10 @@ export const ResetPage: React.FC = () => {
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [stage, setStage] = useState<'request' | 'confirm'>('request')
+  const usernameId = useId()
+  const emailId = useId()
+  const tokenId = useId()
+  const passwordId = useId()
 
   const doRequest = async () => {
     setMessage(null)
@@ -42,14 +47,14 @@ export const ResetPage: React.FC = () => {
           </label>
           {!byEmail && (
             <>
-              <label>Username</label>
-              <input value={username} onChange={e => setUsername(e.target.value)} />
+              <label htmlFor={usernameId}>Username</label>
+              <input id={usernameId} value={username} onChange={e => setUsername(e.target.value)} />
             </>
           )}
           {byEmail && (
             <>
-              <label>Email</label>
-              <input value={email} onChange={e => setEmail(e.target.value)} />
+              <label htmlFor={emailId}>Email</label>
+              <input id={emailId} value={email} onChange={e => setEmail(e.target.value)} />
             </>
           )}
           <div style={{ marginTop: 8 }}>
@@ -59,10 +64,10 @@ export const ResetPage: React.FC = () => {
       )}
       {stage === 'confirm' && (
         <div>
-          <label>Token</label>
-          <input value={token} onChange={e => setToken(e.target.value)} />
-          <label>New Password</label>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          <label htmlFor={tokenId}>Token</label>
+          <input id={tokenId} value={token} onChange={e => setToken(e.target.value)} />
+          <label htmlFor={passwordId}>New Password</label>
+          <input id={passwordId} type="password" value={password} onChange={e => setPassword(e.target.value)} />
           <div style={{ marginTop: 8 }}>
             <button onClick={doConfirm}>Confirm Reset</button>
           </div>

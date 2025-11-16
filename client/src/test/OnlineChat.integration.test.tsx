@@ -1,7 +1,9 @@
+import { render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+
 import { OnlineChat } from '../modular-apps/plugins/OnlineChatPlugin'
+import { NotificationProvider } from '../os/NotificationContext'
 import * as api from '../services/api'
 
 describe('OnlineChat plugin', () => {
@@ -15,7 +17,11 @@ describe('OnlineChat plugin', () => {
       return null as any
     })
 
-    render(<OnlineChat />)
+    render(
+      <NotificationProvider>
+        <OnlineChat />
+      </NotificationProvider>
+    )
 
     await waitFor(() => expect(screen.getByText('hello')).toBeInTheDocument())
 

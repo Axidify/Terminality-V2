@@ -1,5 +1,6 @@
 import { apiRequest } from './api'
 import { isLoggedIn as hasToken } from './auth'
+
 import type { SerializedQuestState } from '../programs/questSystem'
 
 export interface DesktopState {
@@ -49,6 +50,25 @@ export interface DesktopState {
       username?: string
       cwd?: string
     }
+    savedAt?: string
+  }
+  sessionLayout?: {
+    windows: Array<{
+      id: string
+      type: string
+      title: string
+      x: number
+      y: number
+      width: number
+      height: number
+      z: number
+      focused: boolean
+      minimized: boolean
+      maximized: boolean
+      payload?: Record<string, any>
+      prevBounds?: { x: number; y: number; width: number; height: number }
+    }>
+    lastFocusedId?: string
     savedAt?: string
   }
 }

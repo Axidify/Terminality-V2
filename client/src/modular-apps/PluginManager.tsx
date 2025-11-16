@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { saveDesktopState, getCachedDesktop } from '../services/saveService'
-import { ModularAppManifest } from './types'
+
 import registerAllBuiltin from './registerPlugins'
+import { ModularAppManifest } from './types'
+import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 
 interface PluginManagerContextValue {
   register: (manifest: ModularAppManifest) => void

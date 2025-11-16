@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
 
-import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 import { WindowType } from './WindowManager'
+import { saveDesktopState, getCachedDesktop } from '../services/saveService'
 
 export interface NotificationWindowTarget {
   type: WindowType

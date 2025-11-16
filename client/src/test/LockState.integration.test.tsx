@@ -34,7 +34,11 @@ describe('Lock state persistence', () => {
   beforeEach(() => {
     state = { version: 1, desktop: { isLocked: true }, story: {} }
     // Gate allows /app only if logged in; simulate an authenticated user
-    try { localStorage.setItem('authToken', 'test-token') } catch {}
+    try {
+      localStorage.setItem('authToken', 'test-token')
+    } catch (err) {
+      void err
+    }
   })
 
   it('hydrates from server isLocked and persists changes', async () => {

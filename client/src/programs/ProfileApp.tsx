@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useId } from 'react'
+
 import './ProfileApp.css'
 import { useUser } from '../os/UserContext'
 import { updateProfile } from '../services/auth'
@@ -12,6 +13,9 @@ export const ProfileApp: React.FC = () => {
   const [busy, setBusy] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const currentPasswordId = useId()
+  const newPasswordId = useId()
+  const confirmPasswordId = useId()
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -116,7 +120,7 @@ export const ProfileApp: React.FC = () => {
         </h2>
         <div className="profile-form">
           <div className="profile-field">
-            <label className="profile-label">CURRENT PASSWORD</label>
+            <label className="profile-label" htmlFor={currentPasswordId}>CURRENT PASSWORD</label>
             <input 
               type="password" 
               className="profile-input"
@@ -124,10 +128,11 @@ export const ProfileApp: React.FC = () => {
               onChange={e => setOldPassword(e.target.value)}
               placeholder="ENTER CURRENT PASSWORD"
               disabled={busy}
+              id={currentPasswordId}
             />
           </div>
           <div className="profile-field">
-            <label className="profile-label">NEW PASSWORD</label>
+            <label className="profile-label" htmlFor={newPasswordId}>NEW PASSWORD</label>
             <input 
               type="password" 
               className="profile-input"
@@ -135,10 +140,11 @@ export const ProfileApp: React.FC = () => {
               onChange={e => setNewPassword(e.target.value)}
               placeholder="ENTER NEW PASSWORD"
               disabled={busy}
+              id={newPasswordId}
             />
           </div>
           <div className="profile-field">
-            <label className="profile-label">CONFIRM PASSWORD</label>
+            <label className="profile-label" htmlFor={confirmPasswordId}>CONFIRM PASSWORD</label>
             <input 
               type="password" 
               className="profile-input"
@@ -146,6 +152,7 @@ export const ProfileApp: React.FC = () => {
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="CONFIRM NEW PASSWORD"
               disabled={busy}
+              id={confirmPasswordId}
             />
           </div>
           <button 

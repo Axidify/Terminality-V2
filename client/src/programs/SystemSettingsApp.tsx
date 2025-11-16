@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
-import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { useTheme, themes } from '../os/ThemeContext'
-import { useWindowManager } from '../os/WindowManager'
 import { useUser } from '../os/UserContext'
-import { saveDesktopState, getCachedDesktop } from '../services/saveService'
-import { VERSION, BUILD_DATE } from '../version'
+import { useWindowManager } from '../os/WindowManager'
 import { fetchAboutContent, updateAboutContent, FALLBACK_ABOUT_CONTENT, AboutContent } from '../services/aboutService'
 import { fetchChangelog, fetchChangelogMarkdown } from '../services/changelogService'
+import { saveDesktopState, getCachedDesktop } from '../services/saveService'
+import { VERSION, BUILD_DATE } from '../version'
+
 import type { ChangelogResponse } from '../services/changelogService'
+import type { Components } from 'react-markdown'
 import './SystemSettingsApp.css'
 
 type Tab = 'themes' | 'wallpapers' | 'specs' | 'about'
@@ -133,8 +134,10 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
   ), [])
 
   const markdownComponents = React.useMemo<Components>(() => ({
-    a: ({ node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-      <a {...props} target="_blank" rel="noreferrer" />
+    a: ({ node: _node, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown; children?: React.ReactNode }) => (
+      <a {...props} target="_blank" rel="noreferrer">
+        {children ?? props.href}
+      </a>
     )
   }), [])
 
@@ -210,23 +213,14 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
       await navigator.clipboard.writeText(versionInfo)
       setCopyFeedback('Version info copied!')
       setTimeout(() => setCopyFeedback(''), 2000)
-    } catch (err) {
+    } catch (_err) {
       setCopyFeedback('Failed to copy')
       setTimeout(() => setCopyFeedback(''), 2000)
     }
   }
 
   const [updateFeedback, setUpdateFeedback] = useState<string>('')
-  const [contributors, setContributors] = useState<string[]>([]) // scaffold for contributors list
 
-  const heroTitleSource = (aboutContent.heroTitle || 'Terminality OS').trim() || 'Terminality OS'
-  const [heroPrimaryWordRaw, ...heroSecondaryWords] = heroTitleSource.split(/\s+/)
-  const heroPrimaryWordmark = (heroPrimaryWordRaw || 'Terminality').toUpperCase()
-  const heroSecondaryWordmarkSource = heroSecondaryWords.length
-    ? heroSecondaryWords.join(' ')
-    : (heroPrimaryWordmark === 'TERMINALITY' ? 'OS' : '')
-  const heroSecondaryWordmark = heroSecondaryWordmarkSource ? heroSecondaryWordmarkSource.toUpperCase() : ''
-  const shouldRenderSecondaryWordmark = Boolean(heroSecondaryWordmark && heroSecondaryWordmark !== 'OS')
 
   const systemInfoItems = [
     { label: 'Version', value: displayVersion },
@@ -885,6 +879,19 @@ export const SystemSettingsApp: React.FC<SystemSettingsAppProps> = ({ payload })
                     </div>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  className="about-admin-button ghost"
+                  style={{ marginTop: '12px' }}
+                  onClick={() => { void copyVersionInfo() }}
+                >
+                  Copy Version Info
+                </button>
+                {copyFeedback && (
+                  <div className="about-copy-feedback" role="status" aria-live="polite">
+                    {copyFeedback}
+                  </div>
+                )}
               </div>
 
               <div className="about-section about-features">

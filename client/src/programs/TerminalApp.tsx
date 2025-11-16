@@ -2,6 +2,17 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import './TerminalApp.css'
 import {
+  createQuestEngineState,
+  getInboxEntries,
+  hydrateQuestState,
+  processQuestEvent,
+  QuestEngineState,
+  QuestEventType,
+  SerializedQuestState,
+  serializeQuestState,
+  setQuestDefinitions
+} from './questSystem'
+import {
   changeDirectory,
   createHostRuntime,
   getHostByIp,
@@ -13,20 +24,9 @@ import {
   setSystemProfiles,
   SystemProfile
 } from './terminalHosts'
-import {
-  createQuestEngineState,
-  getInboxEntries,
-  hydrateQuestState,
-  processQuestEvent,
-  QuestEngineState,
-  QuestEventType,
-  SerializedQuestState,
-  serializeQuestState,
-  setQuestDefinitions
-} from './questSystem'
 import { getCachedDesktop, hydrateFromServer, saveDesktopState } from '../services/saveService'
-import { listTerminalQuests } from '../services/terminalQuests'
 import { listSystemProfiles as fetchSystemProfiles, SystemProfilesResponse } from '../services/systemProfiles'
+import { listTerminalQuests } from '../services/terminalQuests'
 
 type Line = { role: 'system' | 'user'; text: string }
 type TerminalContext = 'local' | 'remote'

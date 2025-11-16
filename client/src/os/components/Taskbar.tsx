@@ -134,6 +134,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
                 className="start-menu-power" 
                 onClick={() => { 
                   setStartOpen(false); 
+                  wm.clearAll(); 
                   logout(); 
                   window.location.href = '/'; 
                 }}

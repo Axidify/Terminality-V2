@@ -30,7 +30,7 @@ describe('Terminal quests admin', () => {
     const token = login.body.access_token
     expect(token).toBeTruthy()
 
-    const payload = makePayload('quest_flag_test1')
+    const payload = makePayload(`quest_flag_test1_${Date.now()}`)
     payload.completion_flag = 'unit_completed_1'
 
     const res = await request(app).post('/api/terminal-quests').set('Authorization', `Bearer ${token}`).send({ quest: payload })
@@ -45,12 +45,12 @@ describe('Terminal quests admin', () => {
     expect(login.status).toBe(200)
     const token = login.body.access_token
 
-    const payloadA = makePayload('quest_flag_test_a')
+    const payloadA = makePayload(`quest_flag_test_a_${Date.now()}`)
     payloadA.completion_flag = 'shared_flag'
     const resA = await request(app).post('/api/terminal-quests').set('Authorization', `Bearer ${token}`).send({ quest: payloadA })
     expect(resA.status).toBe(201)
 
-    const payloadB = makePayload('quest_flag_test_b')
+    const payloadB = makePayload(`quest_flag_test_b_${Date.now()}`)
     payloadB.completion_flag = 'shared_flag'
     const resB = await request(app).post('/api/terminal-quests').set('Authorization', `Bearer ${token}`).send({ quest: payloadB })
     expect(resB.status).toBe(201)

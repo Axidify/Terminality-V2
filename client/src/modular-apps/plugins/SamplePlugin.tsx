@@ -1,6 +1,6 @@
 import React from 'react'
+
 import { ModularAppManifest } from '../types'
-import { usePluginManager } from '../PluginManager'
 
 export const SamplePlugin: React.FC = () => {
   return (
