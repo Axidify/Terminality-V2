@@ -3,12 +3,25 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import './QuestDesignerApp.css'
 import { FilesystemOverrideEditor } from './filesystem/FilesystemOverrideEditor'
 import { cloneFilesystemMap, createEmptyFilesystemMap, FilesystemMap, normalizeFilesystemMap } from './filesystemUtils'
+import {
+  buildMailList,
+  hydrateMailState,
+  ensureMailDelivered,
+  setMailDefinitions as primeMailDefinitions
+} from './mailSystem'
 import { applyQuestOrderFromStorage, DesignerQuest, reorderQuestSequence } from './questOrdering'
 import { signalSessionActivity } from '../os/SessionActivityContext'
 import { useToasts } from '../os/ToastContext'
 import { useUser } from '../os/UserContext'
 import { getCachedDesktop, hydrateFromServer } from '../services/saveService'
 import { deleteSystemProfile, listSystemProfiles, saveSystemProfile, SystemProfileDTO, SystemProfilesResponse, updateSystemProfile } from '../services/systemProfiles'
+import {
+  listAdminTerminalMail,
+  createTerminalMail,
+  updateTerminalMail,
+  deleteTerminalMail,
+  validateTerminalMail
+} from '../services/terminalMail'
 import {
   listTerminalQuests,
   createTerminalQuest,
@@ -17,8 +30,18 @@ import {
   validateTerminalQuest
 } from '../services/terminalQuests'
 
+import type { MailMessageDefinition, MailFolder, MailCategory, SerializedMailState, MailListEntry } from './mailSystem'
 import type { SerializedQuestState } from './questSystem'
-import type { QuestDefinition, QuestLifecycleStatus, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
+import type {
+  QuestDefinition,
+  QuestLifecycleStatus,
+  QuestMailConfig,
+  QuestRewardFlag,
+  QuestStep,
+  QuestStepType,
+  QuestTrigger,
+  QuestTriggerType
+} from './terminalQuests/types'
 
 interface TagInputProps {
   values: string[]
@@ -97,6 +120,25 @@ const FIELD_HINTS = {
   stepHintPrompt: 'Hint text surfaced when the player requests help.',
   stepCommandExample: 'Optional concrete command example shown with the hint.'
 } as const
+
+const MAIL_FOLDER_OPTIONS: MailFolder[] = ['inbox', 'news', 'spam', 'archive']
+const MAIL_CATEGORY_OPTIONS: MailCategory[] = ['main', 'side', 'lore', 'spam']
+const MAIL_STATUS_OPTIONS: Array<'draft' | 'published'> = ['draft', 'published']
+
+const createEmptyMailDraft = (): MailMessageDefinition & { status?: 'draft' | 'published' } => ({
+  id: '',
+  fromName: '',
+  fromAddress: '',
+  subject: '',
+  previewLine: '',
+  body: '',
+  inUniverseDate: new Date().toISOString(),
+  folder: 'inbox',
+  isUnreadByDefault: true,
+  linkedQuestId: null,
+  emailCategory: 'lore',
+  status: 'draft'
+})
 
 const StatusIcon: React.FC<{ status: StatusFilterValue }> = ({ status }) => {
   switch (status) {
@@ -184,6 +226,55 @@ const sanitizeRewardFlags = (flags?: Array<QuestRewardFlag | string>): QuestRewa
     normalized.push(flag)
   })
   return normalized.slice(0, 25)
+}
+
+const sanitizeMailIds = (ids?: string[], limit = 50): string[] => {
+  if (!ids?.length) return []
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  ids.forEach(id => {
+    const trimmed = id?.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    normalized.push(trimmed)
+  })
+  return normalized.slice(0, limit)
+}
+
+const sanitizeMailPreviewState = (state?: SerializedMailState | null): SerializedMailState | undefined => {
+  if (!state) return undefined
+  const deliveredIds = sanitizeMailIds(state.deliveredIds, 200)
+  const readIds = sanitizeMailIds(state.readIds, 200)
+  const archivedIds = sanitizeMailIds(state.archivedIds, 200)
+  const deletedIds = sanitizeMailIds(state.deletedIds, 200)
+  if (!deliveredIds.length && !readIds.length && !archivedIds.length && !deletedIds.length) {
+    return undefined
+  }
+  return {
+    ...(deliveredIds.length ? { deliveredIds } : {}),
+    ...(readIds.length ? { readIds } : {}),
+    ...(archivedIds.length ? { archivedIds } : {}),
+    ...(deletedIds.length ? { deletedIds } : {})
+  }
+}
+
+const normalizeQuestMailConfig = (mail?: QuestMailConfig | null): QuestMailConfig | undefined => {
+  if (!mail) return undefined
+  const briefingMailId = mail.briefingMailId?.trim() || undefined
+  const completionMailId = mail.completionMailId?.trim() || undefined
+  const autoDeliverOnAccept = sanitizeMailIds(mail.autoDeliverOnAccept)
+  const autoDeliverOnComplete = sanitizeMailIds(mail.autoDeliverOnComplete)
+  const previewState = sanitizeMailPreviewState(mail.previewState)
+  if (!briefingMailId && !completionMailId && !autoDeliverOnAccept.length && !autoDeliverOnComplete.length && !previewState) {
+    return undefined
+  }
+  return {
+    ...(briefingMailId ? { briefingMailId } : {}),
+    ...(completionMailId ? { completionMailId } : {}),
+    ...(autoDeliverOnAccept.length ? { autoDeliverOnAccept } : {}),
+    ...(autoDeliverOnComplete.length ? { autoDeliverOnComplete } : {}),
+    ...(previewState ? { previewState } : {})
+  }
 }
 
 const STEP_TYPES: StepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST']
@@ -332,6 +423,7 @@ const createEmptyQuest = (): DesignerQuest => ({
   embedded_filesystems: {},
   completion_flag: undefined,
   status: 'draft',
+  mail: undefined,
   __unsaved: true
 })
 
@@ -356,36 +448,41 @@ const normalizeQuest = (quest: Operation | DesignerQuest): DesignerQuest => ({
   embedded_filesystems: quest.embedded_filesystems || {},
   completion_flag: quest.completion_flag?.trim() || undefined,
   status: quest.status === 'published' ? 'published' : 'draft',
+  mail: normalizeQuestMailConfig(quest.mail),
   __unsaved: (quest as DesignerQuest).__unsaved
 })
 
-const questToPayload = (quest: DesignerQuest): Operation => ({
-  id: quest.id.trim(),
-  title: quest.title,
-  description: quest.description,
-  trigger: sanitizeTrigger(quest.trigger),
-  steps: quest.steps.map(step => ({
-    ...step,
-    params: step.params || {},
-    hints: step.hints && {
-      prompt: step.hints.prompt || undefined,
-      command_example: step.hints.command_example || undefined
-    }
-  })),
-  rewards: {
-    credits: quest.rewards?.credits,
-    flags: sanitizeRewardFlags(quest.rewards?.flags),
-    unlocks_commands: quest.rewards?.unlocks_commands || []
-  },
-  requirements: {
-    required_flags: quest.requirements?.required_flags || [],
-    required_quests: quest.requirements?.required_quests || []
-  },
-  default_system_id: quest.default_system_id,
-  embedded_filesystems: quest.embedded_filesystems,
-  completion_flag: quest.completion_flag?.trim() || undefined,
-  status: quest.status === 'published' ? 'published' : 'draft'
-})
+const questToPayload = (quest: DesignerQuest): Operation => {
+  const mail = normalizeQuestMailConfig(quest.mail)
+  return {
+    id: quest.id.trim(),
+    title: quest.title,
+    description: quest.description,
+    trigger: sanitizeTrigger(quest.trigger),
+    steps: quest.steps.map(step => ({
+      ...step,
+      params: step.params || {},
+      hints: step.hints && {
+        prompt: step.hints.prompt || undefined,
+        command_example: step.hints.command_example || undefined
+      }
+    })),
+    rewards: {
+      credits: quest.rewards?.credits,
+      flags: sanitizeRewardFlags(quest.rewards?.flags),
+      unlocks_commands: quest.rewards?.unlocks_commands || []
+    },
+    requirements: {
+      required_flags: quest.requirements?.required_flags || [],
+      required_quests: quest.requirements?.required_quests || []
+    },
+    default_system_id: quest.default_system_id,
+    embedded_filesystems: quest.embedded_filesystems,
+    completion_flag: quest.completion_flag?.trim() || undefined,
+    status: quest.status === 'published' ? 'published' : 'draft',
+    ...(mail ? { mail } : {})
+  }
+}
   
 const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: TagInputProps) => {
   const [input, setInput] = useState('')
@@ -545,7 +642,7 @@ const StepCard: React.FC<{
   )
 }
 
-const validateQuestDraft = (quest?: DesignerQuest): string[] => {
+const validateQuestDraft = (quest?: DesignerQuest, options?: { mailIds?: string[] }): string[] => {
   if (!quest) return ['Select or create a quest before saving.']
   const errors: string[] = []
   if (!quest.id.trim()) errors.push('Quest id is required.')
@@ -578,6 +675,24 @@ const validateQuestDraft = (quest?: DesignerQuest): string[] => {
       errors.push(`DELETE_FILE step ${step.id} requires params.file_path.`)
     }
   })
+
+  if (options?.mailIds?.length) {
+    const mailIdSet = new Set(options.mailIds)
+    const verifyMailLink = (id?: string | null, label?: string) => {
+      if (!id) return
+      if (!mailIdSet.has(id)) {
+        errors.push(`${label || 'Mail id'} "${id}" does not exist in the mail library.`)
+      }
+    }
+    verifyMailLink(quest.mail?.briefingMailId, 'Briefing mail')
+    verifyMailLink(quest.mail?.completionMailId, 'Completion mail')
+    quest.mail?.autoDeliverOnAccept?.forEach(id => verifyMailLink(id, 'Auto-deliver on accept id'))
+    quest.mail?.autoDeliverOnComplete?.forEach(id => verifyMailLink(id, 'Auto-deliver on complete id'))
+    quest.mail?.previewState?.deliveredIds?.forEach(id => verifyMailLink(id, 'Preview delivered id'))
+    quest.mail?.previewState?.readIds?.forEach(id => verifyMailLink(id, 'Preview read id'))
+    quest.mail?.previewState?.archivedIds?.forEach(id => verifyMailLink(id, 'Preview archived id'))
+    quest.mail?.previewState?.deletedIds?.forEach(id => verifyMailLink(id, 'Preview deleted id'))
+  }
   return errors
 }
 
@@ -621,12 +736,145 @@ export const QuestDesignerApp: React.FC = () => {
   const [dragOverQuestId, setDragOverQuestId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteInProgress, setDeleteInProgress] = useState(false)
+  const [mailDefinitions, setMailDefinitionsState] = useState<MailMessageDefinition[]>([])
+  const [mailLoading, setMailLoading] = useState(true)
+  const [mailError, setMailError] = useState<string | null>(null)
+  const [mailSearch, setMailSearch] = useState('')
+  const [mailSelectedId, setMailSelectedId] = useState<string | null>(null)
+  const [mailDraft, setMailDraft] = useState<MailMessageDefinition & { status?: 'draft' | 'published' }>(createEmptyMailDraft())
+  const [mailSaving, setMailSaving] = useState(false)
+  const [mailPublishing, setMailPublishing] = useState(false)
+  const [mailValidating, setMailValidating] = useState(false)
+  const [mailValidationErrors, setMailValidationErrors] = useState<string[]>([])
+  const [mailDeletingId, setMailDeletingId] = useState<string | null>(null)
   const flagKeyListId = useId()
   const rewardFlagKeyListId = useId()
   const persistedIdRef = useRef<string | null>(null)
   const questOrderRef = useRef<string[]>([])
   const [questOrderHydrated, setQuestOrderHydrated] = useState(false)
   const tooltipNodeRef = useRef<HTMLDivElement | null>(null)
+
+  const upsertMailDefinition = (message: MailMessageDefinition) => {
+    setMailDefinitionsState(prev => {
+      const next = prev.filter(entry => entry.id !== message.id)
+      next.push(message)
+      next.sort((a, b) => new Date(b.inUniverseDate).getTime() - new Date(a.inUniverseDate).getTime())
+      return next
+    })
+  }
+
+  const handleMailSelect = (message: MailMessageDefinition) => {
+    setMailSelectedId(message.id)
+    setMailDraft({ ...message, body: message.body || '', status: message.status || 'draft' })
+    setMailValidationErrors([])
+  }
+
+  const handleNewMail = () => {
+    setMailSelectedId(null)
+    setMailDraft(createEmptyMailDraft())
+    setMailValidationErrors([])
+  }
+
+  const handleMailDuplicate = () => {
+    setMailSelectedId(null)
+    setMailDraft(prev => ({
+      ...prev,
+      id: prev.id ? `${prev.id}_copy` : '',
+      subject: prev.subject ? `${prev.subject} (Copy)` : prev.subject,
+      status: 'draft'
+    }))
+    setMailValidationErrors([])
+  }
+
+  const handleMailFieldChange = (field: keyof (MailMessageDefinition & { status?: 'draft' | 'published' }), value: any) => {
+    setMailDraft(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleMailSave = async (statusOverride?: 'draft' | 'published') => {
+    const id = mailDraft.id?.trim()
+    if (!id) {
+      setMailValidationErrors(['Mail id is required before saving.'])
+      return
+    }
+    const payload = {
+      ...mailDraft,
+      id,
+      status: statusOverride || mailDraft.status || 'draft'
+    }
+    const exists = mailDefinitions.some(entry => entry.id === id)
+    setMailValidationErrors([])
+    setMailSaving(true)
+    if (statusOverride === 'published') {
+      setMailPublishing(true)
+    }
+    try {
+      const result = exists
+        ? await updateTerminalMail(id, payload)
+        : await createTerminalMail(payload)
+      upsertMailDefinition(result)
+      setMailDraft({ ...result, body: result.body || '', status: result.status || payload.status })
+      setMailSelectedId(result.id)
+      pushToast({
+        title: statusOverride === 'published' ? 'Mail Published' : 'Mail Saved',
+        message: `${result.subject || result.id} ${statusOverride === 'published' ? 'is now live.' : 'saved as draft.'}`,
+        kind: 'success',
+        dedupeKey: `mail-save-${result.id}`
+      })
+    } catch (err: any) {
+      console.error('[quest designer] failed to save mail', err)
+      setMailValidationErrors([err?.message || 'Failed to save mail.'])
+    } finally {
+      setMailSaving(false)
+      setMailPublishing(false)
+    }
+  }
+
+  const handleMailValidate = async () => {
+    setMailValidating(true)
+    try {
+      const result = await validateTerminalMail(mailDraft)
+      setMailValidationErrors(result.errors || [])
+      if (result.mail) {
+        setMailDraft(prev => ({ ...prev, ...result.mail }))
+      }
+    } catch (err: any) {
+      console.error('[quest designer] failed to validate mail', err)
+      setMailValidationErrors([err?.message || 'Mail validation failed.'])
+    } finally {
+      setMailValidating(false)
+    }
+  }
+
+  const handleMailDelete = async () => {
+    const id = mailDraft.id?.trim()
+    if (!id) return
+    const confirmed = typeof window === 'undefined' ? true : window.confirm(`Delete mail "${id}"?`)
+    if (!confirmed) return
+    setMailDeletingId(id)
+    try {
+      await deleteTerminalMail(id)
+      setMailDefinitionsState(prev => prev.filter(entry => entry.id !== id))
+      removeMailIdFromQuest(id)
+      handleNewMail()
+      pushToast({ title: 'Mail Deleted', message: `${id} removed from library.`, kind: 'warning', dedupeKey: `mail-delete-${id}` })
+    } catch (err: any) {
+      console.error('[quest designer] failed to delete mail', err)
+      setMailValidationErrors([err?.message || 'Failed to delete mail.'])
+    } finally {
+      setMailDeletingId(null)
+    }
+  }
+
+  const assignMailToQuest = (mailId: string, slot: 'briefing' | 'completion') => {
+    if (!mailId || !draft) return
+    updateQuestMailConfig(slot === 'briefing' ? { briefingMailId: mailId } : { completionMailId: mailId })
+    pushToast({
+      title: 'Quest Mail Linked',
+      message: `${slot === 'briefing' ? 'Briefing' : 'Completion'} mail set to ${mailId}.`,
+      kind: 'info',
+      dedupeKey: `quest-mail-${slot}-${mailId}`
+    })
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -647,6 +895,7 @@ export const QuestDesignerApp: React.FC = () => {
       setQuestOrderHydrated(true)
     }
   }, [setDraft, setFsDrafts])
+
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined
@@ -742,6 +991,38 @@ export const QuestDesignerApp: React.FC = () => {
       console.warn('[quest designer] unable to persist quest order', err)
     }
   }, [])
+
+  const loadMailLibrary = useCallback(async () => {
+    setMailLoading(true)
+    setMailError(null)
+    try {
+      const messages = await listAdminTerminalMail()
+      setMailDefinitionsState(messages)
+      return messages
+    } catch (err) {
+      console.error('[quest designer] failed to load mail library', err)
+      setMailDefinitionsState([])
+      setMailError('Unable to load mail library.')
+      return []
+    } finally {
+      setMailLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadMailLibrary()
+  }, [loadMailLibrary])
+
+  useEffect(() => {
+    primeMailDefinitions(mailDefinitions)
+  }, [mailDefinitions])
+
+  useEffect(() => {
+    if (!mailSelectedId || mailSaving || mailPublishing) return
+    const entry = mailDefinitions.find(mail => mail.id === mailSelectedId)
+    if (!entry) return
+    setMailDraft(prev => (prev.id === entry.id ? { ...entry, body: entry.body || '', status: entry.status || 'draft' } : prev))
+  }, [mailDefinitions, mailSelectedId, mailSaving, mailPublishing])
 
   const applyStoredQuestOrder = useCallback((entries: DesignerQuest[]) => (
     applyQuestOrderFromStorage(entries, questOrderRef.current)
@@ -959,6 +1240,106 @@ export const QuestDesignerApp: React.FC = () => {
     setDraft(prev => (prev ? updater(prev) : prev))
   }
 
+  const updateQuestMailConfig = (patch: Partial<QuestMailConfig> | null) => {
+    if (patch === null) {
+      updateCurrentQuest(prev => {
+        if (!prev?.mail) return prev
+        const clone = { ...prev }
+        delete clone.mail
+        return clone
+      })
+      return
+    }
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        mail: { ...(prev.mail || {}), ...patch }
+      }
+    })
+  }
+
+  const updateMailPreviewField = (field: keyof SerializedMailState, values: string[]) => {
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      const nextMail = { ...(prev.mail || {}) }
+      const nextPreview = { ...(nextMail.previewState || {}) }
+      if (values.length) {
+        nextPreview[field] = values
+      } else {
+        delete nextPreview[field]
+      }
+      if (Object.keys(nextPreview).length) {
+        nextMail.previewState = nextPreview
+      } else {
+        delete nextMail.previewState
+      }
+      return { ...prev, mail: nextMail }
+    })
+  }
+
+  const removeMailIdFromQuest = (mailId: string) => {
+    if (!mailId) return
+    updateCurrentQuest(prev => {
+      if (!prev?.mail) return prev
+      const nextMail: QuestMailConfig = { ...prev.mail }
+      let changed = false
+      if (nextMail.briefingMailId === mailId) {
+        delete nextMail.briefingMailId
+        changed = true
+      }
+      if (nextMail.completionMailId === mailId) {
+        delete nextMail.completionMailId
+        changed = true
+      }
+      if (nextMail.autoDeliverOnAccept?.length) {
+        const filtered = nextMail.autoDeliverOnAccept.filter(id => id !== mailId)
+        if (filtered.length !== nextMail.autoDeliverOnAccept.length) {
+          nextMail.autoDeliverOnAccept = filtered
+          changed = true
+        }
+        if (!nextMail.autoDeliverOnAccept.length) delete nextMail.autoDeliverOnAccept
+      }
+      if (nextMail.autoDeliverOnComplete?.length) {
+        const filtered = nextMail.autoDeliverOnComplete.filter(id => id !== mailId)
+        if (filtered.length !== nextMail.autoDeliverOnComplete.length) {
+          nextMail.autoDeliverOnComplete = filtered
+          changed = true
+        }
+        if (!nextMail.autoDeliverOnComplete.length) delete nextMail.autoDeliverOnComplete
+      }
+      if (nextMail.previewState) {
+        const preview = { ...nextMail.previewState }
+        const scrub = (key: keyof SerializedMailState) => {
+          const list = preview[key]
+          if (!Array.isArray(list) || !list.length) return
+          const filtered = list.filter(id => id !== mailId)
+          if (filtered.length !== list.length) {
+            preview[key] = filtered
+            changed = true
+          }
+          if (!filtered.length) delete preview[key]
+        }
+        scrub('deliveredIds')
+        scrub('readIds')
+        scrub('archivedIds')
+        scrub('deletedIds')
+        if (Object.keys(preview).length) {
+          nextMail.previewState = preview
+        } else {
+          delete nextMail.previewState
+        }
+      }
+      if (!changed) return prev
+      if (!nextMail.briefingMailId && !nextMail.completionMailId && !nextMail.autoDeliverOnAccept?.length && !nextMail.autoDeliverOnComplete?.length && !nextMail.previewState) {
+        const clone = { ...prev }
+        delete clone.mail
+        return clone
+      }
+      return { ...prev, mail: nextMail }
+    })
+  }
+
   const updateTrigger = (patch: Partial<OperationTrigger>) => {
     updateCurrentQuest(prev => {
       if (!prev) return prev
@@ -1089,6 +1470,56 @@ export const QuestDesignerApp: React.FC = () => {
     ariaLabel: 'Unlock command list'
   })
 
+  const mailIdSuggestions = useMemo(() => mailDefinitions.map(entry => entry.id), [mailDefinitions])
+
+  const autoDeliverAcceptInput = useTagInput({
+    values: draft?.mail?.autoDeliverOnAccept || [],
+    onChange: values => updateQuestMailConfig({ autoDeliverOnAccept: values }),
+    suggestions: mailIdSuggestions,
+    placeholder: 'mail_id',
+    ariaLabel: 'Mail delivered on accept'
+  })
+
+  const autoDeliverCompleteInput = useTagInput({
+    values: draft?.mail?.autoDeliverOnComplete || [],
+    onChange: values => updateQuestMailConfig({ autoDeliverOnComplete: values }),
+    suggestions: mailIdSuggestions,
+    placeholder: 'mail_id',
+    ariaLabel: 'Mail delivered on completion'
+  })
+
+  const previewDeliveredInput = useTagInput({
+    values: draft?.mail?.previewState?.deliveredIds || [],
+    onChange: values => updateMailPreviewField('deliveredIds', values),
+    suggestions: mailIdSuggestions,
+    placeholder: 'mail_id',
+    ariaLabel: 'Preview delivered ids'
+  })
+
+  const previewReadInput = useTagInput({
+    values: draft?.mail?.previewState?.readIds || [],
+    onChange: values => updateMailPreviewField('readIds', values),
+    suggestions: mailIdSuggestions,
+    placeholder: 'mail_id',
+    ariaLabel: 'Preview read ids'
+  })
+
+  const previewArchivedInput = useTagInput({
+    values: draft?.mail?.previewState?.archivedIds || [],
+    onChange: values => updateMailPreviewField('archivedIds', values),
+    suggestions: mailIdSuggestions,
+    placeholder: 'mail_id',
+    ariaLabel: 'Preview archived ids'
+  })
+
+  const previewDeletedInput = useTagInput({
+    values: draft?.mail?.previewState?.deletedIds || [],
+    onChange: values => updateMailPreviewField('deletedIds', values),
+    suggestions: mailIdSuggestions,
+    placeholder: 'mail_id',
+    ariaLabel: 'Preview deleted ids'
+  })
+
   const rewardFlags = draft?.rewards?.flags || []
 
   const addRewardFlag = () => {
@@ -1160,6 +1591,32 @@ export const QuestDesignerApp: React.FC = () => {
     }).filter(entry => entry.quests.length)
     return { questLinks, flagDependents }
   }, [draft, quests])
+
+  const filteredMailDefinitions = useMemo(() => {
+    const term = mailSearch.trim().toLowerCase()
+    if (!term) return mailDefinitions
+    return mailDefinitions.filter(mail => {
+      const haystack = [mail.id, mail.subject, mail.fromName, mail.fromAddress, mail.emailCategory, mail.folder]
+      return haystack.some(value => value?.toLowerCase().includes(term))
+    })
+  }, [mailDefinitions, mailSearch])
+
+  const mailPreviewState = useMemo(() => {
+    const serialized = draft?.mail?.previewState || null
+    let state = hydrateMailState(serialized)
+    state = ensureMailDelivered(state, draft?.mail?.autoDeliverOnAccept)
+    state = ensureMailDelivered(state, draft?.mail?.autoDeliverOnComplete)
+    return state
+  }, [draft?.mail])
+
+  const mailPreviewList: MailListEntry[] = useMemo(
+    () => buildMailList(mailPreviewState, { includeArchived: true, includeDeleted: true }),
+    [mailPreviewState]
+  )
+
+  const currentMailExists = useMemo(() => (
+    !!(mailDraft.id && mailDefinitions.some(entry => entry.id === mailDraft.id))
+  ), [mailDraft.id, mailDefinitions])
 
   const relationships = useMemo(() => {
     if (!draft) return null
@@ -1722,7 +2179,7 @@ export const QuestDesignerApp: React.FC = () => {
     if (statusOverride) {
       setDraft(targetDraft)
     }
-    const validation = validateQuestDraft(targetDraft)
+    const validation = validateQuestDraft(targetDraft, { mailIds: mailDefinitions.map(mail => mail.id) })
     if (validation.length) {
       setErrors(validation)
       pushToast({
@@ -1807,9 +2264,10 @@ export const QuestDesignerApp: React.FC = () => {
     try {
       const result = await validateTerminalQuest(questToPayload(draft))
       const designerIssues = gatherDesignerValidationIssues(draft, quests)
+      const clientValidation = validateQuestDraft(draft, { mailIds: mailDefinitions.map(mail => mail.id) })
       const serverErrors = result.errors || []
       const serverWarnings = result.warnings || []
-      const combinedErrors = [...serverErrors, ...designerIssues.errors]
+      const combinedErrors = [...serverErrors, ...designerIssues.errors, ...clientValidation]
       const combinedWarnings = [...serverWarnings, ...designerIssues.warnings]
       setValidationMessages(combinedErrors.length ? combinedErrors : ['Quest validated successfully.'])
       setWarnings(combinedWarnings)
@@ -2203,6 +2661,256 @@ export const QuestDesignerApp: React.FC = () => {
                     </small>
                   )}
                 </label>
+              </div>
+            </section>
+
+            <section className="quest-mail-section">
+              <div className="section-header">
+                <h3>Mail & Inbox</h3>
+                <div className="mail-section-actions">
+                  <button type="button" className="ghost" onClick={() => updateQuestMailConfig(null)} disabled={!draft.mail}>
+                    Clear Quest Mail
+                  </button>
+                </div>
+              </div>
+              <div className="quest-mail-grid">
+                <div className="mail-config-panel">
+                  <h4>Quest Mail Delivery</h4>
+                  <div className="info-grid">
+                    <label>
+                      Briefing Mail
+                      <select
+                        value={draft.mail?.briefingMailId || ''}
+                        onChange={e => updateQuestMailConfig({ briefingMailId: e.target.value || undefined })}
+                      >
+                        <option value="">None</option>
+                        {mailDefinitions.map(mail => (
+                          <option key={`briefing-${mail.id}`} value={mail.id}>
+                            {mail.subject || mail.id}{mail.status === 'draft' ? ' (draft)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Completion Mail
+                      <select
+                        value={draft.mail?.completionMailId || ''}
+                        onChange={e => updateQuestMailConfig({ completionMailId: e.target.value || undefined })}
+                      >
+                        <option value="">None</option>
+                        {mailDefinitions.map(mail => (
+                          <option key={`completion-${mail.id}`} value={mail.id}>
+                            {mail.subject || mail.id}{mail.status === 'draft' ? ' (draft)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="full">
+                      Auto-deliver on Accept
+                      {autoDeliverAcceptInput.Input}
+                    </label>
+                    <label className="full">
+                      Auto-deliver on Completion
+                      {autoDeliverCompleteInput.Input}
+                    </label>
+                  </div>
+                  <div className="mail-preview-controls">
+                    <div>
+                      <strong>Preview Delivered</strong>
+                      {previewDeliveredInput.Input}
+                    </div>
+                    <div>
+                      <strong>Preview Read</strong>
+                      {previewReadInput.Input}
+                    </div>
+                    <div>
+                      <strong>Preview Archived</strong>
+                      {previewArchivedInput.Input}
+                    </div>
+                    <div>
+                      <strong>Preview Deleted</strong>
+                      {previewDeletedInput.Input}
+                    </div>
+                  </div>
+                </div>
+                <div className="mail-preview-panel">
+                  <div className="mail-preview-header">
+                    <div>
+                      <h4>Inbox Preview</h4>
+                      <p className="muted">{mailPreviewList.length} delivered / {mailPreviewList.filter(entry => !entry.read && !entry.deleted && !entry.archived).length} unread</p>
+                    </div>
+                  </div>
+                  {mailPreviewList.length === 0 ? (
+                    <p className="muted empty">No mail delivered for this quest yet.</p>
+                  ) : (
+                    <ul className="mail-preview-list">
+                      {mailPreviewList.map(entry => (
+                        <li key={`preview-${entry.id}`} className={`mail-preview-item ${entry.read ? 'read' : 'unread'}`}>
+                          <div className="mail-preview-row">
+                            <div>
+                              <strong>{entry.subject}</strong>
+                              <span className="mail-preview-from">{entry.fromName}</span>
+                            </div>
+                            <div className="mail-preview-tags">
+                              <span className={`pill ${entry.read ? 'read' : 'unread'}`}>{entry.read ? 'Read' : 'Unread'}</span>
+                              {entry.archived && <span className="pill archived">Archived</span>}
+                              {entry.deleted && <span className="pill deleted">Deleted</span>}
+                            </div>
+                          </div>
+                          <p className="muted">{entry.previewLine || entry.body.slice(0, 120)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              <div className="mail-library-panel">
+                <div className="mail-library-column">
+                  <div className="mail-library-header">
+                    <h4>Mail Library</h4>
+                    <button type="button" onClick={handleNewMail}>+ New Mail</button>
+                  </div>
+                  <input
+                    className="mail-search"
+                    placeholder="Search mail"
+                    value={mailSearch}
+                    onChange={e => setMailSearch(e.target.value)}
+                  />
+                  {mailError && <div className="inline-alert error">{mailError}</div>}
+                  <div className={`mail-library-list ${mailLoading ? 'loading' : ''}`}>
+                    {mailLoading && <p className="muted">Loading mail…</p>}
+                    {!mailLoading && filteredMailDefinitions.length === 0 && <p className="muted empty">No mail matches this filter.</p>}
+                    {!mailLoading && filteredMailDefinitions.map(mail => (
+                      <button
+                        key={`mail-${mail.id}`}
+                        type="button"
+                        className={`mail-library-item ${mailSelectedId === mail.id ? 'selected' : ''}`}
+                        onClick={() => handleMailSelect(mail)}
+                      >
+                        <div>
+                          <strong>{mail.subject || mail.id}</strong>
+                          <span className="muted">{mail.fromName}</span>
+                        </div>
+                        <div className="mail-library-badges">
+                          <span className={`tag ${mail.status === 'published' ? 'published' : 'draft'}`}>{mail.status === 'published' ? 'Published' : 'Draft'}</span>
+                          <span className="tag pill-lite">{mail.folder}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mail-editor-panel">
+                  <div className="mail-editor-header">
+                    <div>
+                      <h4>{mailSelectedId ? `Editing ${mailSelectedId}` : 'New Mail'}</h4>
+                      <p className="muted">Standalone messages that can be linked to quests or lore drops.</p>
+                    </div>
+                    {mailSelectedId && (
+                      <button type="button" className="ghost" onClick={handleMailDuplicate}>
+                        Duplicate
+                      </button>
+                    )}
+                  </div>
+                  <div className="mail-editor-grid">
+                    <label>
+                      Mail ID
+                      <input value={mailDraft.id} onChange={e => handleMailFieldChange('id', e.target.value)} placeholder="ops_directive" />
+                    </label>
+                    <label>
+                      Status
+                      <select value={mailDraft.status || 'draft'} onChange={e => handleMailFieldChange('status', e.target.value)}>
+                        {MAIL_STATUS_OPTIONS.map(option => (
+                          <option key={`mail-status-${option}`} value={option}>{option === 'draft' ? 'Draft' : 'Published'}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Folder
+                      <select value={mailDraft.folder || 'inbox'} onChange={e => handleMailFieldChange('folder', e.target.value)}>
+                        {MAIL_FOLDER_OPTIONS.map(option => (
+                          <option key={`mail-folder-${option}`} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Category
+                      <select value={mailDraft.emailCategory || 'lore'} onChange={e => handleMailFieldChange('emailCategory', e.target.value)}>
+                        {MAIL_CATEGORY_OPTIONS.map(option => (
+                          <option key={`mail-category-${option}`} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      From Name
+                      <input value={mailDraft.fromName} onChange={e => handleMailFieldChange('fromName', e.target.value)} placeholder="Atlas Ops" />
+                    </label>
+                    <label>
+                      From Address
+                      <input value={mailDraft.fromAddress} onChange={e => handleMailFieldChange('fromAddress', e.target.value)} placeholder="ops@atlasnet" />
+                    </label>
+                    <label className="full">
+                      Subject
+                      <input value={mailDraft.subject} onChange={e => handleMailFieldChange('subject', e.target.value)} placeholder="Directive: …" />
+                    </label>
+                    <label className="full">
+                      Preview Line
+                      <input value={mailDraft.previewLine || ''} onChange={e => handleMailFieldChange('previewLine', e.target.value)} placeholder="Short summary" />
+                    </label>
+                    <label>
+                      In-universe Date
+                      <input value={mailDraft.inUniverseDate} onChange={e => handleMailFieldChange('inUniverseDate', e.target.value)} placeholder="2089-06-01 12:30" />
+                    </label>
+                    <label>
+                      Linked Quest
+                      <input value={mailDraft.linkedQuestId || ''} onChange={e => handleMailFieldChange('linkedQuestId', e.target.value)} placeholder="quest_id (optional)" />
+                    </label>
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={mailDraft.isUnreadByDefault ?? true}
+                        onChange={e => handleMailFieldChange('isUnreadByDefault', e.target.checked)}
+                      />
+                      Unread by default
+                    </label>
+                  </div>
+                  <label className="full">
+                    Body
+                    <textarea value={mailDraft.body} onChange={e => handleMailFieldChange('body', e.target.value)} rows={6} />
+                  </label>
+                  {mailValidationErrors.length > 0 && (
+                    <div className="inline-alert error">
+                      <strong>Mail Validation</strong>
+                      <ul>
+                        {mailValidationErrors.map(err => <li key={err}>{err}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="editor-actions mail-editor-actions">
+                    <button type="button" className="ghost" onClick={handleMailValidate} disabled={mailValidating}>
+                      {mailValidating ? 'Validating…' : 'Validate Mail'}
+                    </button>
+                    <button type="button" onClick={() => handleMailSave()} disabled={mailSaving || mailPublishing}>
+                      {mailSaving ? 'Saving…' : 'Save Draft'}
+                    </button>
+                    <button type="button" className="publish" onClick={() => handleMailSave('published')} disabled={mailPublishing || mailSaving}>
+                      {mailPublishing ? 'Publishing…' : 'Publish Mail'}
+                    </button>
+                    {currentMailExists && (
+                      <button type="button" className="danger" onClick={handleMailDelete} disabled={mailDeletingId === mailDraft.id}>
+                        {mailDeletingId === mailDraft.id ? 'Deleting…' : 'Delete Mail'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="mail-assign-actions">
+                    <button type="button" className="ghost" onClick={() => assignMailToQuest(mailDraft.id, 'briefing')} disabled={!draft || !mailDraft.id}>
+                      Use as Briefing Mail
+                    </button>
+                    <button type="button" className="ghost" onClick={() => assignMailToQuest(mailDraft.id, 'completion')} disabled={!draft || !mailDraft.id}>
+                      Use as Completion Mail
+                    </button>
+                  </div>
+                </div>
               </div>
             </section>
 

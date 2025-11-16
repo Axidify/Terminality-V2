@@ -1,3 +1,4 @@
+import type { SerializedMailState } from './mailSystem'
 import type {
   QuestDefinition,
   QuestLifecycleStatus,
@@ -96,6 +97,55 @@ const DEFAULT_QUEST_DEFINITIONS: QuestDefinition[] = [
     completion_flag: 'quest_intro_001_completed'
   }
 ]
+
+const normalizeMailIds = (ids?: string[]): string[] => {
+  if (!ids?.length) return []
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  ids.forEach(id => {
+    const trimmed = id?.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    normalized.push(trimmed)
+  })
+  return normalized.slice(0, 50)
+}
+
+const normalizeMailPreviewState = (state?: SerializedMailState | null): SerializedMailState | undefined => {
+  if (!state) return undefined
+  const deliveredIds = normalizeMailIds(state.deliveredIds)
+  const readIds = normalizeMailIds(state.readIds)
+  const archivedIds = normalizeMailIds(state.archivedIds)
+  const deletedIds = normalizeMailIds(state.deletedIds)
+  if (!deliveredIds.length && !readIds.length && !archivedIds.length && !deletedIds.length) {
+    return undefined
+  }
+  return {
+    ...(deliveredIds.length ? { deliveredIds } : {}),
+    ...(readIds.length ? { readIds } : {}),
+    ...(archivedIds.length ? { archivedIds } : {}),
+    ...(deletedIds.length ? { deletedIds } : {})
+  }
+}
+
+const normalizeMailConfig = (mail?: QuestDefinition['mail']): QuestDefinition['mail'] | undefined => {
+  if (!mail) return undefined
+  const briefingMailId = mail.briefingMailId?.trim() || undefined
+  const completionMailId = mail.completionMailId?.trim() || undefined
+  const autoDeliverOnAccept = normalizeMailIds(mail.autoDeliverOnAccept)
+  const autoDeliverOnComplete = normalizeMailIds(mail.autoDeliverOnComplete)
+  const previewState = normalizeMailPreviewState(mail.previewState)
+  if (!briefingMailId && !completionMailId && !autoDeliverOnAccept.length && !autoDeliverOnComplete.length && !previewState) {
+    return undefined
+  }
+  return {
+    ...(briefingMailId ? { briefingMailId } : {}),
+    ...(completionMailId ? { completionMailId } : {}),
+    ...(autoDeliverOnAccept.length ? { autoDeliverOnAccept } : {}),
+    ...(autoDeliverOnComplete.length ? { autoDeliverOnComplete } : {}),
+    ...(previewState ? { previewState } : {})
+  }
+}
 
 const ensureCompletionFlag = (quest: QuestDefinition): string => {
   if (quest.completion_flag && quest.completion_flag.trim()) {
@@ -204,7 +254,8 @@ const hydrateDefinitions = (definitions: QuestDefinition[]) => {
       required_flags: def.requirements?.required_flags || [],
       required_quests: def.requirements?.required_quests || []
     },
-    completion_flag: ensureCompletionFlag(def)
+    completion_flag: ensureCompletionFlag(def),
+    mail: normalizeMailConfig(def.mail)
   }))
   QUEST_DEFINITIONS.forEach(def => QUEST_INDEX.set(def.id, def))
 }
@@ -242,6 +293,18 @@ const matchesFlagRequirement = (flags: QuestFlagState[], flagKey: string, expect
     const value = (flag.value || DEFAULT_FLAG_VALUE).toLowerCase()
     return value === normalizedExpected
   })
+}
+
+const requirementsSatisfied = (quest: QuestDefinition, completedSet: Set<string>, flags: QuestFlagState[]): boolean => {
+  const requiredFlags = quest.requirements?.required_flags || []
+  if (requiredFlags.some(flag => !matchesFlagRequirement(flags, flag, undefined))) {
+    return false
+  }
+  const requiredQuests = quest.requirements?.required_quests || []
+  if (requiredQuests.some(reqId => !completedSet.has(reqId))) {
+    return false
+  }
+  return true
 }
 
 const triggerSatisfied = (trigger: QuestTrigger, completedSet: Set<string>, flags: QuestFlagState[]): boolean => {
@@ -472,3 +535,33 @@ export const getInboxEntries = (state: QuestEngineState): InboxEntry[] => {
 }
 
 export const getQuestDefinitions = () => QUEST_DEFINITIONS
+
+export const offerQuestFromMail = (state: QuestEngineState, questId?: string | null): QuestEventResult => {
+  if (!questId) {
+    return { state, notifications: [] }
+  }
+  const quest = getQuestDefinitionById(questId)
+  if (!quest) {
+    return { state, notifications: [] }
+  }
+  if (state.completedIds.includes(questId)) {
+    return { state, notifications: [] }
+  }
+  if (state.active.some(instance => instance.quest.id === questId)) {
+    return { state, notifications: [] }
+  }
+  const completedSet = new Set(state.completedIds)
+  if (!requirementsSatisfied(quest, completedSet, state.flags)) {
+    return { state, notifications: [] }
+  }
+  const nextStatuses: Record<string, QuestLifecycleStatus> = { ...state.statuses, [quest.id]: 'in_progress' }
+  const nextActive = [...state.active, { quest, currentStepIndex: 0, completed: false }]
+  return {
+    state: {
+      ...state,
+      active: nextActive,
+      statuses: nextStatuses
+    },
+    notifications: [`New quest available: ${quest.title}`]
+  }
+}

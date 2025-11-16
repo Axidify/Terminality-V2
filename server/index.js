@@ -13,6 +13,7 @@ const cookieParser = require('cookie-parser')
 const rateLimit = require('express-rate-limit')
 const { loadChangelogFromFile, readChangelogMarkdown } = require('./utils/markdownChangelog')
 const terminalQuestStore = require('./terminalQuestsStore')
+const terminalMailStore = require('./terminalMailStore')
 const systemProfilesStore = require('./systemProfilesStore')
 const economyStore = require('./economyStore')
 
@@ -1437,6 +1438,79 @@ app.post('/api/terminal-quests/validate', authMiddleware, requireAdmin, (req, re
     res.json({ errors: result.errors || [], warnings: result.warnings || [], quest: result.quest })
   } catch (err) {
     console.error('[api/terminal-quests/validate][post] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/terminal-mail', (_req, res) => {
+  try {
+    const messages = terminalMailStore.listMail({ includeDrafts: false })
+    res.json({ messages })
+  } catch (err) {
+    console.error('[api/terminal-mail][list] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/admin/terminal-mail', authMiddleware, requireAdmin, (_req, res) => {
+  try {
+    const messages = terminalMailStore.listMail({ includeDrafts: true })
+    res.json({ messages })
+  } catch (err) {
+    console.error('[api/admin/terminal-mail][list] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/admin/terminal-mail/validate', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.mail || req.body
+    const result = terminalMailStore.validateMailStandalone(payload)
+    res.json({ errors: result.errors || [], mail: result.mail })
+  } catch (err) {
+    console.error('[api/admin/terminal-mail/validate][post] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/admin/terminal-mail', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.mail || req.body
+    const result = terminalMailStore.createMail(payload)
+    if (result.errors) {
+      return res.status(400).json({ errors: result.errors })
+    }
+    res.status(201).json({ mail: result.mail })
+  } catch (err) {
+    console.error('[api/admin/terminal-mail][post] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.put('/api/admin/terminal-mail/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const payload = req.body?.mail || req.body
+    const result = terminalMailStore.updateMail(req.params.id, payload)
+    if (result.errors) {
+      const code = result.errors.includes('Mail not found.') ? 404 : 400
+      return res.status(code).json({ errors: result.errors })
+    }
+    res.json({ mail: result.mail })
+  } catch (err) {
+    console.error('[api/admin/terminal-mail/:id][put] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.delete('/api/admin/terminal-mail/:id', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const result = terminalMailStore.deleteMail(req.params.id)
+    if (result.errors) {
+      return res.status(404).json({ errors: result.errors })
+    }
+    res.json({ mail: result.mail })
+  } catch (err) {
+    console.error('[api/admin/terminal-mail/:id][delete] error', err)
     res.status(500).json({ message: 'Server error' })
   }
 })

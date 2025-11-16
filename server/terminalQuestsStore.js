@@ -9,6 +9,50 @@ const SYSTEM_REQUIRED_TYPES = new Set(['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE
 const TRIGGER_TYPES = new Set(['ON_FIRST_TERMINAL_OPEN', 'ON_QUEST_COMPLETION', 'ON_FLAG_SET'])
 const QUEST_STATUSES = new Set(['draft', 'published'])
 
+const normalizeMailIdList = (input, max = 50) => {
+  if (!Array.isArray(input)) return []
+  const seen = new Set()
+  const ids = []
+  for (const entry of input) {
+    const id = normalizeId(entry)
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+    if (ids.length >= max) break
+  }
+  return ids
+}
+
+const normalizeMailPreviewState = (input) => {
+  if (!input || typeof input !== 'object') return undefined
+  const draft = {
+    deliveredIds: normalizeMailIdList(input.deliveredIds, 200),
+    readIds: normalizeMailIdList(input.readIds, 200),
+    archivedIds: normalizeMailIdList(input.archivedIds, 200),
+    deletedIds: normalizeMailIdList(input.deletedIds, 200)
+  }
+  const hasState = draft.deliveredIds.length || draft.readIds.length || draft.archivedIds.length || draft.deletedIds.length
+  return hasState ? draft : undefined
+}
+
+const normalizeMailConfig = (input) => {
+  if (!input || typeof input !== 'object') return undefined
+  const briefingMailId = normalizeId(input.briefingMailId)
+  const completionMailId = normalizeId(input.completionMailId)
+  const autoDeliverOnAccept = normalizeMailIdList(input.autoDeliverOnAccept)
+  const autoDeliverOnComplete = normalizeMailIdList(input.autoDeliverOnComplete)
+  const previewState = normalizeMailPreviewState(input.previewState)
+  const hasConfig = briefingMailId || completionMailId || autoDeliverOnAccept.length || autoDeliverOnComplete.length || previewState
+  if (!hasConfig) return undefined
+  return {
+    ...(briefingMailId ? { briefingMailId } : {}),
+    ...(completionMailId ? { completionMailId } : {}),
+    ...(autoDeliverOnAccept.length ? { autoDeliverOnAccept } : {}),
+    ...(autoDeliverOnComplete.length ? { autoDeliverOnComplete } : {}),
+    ...(previewState ? { previewState } : {})
+  }
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
@@ -29,9 +73,14 @@ function readStore() {
     parsed.quests = parsed.quests.map((quest) => {
       const normalized = {
         ...quest,
-        status: normalizeStatus(quest?.status)
-      ,
+        status: normalizeStatus(quest?.status),
         completion_flag: typeof quest?.completion_flag === 'string' ? quest.completion_flag.trim() : undefined
+      }
+      const mailConfig = normalizeMailConfig(quest?.mail)
+      if (mailConfig) {
+        normalized.mail = mailConfig
+      } else {
+        delete normalized.mail
       }
       if (normalized?.rewards && Array.isArray(normalized.rewards.flags)) {
         normalized.rewards = {
@@ -386,6 +435,7 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
     : { required_flags: [], required_quests: [] }
 
   const status = normalizeStatus(input?.status)
+  const mail = normalizeMailConfig(input?.mail)
 
   if (errors.length) {
     return { errors }
@@ -402,7 +452,8 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
     default_system_id: defaultSystemId || undefined,
     embedded_filesystems: Object.keys(embeddedFilesystems).length ? embeddedFilesystems : undefined,
     completion_flag: normalizeId(input?.completion_flag) || undefined,
-    status
+    status,
+    ...(mail ? { mail } : {})
   }
   const warnings = buildQuestWarnings(quest, existing)
   return { quest, warnings }

@@ -1,3 +1,5 @@
+import type { SerializedMailState } from '../mailSystem'
+
 export type QuestTriggerType = 'ON_FIRST_TERMINAL_OPEN' | 'ON_QUEST_COMPLETION' | 'ON_FLAG_SET'
 
 export type QuestStepType = 'SCAN_HOST' | 'CONNECT_HOST' | 'DELETE_FILE' | 'DISCONNECT_HOST'
@@ -47,6 +49,16 @@ export interface QuestRewards {
   unlocks_commands?: string[]
 }
 
+export type QuestMailDeliveryPhase = 'on_accept' | 'on_complete'
+
+export interface QuestMailConfig {
+  briefingMailId?: string | null
+  completionMailId?: string | null
+  autoDeliverOnAccept?: string[]
+  autoDeliverOnComplete?: string[]
+  previewState?: SerializedMailState
+}
+
 export interface QuestDefinition {
   id: string
   title: string
@@ -59,6 +71,7 @@ export interface QuestDefinition {
   embedded_filesystems?: Record<string, Record<string, FileSystemNode>>
   status?: 'draft' | 'published'
   completion_flag?: string
+  mail?: QuestMailConfig
 }
 
 export interface FileSystemNode {

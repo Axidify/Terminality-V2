@@ -2,8 +2,23 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import './TerminalApp.css'
 import {
+  buildMailList,
+  countUnreadMail,
+  createMailEngineState,
+  ensureMailDelivered,
+  formatMailDateLabel,
+  formatMailTimestamp,
+  hydrateMailState,
+  MailFilterOptions,
+  MailListEntry,
+  MailEngineState,
+  markMailRead,
+  serializeMailState,
+  SerializedMailState,
+  setMailDefinitions
+} from './mailSystem'
+import {
   createQuestEngineState,
-  getInboxEntries,
   hydrateQuestState,
   processQuestEvent,
   QuestEngineState,
@@ -12,7 +27,8 @@ import {
   QuestEventType,
   SerializedQuestState,
   serializeQuestState,
-  setQuestDefinitions
+  setQuestDefinitions,
+  offerQuestFromMail
 } from './questSystem'
 import {
   changeDirectory,
@@ -28,6 +44,7 @@ import {
 } from './terminalHosts'
 import { getCachedDesktop, hydrateFromServer, saveDesktopState } from '../services/saveService'
 import { listSystemProfiles as fetchSystemProfiles, SystemProfilesResponse } from '../services/systemProfiles'
+import { listPublishedTerminalMail } from '../services/terminalMail'
 import { listTerminalQuests } from '../services/terminalQuests'
 
 type Line = { role: 'system' | 'user'; text: string }
@@ -44,6 +61,7 @@ interface TerminalSnapshot {
   lines?: Line[]
   buffer?: string
   questState?: SerializedQuestState | null
+  mailState?: SerializedMailState | null
 }
 
 interface CommandDescriptor {
@@ -51,11 +69,19 @@ interface CommandDescriptor {
   description: string
 }
 
+interface InboxListOptions extends MailFilterOptions {
+  page: number
+  pageSize: number
+}
+
 const PLAYER_ID = 'player-1'
+const MAIL_PAGE_SIZE = 7
 
 const LOCAL_COMMANDS: CommandDescriptor[] = [
   { name: 'help', description: 'Show locally available commands' },
-  { name: 'inbox', description: 'Review mission messages' },
+  { name: 'inbox [filters]', description: 'View secure email inbox' },
+  { name: 'mail <index>', description: 'Open a mail item by number' },
+  { name: 'open <index>', description: 'Open from the last inbox view' },
   { name: 'scan <ip>', description: 'Probe a host for reachability' },
   { name: 'connect <ip>', description: 'Open a remote shell' },
   { name: 'quest_debug', description: 'Dump quest engine debug info' },
@@ -106,20 +132,25 @@ const logQuestDebugInfo = (event: QuestEvent, result: QuestEventResult) => {
 
 export const TerminalApp: React.FC = () => {
   const [questState, setQuestState] = useState(createQuestEngineState)
+  const [mailState, setMailState] = useState(createMailEngineState)
   const [lines, setLines] = useState<Line[]>([{ role: 'system', text: 'Terminal ready. Type help.' }])
   const [buffer, setBuffer] = useState('')
   const [session, setSession] = useState<RemoteSession | null>(null)
   const [systemsReady, setSystemsReady] = useState(false)
   const [definitionsReady, setDefinitionsReady] = useState(false)
+  const [mailDefinitionsReady, setMailDefinitionsReady] = useState(false)
   const [hydrationComplete, setHydrationComplete] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
-  const questIntroPrinted = useRef(false)
   const pendingSnapshotRef = useRef<TerminalSnapshot | null>(null)
   const questStateInitializedRef = useRef(false)
+  const mailStateInitializedRef = useRef(false)
   const lastNotificationRef = useRef<string | null>(null)
+  const lastMailNoticeRef = useRef<string | null>(null)
+  const inboxListingRef = useRef<Record<number, string> | null>(null)
   const questStateRef = useRef<QuestEngineState>(questState)
-  const persistenceReady = definitionsReady && hydrationComplete
+  const mailStateRef = useRef<MailEngineState>(mailState)
+  const persistenceReady = definitionsReady && hydrationComplete && mailDefinitionsReady
 
   const context: TerminalContext = session ? 'remote' : 'local'
   const prompt = session ? `${session.hostIp}:${session.cwd}$` : '>'
@@ -147,12 +178,18 @@ export const TerminalApp: React.FC = () => {
 
   useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => {
-    outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' })
+    const target = outputRef.current
+    if (!target || typeof target.scrollTo !== 'function') return
+    target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' })
   }, [lines])
 
   useEffect(() => {
     questStateRef.current = questState
   }, [questState])
+
+  useEffect(() => {
+    mailStateRef.current = mailState
+  }, [mailState])
 
   useEffect(() => {
     let cancelled = false
@@ -215,21 +252,31 @@ export const TerminalApp: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    if (!definitionsReady) return
-    if (pendingSnapshotRef.current) {
-      const snapshot = pendingSnapshotRef.current
+    if (!definitionsReady || !hydrationComplete) return
+    const snapshot = pendingSnapshotRef.current
+    if (snapshot) {
       pendingSnapshotRef.current = null
       if (snapshot.questState) {
         setQuestState(hydrateQuestState(snapshot.questState))
       } else {
         setQuestState(createQuestEngineState())
       }
+      if (snapshot.mailState) {
+        setMailState(hydrateMailState(snapshot.mailState))
+      } else {
+        setMailState(createMailEngineState())
+      }
       questStateInitializedRef.current = true
+      mailStateInitializedRef.current = true
       return
     }
     if (!questStateInitializedRef.current) {
       setQuestState(createQuestEngineState())
       questStateInitializedRef.current = true
+    }
+    if (!mailStateInitializedRef.current) {
+      setMailState(createMailEngineState())
+      mailStateInitializedRef.current = true
     }
   }, [definitionsReady, hydrationComplete])
 
@@ -268,14 +315,42 @@ export const TerminalApp: React.FC = () => {
     }
   }, [])
 
-  const persistQuestState = useCallback((state: QuestEngineState) => {
-    if (!state) return
+  useEffect(() => {
+    let cancelled = false
+    const loadMail = async () => {
+      try {
+        const messages = await listPublishedTerminalMail()
+        if (cancelled) return
+        setMailDefinitions(messages)
+      } catch (err) {
+        console.warn('[terminal] failed to load mail definitions, using fallback', err)
+        setMailDefinitions([])
+      } finally {
+        if (!cancelled) {
+          setMailDefinitionsReady(true)
+        }
+      }
+    }
+    void loadMail()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mailDefinitionsReady) return
+    setMailState(prev => ensureMailDelivered(prev))
+  }, [mailDefinitionsReady])
+
+  const persistTerminalState = useCallback((quests: QuestEngineState, mail: MailEngineState) => {
+    if (!quests || !mail) return
     saveDesktopState({
       terminalState: {
-        questState: serializeQuestState(state),
+        questState: serializeQuestState(quests),
+        mailState: serializeMailState(mail),
         savedAt: new Date().toISOString()
       }
-    }).catch(err => console.warn('[terminal] failed to persist quest state', err))
+    }).catch(err => console.warn('[terminal] failed to persist terminal state', err))
   }, [])
 
   useEffect(() => {
@@ -283,49 +358,233 @@ export const TerminalApp: React.FC = () => {
     if (typeof window === 'undefined') return
 
     const timer = window.setTimeout(() => {
-      persistQuestState(questStateRef.current)
+      persistTerminalState(questStateRef.current, mailStateRef.current)
     }, 400)
 
     return () => {
       window.clearTimeout(timer)
     }
-  }, [persistQuestState, persistenceReady, questState])
+  }, [persistTerminalState, persistenceReady, questState, mailState])
 
   useEffect(() => {
     return () => {
-      persistQuestState(questStateRef.current)
+      persistTerminalState(questStateRef.current, mailStateRef.current)
     }
-  }, [persistQuestState])
+  }, [persistTerminalState])
 
   useEffect(() => {
-    // Don't print the intro until quest definitions and hydration are finished
-    if (!definitionsReady || !hydrationComplete || !questStateInitializedRef.current) return
-    if (questIntroPrinted.current) return
-    questIntroPrinted.current = true
-    const inbox = getInboxEntries(questState)
-    if (!inbox.length) {
-      print('Inbox empty. Await new directives.')
-      return
-    }
-    inbox.forEach(entry => {
-      print(`[inbox] ${entry.title}: ${entry.description}`)
-    })
-  }, [definitionsReady, hydrationComplete, questState])
+    if (!mailDefinitionsReady || !hydrationComplete || !mailStateInitializedRef.current) return
+    const unreadCount = countUnreadMail(mailState)
+    const notice = unreadCount > 0
+      ? `[mail] You have ${unreadCount} unread ${unreadCount === 1 ? 'message' : 'messages'}. Type "inbox" to view.`
+      : '[mail] Inbox empty. Type "inbox" to view all messages.'
+    if (lastMailNoticeRef.current === notice) return
+    lastMailNoticeRef.current = notice
+    print(notice)
+  }, [mailDefinitionsReady, hydrationComplete, mailState])
 
-  const showInbox = () => {
-    const entries = getInboxEntries(questState)
+  const tokenizeArgs = (input: string): string[] => input.match(/"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|\S+/g) || []
+  const stripQuotes = (value: string): string => value.replace(/^['"]|['"]$/g, '').trim()
+
+  const parseInboxArgs = (rawArgs: string): InboxListOptions => {
+    const options: InboxListOptions = { page: 1, pageSize: MAIL_PAGE_SIZE }
+    const tokens = tokenizeArgs(rawArgs.trim())
+    for (let idx = 0; idx < tokens.length; idx += 1) {
+      const token = tokens[idx]
+      const normalized = token.toLowerCase()
+      if (['inbox', 'mail', 'list'].includes(normalized)) {
+        continue
+      }
+      if (normalized === 'unread') {
+        options.unreadOnly = true
+        continue
+      }
+      if (normalized === 'from') {
+        const next = tokens[idx + 1]
+        if (next) {
+          options.sender = stripQuotes(next)
+          idx += 1
+        }
+        continue
+      }
+      if (normalized === 'search') {
+        const next = tokens[idx + 1]
+        if (next) {
+          options.search = stripQuotes(next)
+          idx += 1
+        }
+        continue
+      }
+      const pageMatch = normalized.match(/^(?:-?p|--page|page)(?:=)?(\d+)?$/)
+      if (pageMatch) {
+        if (pageMatch[1]) {
+          options.page = Math.max(1, parseInt(pageMatch[1], 10) || 1)
+        } else if (tokens[idx + 1]) {
+          options.page = Math.max(1, parseInt(tokens[idx + 1], 10) || 1)
+          idx += 1
+        }
+        continue
+      }
+    }
+    return options
+  }
+
+  const formatColumn = (value: string, width: number) => {
+    const safe = value.length > width
+      ? `${value.slice(0, Math.max(0, width - 3))}...`
+      : value
+    return safe.padEnd(width, ' ')
+  }
+
+  const renderInbox = (rawArgs: string) => {
+    const options = parseInboxArgs(rawArgs)
+    const { page, pageSize, ...filters } = options
+    const entries = buildMailList(mailState, filters)
     if (!entries.length) {
-      print('Inbox empty. Await new directives.')
+      print(filters.unreadOnly || filters.sender || filters.search
+        ? '[mail] No messages match that filter.'
+        : '[mail] Inbox empty.')
+      inboxListingRef.current = null
       return
     }
-    entries.forEach(entry => {
-      print(`[${entry.questId}] ${entry.title}`)
-      print(`    ${entry.description}`)
-      print(`    ${entry.progress}`)
-      if (entry.hint) {
-        print(`    Hint: ${entry.hint}`)
-      }
+    const totalPages = Math.max(1, Math.ceil(entries.length / pageSize))
+    const safePage = Math.min(Math.max(1, page), totalPages)
+    const startIndex = (safePage - 1) * pageSize
+    const visible = entries.slice(startIndex, startIndex + pageSize)
+    const unreadCount = countUnreadMail(mailState)
+    const indexMap: Record<number, string> = {}
+
+    print(`INBOX (${unreadCount} unread)`)
+    print('#  From               Subject                               Date        Unread')
+    print('-------------------------------------------------------------------------------')
+    visible.forEach((entry, idx) => {
+      const absoluteIndex = startIndex + idx + 1
+      indexMap[absoluteIndex] = entry.id
+      const row = `${String(absoluteIndex).padEnd(3)}${formatColumn(entry.fromName, 18)}${formatColumn(entry.subject, 37)}${formatColumn(formatMailDateLabel(entry.inUniverseDate), 12)}   ${entry.read ? ' ' : '*'}`
+      print(row)
     })
+    inboxListingRef.current = indexMap
+    if (totalPages > 1) {
+      if (safePage !== page) {
+        print(`[mail] Page ${page} unavailable. Showing page ${safePage} of ${totalPages}.`)
+      }
+      print(`Page ${safePage}/${totalPages}. Use "inbox page <n>" to navigate.`)
+    }
+  }
+
+  const openMailEntry = (entry: MailListEntry) => {
+    const recipientName = 'You'
+    const recipientEmail = 'operator@atlasnet'
+    const wasUnread = !entry.read
+    print(`From: ${entry.fromName} <${entry.fromAddress}>`)
+    print(`To: ${recipientName} <${recipientEmail}>`)
+    print(`Date: ${formatMailTimestamp(entry.inUniverseDate)}`)
+    print(`Subject: ${entry.subject}`)
+    print('')
+    entry.body.split(/\r?\n/).forEach(line => {
+      print(line || '\u00a0')
+    })
+    setMailState(prev => markMailRead(prev, entry.id))
+    if (wasUnread && entry.linkedQuestId) {
+      setQuestState(prev => {
+        const questResult = offerQuestFromMail(prev, entry.linkedQuestId)
+        if (questResult.notifications.length) {
+          questResult.notifications.forEach((note: string) => print(`[quest] ${note}`))
+        }
+        return questResult.state
+      })
+    }
+  }
+
+  const openMailById = (id: string) => {
+    if (!id) {
+      print('[mail] Specify which message to open.')
+      return
+    }
+    const entries = buildMailList(mailState, { includeArchived: true })
+    const target = entries.find(entry => entry.id === id)
+    if (!target) {
+      print(`[mail] Message ${id} not found.`)
+      return
+    }
+    openMailEntry(target)
+  }
+
+  const openMailFromListingIndex = (index: number) => {
+    if (!index || index < 1) {
+      print('Usage: open <index>')
+      return
+    }
+    const mapping = inboxListingRef.current
+    if (!mapping) {
+      print('[mail] Run "inbox" before opening by index.')
+      return
+    }
+    const id = mapping[index]
+    if (!id) {
+      print(`[mail] No message ${index} on the last inbox view.`)
+      return
+    }
+    openMailById(id)
+  }
+
+  const openMailByGlobalIndex = (index: number) => {
+    if (!index || index < 1) {
+      print('Usage: mail <index>')
+      return
+    }
+    const entries = buildMailList(mailState)
+    if (!entries.length) {
+      print('[mail] Inbox empty.')
+      return
+    }
+    const target = entries[index - 1]
+    if (!target) {
+      print(`[mail] No message ${index} found. Try "inbox" for the latest list.`)
+      return
+    }
+    openMailEntry(target)
+  }
+
+  const handleMailCommand = (args: string) => {
+    const trimmed = args.trim()
+    if (!trimmed) {
+      renderInbox('')
+      return
+    }
+    const lower = trimmed.toLowerCase()
+    if (lower.startsWith('inbox')) {
+      renderInbox(trimmed.slice(5).trim())
+      return
+    }
+    if (lower.startsWith('open ')) {
+      const idx = parseInt(trimmed.slice(5).trim(), 10)
+      if (Number.isNaN(idx)) {
+        print('Usage: mail open <index>')
+        return
+      }
+      openMailByGlobalIndex(idx)
+      return
+    }
+    const numeric = parseInt(trimmed, 10)
+    if (!Number.isNaN(numeric) && `${numeric}` === trimmed) {
+      openMailByGlobalIndex(numeric)
+      return
+    }
+    renderInbox(trimmed)
+  }
+
+  const handleOpenCommand = (args: string) => {
+    if (!args) {
+      print('Usage: open <index>')
+      return
+    }
+    const target = parseInt(args.trim(), 10)
+    if (Number.isNaN(target)) {
+      print('Usage: open <index>')
+      return
+    }
+    openMailFromListingIndex(target)
   }
 
   const printQuestDebug = () => {
@@ -360,7 +619,13 @@ export const TerminalApp: React.FC = () => {
         print(formatCommandList(LOCAL_COMMANDS))
         break
       case 'inbox':
-        showInbox()
+        renderInbox(args)
+        break
+      case 'mail':
+        handleMailCommand(args)
+        break
+      case 'open':
+        handleOpenCommand(args)
         break
       case 'scan': {
         if (!args) {
@@ -566,7 +831,7 @@ export const TerminalApp: React.FC = () => {
             {context === 'local' ? 'LOCAL :: inbox, scan, connect' : `REMOTE :: ${session?.cwd}`}
           </div>
           <div className="footer-right">
-            {getInboxEntries(questState).map(entry => entry.title).join(' | ') || 'Awaiting directives'}
+            {buildMailList(mailState).slice(0, 3).map(entry => entry.subject).join(' | ') || 'Awaiting directives'}
           </div>
         </div>
         <input

@@ -1,6 +1,7 @@
 import { apiRequest } from './api'
 import { isLoggedIn as hasToken } from './auth'
 
+import type { SerializedMailState } from '../programs/mailSystem'
 import type { SerializedQuestState } from '../programs/questSystem'
 
 export interface DesktopState {
@@ -45,6 +46,7 @@ export interface DesktopState {
     lines?: Array<{ role: 'system' | 'user'; text: string }>
     buffer?: string
     questState?: SerializedQuestState
+    mailState?: SerializedMailState
     session?: {
       hostIp: string
       username?: string
