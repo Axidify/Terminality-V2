@@ -1,5 +1,6 @@
 import type {
   QuestDefinition,
+  QuestLifecycleStatus,
   QuestRewardFlag,
   QuestStep,
   QuestStepType,
@@ -18,12 +19,14 @@ export interface QuestEngineState {
   active: QuestInstanceState[]
   completedIds: string[]
   flags: QuestFlagState[]
+  statuses: Record<string, QuestLifecycleStatus>
 }
 
 export interface SerializedQuestState {
   active?: Array<{ questId: string; currentStepIndex: number }>
   completedIds?: string[]
   flags?: Array<string | QuestFlagState>
+  statuses?: Record<string, QuestLifecycleStatus>
 }
 
 export interface QuestFlagState {
@@ -90,9 +93,17 @@ const DEFAULT_QUEST_DEFINITIONS: QuestDefinition[] = [
     rewards: {
       credits: 50,
       flags: [{ key: 'quest_intro_001_completed' }]
-    }
+    },
+    completion_flag: 'quest_intro_001_completed'
   }
 ]
+
+const ensureCompletionFlag = (quest: QuestDefinition): string => {
+  if (quest.completion_flag && quest.completion_flag.trim()) {
+    return quest.completion_flag.trim()
+  }
+  return `quest_completed_${quest.id}`
+}
 
 let QUEST_DEFINITIONS: QuestDefinition[] = [...DEFAULT_QUEST_DEFINITIONS]
 const QUEST_INDEX = new Map<string, QuestDefinition>()
@@ -193,7 +204,8 @@ const hydrateDefinitions = (definitions: QuestDefinition[]) => {
     requirements: {
       required_flags: def.requirements?.required_flags || [],
       required_quests: def.requirements?.required_quests || []
-    }
+    },
+    completion_flag: ensureCompletionFlag(def)
   }))
   QUEST_DEFINITIONS.forEach(def => QUEST_INDEX.set(def.id, def))
 }
@@ -213,6 +225,14 @@ const createTriggeredQuests = () => (
     .filter(q => q.trigger.type === 'ON_FIRST_TERMINAL_OPEN')
     .map<QuestInstanceState>(quest => ({ quest, currentStepIndex: 0, completed: false }))
 )
+
+const createStatusMap = (): Record<string, QuestLifecycleStatus> => {
+  const map: Record<string, QuestLifecycleStatus> = {}
+  QUEST_DEFINITIONS.forEach(def => {
+    map[def.id] = 'not_started'
+  })
+  return map
+}
 
 const matchesFlagRequirement = (flags: QuestFlagState[], flagKey: string, expectedValue?: string): boolean => {
   if (!flagKey) return false
@@ -243,12 +263,14 @@ const triggerSatisfied = (trigger: QuestTrigger, completedSet: Set<string>, flag
 const spawnTriggeredQuests = (
   active: QuestInstanceState[],
   completedIds: string[],
-  flags: QuestFlagState[]
+  flags: QuestFlagState[],
+  statuses: Record<string, QuestLifecycleStatus>
 ): { active: QuestInstanceState[]; triggered: QuestDefinition[] } => {
   const completedSet = new Set(completedIds)
   const activeIds = new Set(active.map(instance => instance.quest.id))
   const triggeredDefinitions = QUEST_DEFINITIONS.filter(quest => {
     if (completedSet.has(quest.id) || activeIds.has(quest.id)) return false
+    if (statuses[quest.id] === 'completed') return false
     return triggerSatisfied(quest.trigger, completedSet, flags)
   })
   if (!triggeredDefinitions.length) {
@@ -259,11 +281,14 @@ const spawnTriggeredQuests = (
 }
 
 export const createQuestEngineState = (): QuestEngineState => {
+  const statuses = createStatusMap()
   const baseActive = createTriggeredQuests()
+  baseActive.forEach(instance => { statuses[instance.quest.id] = 'in_progress' })
   return {
-    active: spawnTriggeredQuests(baseActive, [], []).active,
+    active: spawnTriggeredQuests(baseActive, [], [], statuses).active,
     completedIds: [],
-    flags: []
+    flags: [],
+    statuses
   }
 }
 
@@ -274,7 +299,18 @@ export const hydrateQuestState = (serialized?: SerializedQuestState | null): Que
     return createQuestEngineState()
   }
 
+  const statuses = createStatusMap()
+  if (serialized.statuses) {
+    Object.entries(serialized.statuses).forEach(([questId, status]) => {
+      if (status === 'completed' || status === 'in_progress' || status === 'not_started') {
+        statuses[questId] = status
+      }
+    })
+  }
   const completedSet = new Set(serialized.completedIds || [])
+  Object.entries(statuses).forEach(([questId, status]) => {
+    if (status === 'completed') completedSet.add(questId)
+  })
   const activeInstances: QuestInstanceState[] = []
 
   if (Array.isArray(serialized.active)) {
@@ -288,6 +324,7 @@ export const hydrateQuestState = (serialized?: SerializedQuestState | null): Que
         return
       }
       activeInstances.push({ quest, currentStepIndex: cappedIndex, completed: false })
+      statuses[quest.id] = 'in_progress'
     })
   }
 
@@ -295,17 +332,22 @@ export const hydrateQuestState = (serialized?: SerializedQuestState | null): Que
   createTriggeredQuests().forEach(instance => {
     if (!completedSet.has(instance.quest.id) && !existingActiveIds.has(instance.quest.id)) {
       activeInstances.push(instance)
+      statuses[instance.quest.id] = 'in_progress'
     }
   })
 
   const completedIdsList = Array.from(completedSet)
   const normalizedFlags = normalizeSerializedFlags(serialized.flags)
-  const hydratedActive = spawnTriggeredQuests(activeInstances, completedIdsList, normalizedFlags).active
+  const spawnResult = spawnTriggeredQuests(activeInstances, completedIdsList, normalizedFlags, statuses)
+  spawnResult.triggered.forEach(quest => {
+    statuses[quest.id] = 'in_progress'
+  })
 
   return {
-    active: hydratedActive,
+    active: spawnResult.active,
     completedIds: completedIdsList,
-    flags: normalizedFlags
+    flags: normalizedFlags,
+    statuses
   }
 }
 
@@ -319,7 +361,8 @@ export const serializeQuestState = (state: QuestEngineState): SerializedQuestSta
     flag.value && flag.value !== DEFAULT_FLAG_VALUE
       ? { key: flag.key, value: flag.value }
       : { key: flag.key }
-  ))
+  )),
+  statuses: { ...state.statuses }
 })
 
 const stepSatisfiedByEvent = (step: QuestStep, event: QuestEvent): boolean => {
@@ -347,6 +390,7 @@ export interface QuestEventResult {
 
 export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): QuestEventResult => {
   const notifications: string[] = []
+  const nextStatuses: Record<string, QuestLifecycleStatus> = { ...state.statuses }
   const nextActive: QuestInstanceState[] = state.active.map(instance => {
     if (instance.completed) return instance
     const currentStep = instance.quest.steps[instance.currentStepIndex]
@@ -356,9 +400,11 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
     const finished = nextIndex >= instance.quest.steps.length
     if (finished) {
       notifications.push(`Quest complete: ${instance.quest.title}`)
+      nextStatuses[instance.quest.id] = 'completed'
     } else {
       const nextStep = instance.quest.steps[nextIndex]
       notifications.push(`Progress: ${instance.quest.title} -> ${nextStep.id}`)
+      nextStatuses[instance.quest.id] = 'in_progress'
     }
     return {
       ...instance,
@@ -372,14 +418,20 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
     ? [...state.completedIds, ...newlyCompleted.map(inst => inst.quest.id)]
     : state.completedIds
 
-  const updatedFlags = newlyCompleted.reduce<QuestFlagState[]>((acc, inst) => (
+  let updatedFlags = newlyCompleted.reduce<QuestFlagState[]>((acc, inst) => (
     applyRewardFlags(acc, inst.quest.rewards?.flags)
   ), [...state.flags])
 
+  newlyCompleted.forEach(inst => {
+    const completionFlag = inst.quest.completion_flag || ensureCompletionFlag(inst.quest)
+    updatedFlags = upsertFlagState(updatedFlags, { key: completionFlag, value: DEFAULT_FLAG_VALUE })
+  })
+
   const stillActive = nextActive.filter(inst => !inst.completed)
-  const spawnResult = spawnTriggeredQuests(stillActive, updatedCompletedIds, updatedFlags)
+  const spawnResult = spawnTriggeredQuests(stillActive, updatedCompletedIds, updatedFlags, nextStatuses)
   if (spawnResult.triggered.length) {
     spawnResult.triggered.forEach(quest => {
+      nextStatuses[quest.id] = 'in_progress'
       notifications.push(`New quest available: ${quest.title}`)
     })
   }
@@ -388,7 +440,8 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
     state: {
       active: spawnResult.active,
       completedIds: updatedCompletedIds,
-      flags: updatedFlags
+      flags: updatedFlags,
+      statuses: nextStatuses
     },
     notifications
   }

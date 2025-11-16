@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import './TerminalApp.css'
 import {
@@ -86,6 +86,7 @@ export const TerminalApp: React.FC = () => {
   const pendingSnapshotRef = useRef<TerminalSnapshot | null>(null)
   const questStateInitializedRef = useRef(false)
   const lastNotificationRef = useRef<string | null>(null)
+  const questStateRef = useRef<QuestEngineState>(questState)
   const persistenceReady = definitionsReady && hydrationComplete
 
   const context: TerminalContext = session ? 'remote' : 'local'
@@ -114,6 +115,10 @@ export const TerminalApp: React.FC = () => {
   useEffect(() => {
     outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' })
   }, [lines])
+
+  useEffect(() => {
+    questStateRef.current = questState
+  }, [questState])
 
   useEffect(() => {
     let cancelled = false
@@ -180,12 +185,6 @@ export const TerminalApp: React.FC = () => {
     if (pendingSnapshotRef.current) {
       const snapshot = pendingSnapshotRef.current
       pendingSnapshotRef.current = null
-      if (Array.isArray(snapshot.lines)) {
-        setLines([...snapshot.lines])
-      }
-      if (typeof snapshot.buffer === 'string') {
-        setBuffer(snapshot.buffer)
-      }
       if (snapshot.questState) {
         setQuestState(hydrateQuestState(snapshot.questState))
       } else {
@@ -235,25 +234,34 @@ export const TerminalApp: React.FC = () => {
     }
   }, [])
 
+  const persistQuestState = useCallback((state: QuestEngineState) => {
+    if (!state) return
+    saveDesktopState({
+      terminalState: {
+        questState: serializeQuestState(state),
+        savedAt: new Date().toISOString()
+      }
+    }).catch(err => console.warn('[terminal] failed to persist quest state', err))
+  }, [])
+
   useEffect(() => {
     if (!persistenceReady) return
     if (typeof window === 'undefined') return
 
     const timer = window.setTimeout(() => {
-      void saveDesktopState({
-        terminalState: {
-          lines,
-          buffer,
-          questState: serializeQuestState(questState),
-          savedAt: new Date().toISOString()
-        }
-      })
-    }, 500)
+      persistQuestState(questStateRef.current)
+    }, 400)
 
     return () => {
       window.clearTimeout(timer)
     }
-  }, [lines, buffer, questState, persistenceReady])
+  }, [persistQuestState, persistenceReady, questState])
+
+  useEffect(() => {
+    return () => {
+      persistQuestState(questStateRef.current)
+    }
+  }, [persistQuestState])
 
   useEffect(() => {
     if (questIntroPrinted.current) return
@@ -455,7 +463,13 @@ export const TerminalApp: React.FC = () => {
 
   return (
     <div className="terminal-container">
-      <div className="terminal-frame" onClick={() => inputRef.current?.focus()}>
+      <div
+        className="terminal-frame"
+        onClick={() => inputRef.current?.focus()}
+        onContextMenu={(event) => {
+          event.preventDefault()
+        }}
+      >
         <div className="terminal-header">
           <div className="terminal-title">ops console</div>
           <div className="terminal-indicators">

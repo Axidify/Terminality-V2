@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import './QuestDesignerApp.css'
-import type { FileSystemNode, QuestDefinition, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
+import type { FileSystemNode, QuestDefinition, QuestLifecycleStatus, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
 import {
   listTerminalQuests,
   createTerminalQuest,
@@ -11,6 +11,8 @@ import {
 } from '../services/terminalQuests'
 import { listSystemProfiles, SystemProfileDTO, SystemProfilesResponse } from '../services/systemProfiles'
 import { useUser } from '../os/UserContext'
+import type { SerializedQuestState } from './questSystem'
+import { getCachedDesktop, hydrateFromServer } from '../services/saveService'
 
 interface DesignerQuest extends QuestDefinition {
   __unsaved?: boolean
@@ -31,10 +33,28 @@ const TRIGGER_OPTIONS: Array<{ value: QuestTriggerType; label: string }> = [
   { value: 'ON_FLAG_SET', label: 'On Flag Set' }
 ]
 
+type StatusFilterValue = 'all' | QuestLifecycleStatus
+
+const DEFAULT_LIFECYCLE_STATUS: QuestLifecycleStatus = 'not_started'
+
+const STATUS_LABELS: Record<QuestLifecycleStatus, string> = {
+  not_started: 'Not Started',
+  in_progress: 'Active',
+  completed: 'Completed'
+}
+
+const STATUS_FILTERS: Array<{ value: StatusFilterValue; label: string; lifecycle?: QuestLifecycleStatus }> = [
+  { value: 'all', label: 'All' },
+  { value: 'in_progress', label: 'Active', lifecycle: 'in_progress' },
+  { value: 'completed', label: 'Completed', lifecycle: 'completed' },
+  { value: 'not_started', label: 'Not Started', lifecycle: 'not_started' }
+]
+
 const FIELD_HINTS = {
   questId: 'Unique quest identifier referenced by automation and saves; keep stable once published.',
   questTitle: 'Player-facing title that appears in the terminal quest list.',
   questStatus: 'Draft quests stay internal; published quests sync to players.',
+  questStatusFilter: 'Filters rely on the most recent player desktop snapshot; refresh after testing quests to see updated lifecycle states.',
   triggerType: 'Determines when this quest activates (first terminal, quest completion, or flag).',
   completionQuests: 'Select quests whose completion automatically fires this quest trigger.',
   triggerFlagKey: 'Flag key watched for ON_FLAG_SET triggers.',
@@ -48,6 +68,7 @@ const FIELD_HINTS = {
   rewardFlagKey: 'Flag key stored in player state upon completion.',
   rewardFlagValue: 'Optional value stored alongside the flag key.',
   unlockCommands: 'Terminal commands unlocked for the player after this quest.',
+  completionFlag: 'Unique lifecycle flag automatically set when this quest completes; use it for dependencies and analytics.',
   stepId: 'Internal identifier for the step (used in logs/debugging).',
   stepType: 'Player action needed to progress this step.',
   stepTargetSystem: 'Override system target for this step; falls back to quest default.',
@@ -126,6 +147,7 @@ const createEmptyQuest = (): DesignerQuest => ({
   requirements: { required_flags: [], required_quests: [] },
   default_system_id: undefined,
   embedded_filesystems: {},
+  completion_flag: undefined,
   status: 'draft',
   __unsaved: true
 })
@@ -149,6 +171,7 @@ const normalizeQuest = (quest: QuestDefinition | DesignerQuest): DesignerQuest =
   trigger: sanitizeTrigger(quest.trigger),
   default_system_id: quest.default_system_id,
   embedded_filesystems: quest.embedded_filesystems || {},
+  completion_flag: quest.completion_flag?.trim() || undefined,
   status: quest.status === 'published' ? 'published' : 'draft',
   __unsaved: (quest as DesignerQuest).__unsaved
 })
@@ -177,6 +200,7 @@ const questToPayload = (quest: DesignerQuest): QuestDefinition => ({
   },
   default_system_id: quest.default_system_id,
   embedded_filesystems: quest.embedded_filesystems,
+  completion_flag: quest.completion_flag?.trim() || undefined,
   status: quest.status === 'published' ? 'published' : 'draft'
 })
 
@@ -391,6 +415,11 @@ export const QuestDesignerApp: React.FC = () => {
   const [systemTemplates, setSystemTemplates] = useState<SystemTemplateDTO[]>([])
   const [systemsLoading, setSystemsLoading] = useState(true)
   const [fsDrafts, setFsDrafts] = useState<Record<string, string>>({})
+  const [playerQuestStatuses, setPlayerQuestStatuses] = useState<Record<string, QuestLifecycleStatus>>({})
+  const [questStatusTimestamp, setQuestStatusTimestamp] = useState<string | null>(null)
+  const [questStateLoading, setQuestStateLoading] = useState(false)
+  const [questStatusError, setQuestStatusError] = useState<string | null>(null)
+  const [questStatusFilter, setQuestStatusFilter] = useState<StatusFilterValue>('all')
   const flagKeyListId = useId()
   const rewardFlagKeyListId = useId()
   const persistedIdRef = useRef<string | null>(null)
@@ -481,6 +510,47 @@ export const QuestDesignerApp: React.FC = () => {
   const handleTooltipBlur = useCallback(() => {
     hideTooltip()
   }, [hideTooltip])
+
+  const applyQuestSnapshot = useCallback((snapshot?: SerializedQuestState | null, savedAt?: string | null) => {
+    if (!snapshot) return false
+    setPlayerQuestStatuses(snapshot.statuses || {})
+    setQuestStatusTimestamp(savedAt || null)
+    return true
+  }, [])
+
+  const loadQuestStatusSnapshot = useCallback(async () => {
+    setQuestStateLoading(true)
+    setQuestStatusError(null)
+    let hadSnapshot = false
+    try {
+      const cached = getCachedDesktop()
+      if (cached?.terminalState?.questState) {
+        hadSnapshot = applyQuestSnapshot(cached.terminalState.questState, cached.terminalState.savedAt || null) || hadSnapshot
+      }
+      const unified = await hydrateFromServer()
+      if (unified?.desktop?.terminalState?.questState) {
+        hadSnapshot = applyQuestSnapshot(unified.desktop.terminalState.questState, unified.desktop.terminalState.savedAt || null) || hadSnapshot
+      } else if (!hadSnapshot) {
+        setPlayerQuestStatuses({})
+        setQuestStatusTimestamp(null)
+      }
+    } catch (err) {
+      console.error('[quest designer] failed to load quest snapshot', err)
+      if (!hadSnapshot) {
+        setQuestStatusError('Unable to load player quest status snapshot.')
+        setPlayerQuestStatuses({})
+        setQuestStatusTimestamp(null)
+      } else {
+        setQuestStatusError('Unable to refresh player quest status snapshot.')
+      }
+    } finally {
+      setQuestStateLoading(false)
+    }
+  }, [applyQuestSnapshot])
+
+  useEffect(() => {
+    void loadQuestStatusSnapshot()
+  }, [loadQuestStatusSnapshot])
 
   useEffect(() => {
     let cancelled = false
@@ -624,14 +694,29 @@ export const QuestDesignerApp: React.FC = () => {
 
   const questFlagSuggestions = useMemo(() => {
     const flags = new Set<string>()
-    quests.forEach(q => q.rewards?.flags?.forEach(entry => {
+    const source = draft ? [...quests.filter(q => q.id !== draft.id), draft] : quests
+    source.forEach(q => q.rewards?.flags?.forEach(entry => {
       const flag = sanitizeRewardFlagEntry(entry)
       if (!flag) return
       flags.add(flag.key)
       if (flag.value) flags.add(`${flag.key}=${flag.value}`)
     }))
+    source.forEach(q => {
+      const completionFlag = q.completion_flag?.trim()
+      if (!completionFlag) return
+      flags.add(completionFlag)
+    })
     return Array.from(flags)
-  }, [quests])
+  }, [draft, quests])
+
+  const completionFlagConflicts = useMemo(() => {
+    if (!draft) return [] as string[]
+    const trimmed = draft.completion_flag?.trim()
+    if (!trimmed) return []
+    return quests
+      .filter(q => q.id !== draft.id && q.completion_flag?.trim() === trimmed)
+      .map(q => q.title || q.id)
+  }, [draft, quests])
 
   const questIdSuggestions = useMemo(() => quests.map(q => q.id), [quests])
 
@@ -699,11 +784,29 @@ export const QuestDesignerApp: React.FC = () => {
     }))
   }
 
+  const normalizedSearch = search.trim().toLowerCase()
   const filteredQuests = quests.filter(quest => {
-    if (!search.trim()) return true
-    const term = search.toLowerCase()
-    return quest.title.toLowerCase().includes(term) || quest.id.toLowerCase().includes(term)
+    const lifecycle = playerQuestStatuses[quest.id] || DEFAULT_LIFECYCLE_STATUS
+    const matchesFilter = questStatusFilter === 'all' || lifecycle === questStatusFilter
+    if (!matchesFilter) return false
+    if (!normalizedSearch) return true
+    return quest.title.toLowerCase().includes(normalizedSearch) || quest.id.toLowerCase().includes(normalizedSearch)
   })
+
+  const questStatusCounters = useMemo(() => {
+    const counters: Record<QuestLifecycleStatus, number> = {
+      not_started: 0,
+      in_progress: 0,
+      completed: 0
+    }
+    quests.forEach(q => {
+      const lifecycle = playerQuestStatuses[q.id] || DEFAULT_LIFECYCLE_STATUS
+      counters[lifecycle] += 1
+    })
+    return counters
+  }, [playerQuestStatuses, quests])
+
+  const runtimeStatusForDraft = draft ? (playerQuestStatuses[draft.id] || DEFAULT_LIFECYCLE_STATUS) : DEFAULT_LIFECYCLE_STATUS
 
   const dependentQuests = useMemo(() => {
     if (!draft) return { questLinks: [], flagDependents: [] as Array<{ flag: QuestRewardFlag; quests: DesignerQuest[] }> }
@@ -724,6 +827,13 @@ export const QuestDesignerApp: React.FC = () => {
       label: `${profile.label}${profile.identifiers?.ips?.length ? ` (${profile.identifiers.ips[0]})` : ''}`
     }))
   ), [systemProfilesState])
+
+  const questStatusTimestampLabel = useMemo(() => {
+    if (!questStatusTimestamp) return 'Snapshot not captured yet.'
+    const parsed = new Date(questStatusTimestamp)
+    if (Number.isNaN(parsed.getTime())) return 'Snapshot timestamp unavailable.'
+    return `Snapshot saved ${parsed.toLocaleString()}`
+  }, [questStatusTimestamp])
 
   const systemLookup = useMemo(() => {
     const map = new Map<string, SystemProfileDTO>()
@@ -921,24 +1031,55 @@ export const QuestDesignerApp: React.FC = () => {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        <div className="quest-status-filter" data-tooltip={FIELD_HINTS.questStatusFilter}>
+          {STATUS_FILTERS.map(option => {
+            const count = option.lifecycle ? questStatusCounters[option.lifecycle] : quests.length
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`status-filter-chip ${questStatusFilter === option.value ? 'active' : ''}`}
+                onClick={() => setQuestStatusFilter(option.value)}
+              >
+                <span>{option.label}</span>
+                <span className="chip-count">{count}</span>
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            className="ghost refresh-status"
+            onClick={() => { void loadQuestStatusSnapshot() }}
+            disabled={questStateLoading}
+          >
+            {questStateLoading ? 'Syncing…' : 'Refresh'}
+          </button>
+        </div>
+        {questStatusError && <div className="inline-alert error">{questStatusError}</div>}
         <div className="quest-list-items">
           {filteredQuests.map(quest => {
             const isActive = !!draft && (quest.id === draft.id || quest.id === (selectedKey || ''))
+            const lifecycleStatus = playerQuestStatuses[quest.id] || DEFAULT_LIFECYCLE_STATUS
             return (
               <button
                 key={quest.id}
                 className={`quest-list-item ${isActive ? 'selected' : ''}`}
                 onClick={() => selectQuest(quest)}
               >
-              <div className="quest-item-header">
-                <strong>{quest.title}</strong>
-                <span className={`tag quest-status ${quest.status}`}>
-                  {quest.status === 'published' ? 'Published' : 'Draft'}
-                </span>
-              </div>
-              <span className="muted">{quest.id}</span>
-              {quest.__unsaved && <span className="tag unsaved">Unsaved</span>}
-            </button>
+                <div className="quest-item-header">
+                  <strong>{quest.title}</strong>
+                  <div className="quest-item-badges">
+                    <span className={`tag quest-status ${quest.status}`}>
+                      {quest.status === 'published' ? 'Published' : 'Draft'}
+                    </span>
+                    <span className={`tag lifecycle-status ${lifecycleStatus}`}>
+                      {STATUS_LABELS[lifecycleStatus]}
+                    </span>
+                  </div>
+                </div>
+                <span className="muted">{quest.id}</span>
+                {quest.__unsaved && <span className="tag unsaved">Unsaved</span>}
+              </button>
             )
           })}
           {!filteredQuests.length && <div className="muted empty">No quests match this filter.</div>}
@@ -970,6 +1111,21 @@ export const QuestDesignerApp: React.FC = () => {
                 <button type="button" className="danger" onClick={handleDelete}>Delete</button>
               </div>
             </header>
+
+            <div className="quest-runtime-status">
+              <div>
+                <span className={`status-pill ${runtimeStatusForDraft}`}>{STATUS_LABELS[runtimeStatusForDraft]}</span>
+                <span className="muted status-timestamp">{questStatusTimestampLabel}</span>
+              </div>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => { void loadQuestStatusSnapshot() }}
+                disabled={questStateLoading}
+              >
+                {questStateLoading ? 'Syncing…' : 'Refresh Status'}
+              </button>
+            </div>
 
             {errors.length > 0 && (
               <div className="alert error">
@@ -1080,6 +1236,19 @@ export const QuestDesignerApp: React.FC = () => {
                 <label className="full" data-tooltip={FIELD_HINTS.description}>
                   Description
                   <textarea value={draft.description} onChange={e => updateCurrentQuest(prev => ({ ...prev, description: e.target.value }))} />
+                </label>
+                <label className="full" data-tooltip={FIELD_HINTS.completionFlag}>
+                  Completion Flag
+                  <input
+                    value={draft.completion_flag || ''}
+                    placeholder={`quest_completed_${draft.id}`}
+                    onChange={e => updateCurrentQuest(prev => ({ ...prev, completion_flag: e.target.value }))}
+                  />
+                  {completionFlagConflicts.length > 0 && (
+                    <small className="field-note warning">
+                      Also used by {completionFlagConflicts.join(', ')}
+                    </small>
+                  )}
                 </label>
               </div>
             </section>

@@ -2,6 +2,8 @@ export type QuestTriggerType = 'ON_FIRST_TERMINAL_OPEN' | 'ON_QUEST_COMPLETION' 
 
 export type QuestStepType = 'SCAN_HOST' | 'CONNECT_HOST' | 'DELETE_FILE' | 'DISCONNECT_HOST'
 
+export type QuestLifecycleStatus = 'not_started' | 'in_progress' | 'completed'
+
 export interface QuestTrigger {
   type: QuestTriggerType
   quest_ids?: string[]
@@ -56,6 +58,7 @@ export interface QuestDefinition {
   default_system_id?: string
   embedded_filesystems?: Record<string, Record<string, FileSystemNode>>
   status?: 'draft' | 'published'
+  completion_flag?: string
 }
 
 export interface FileSystemNode {
