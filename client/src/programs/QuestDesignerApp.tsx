@@ -505,12 +505,15 @@ export const QuestDesignerApp: React.FC = () => {
   const [systemEditorDraft, setSystemEditorDraft] = useState<SystemEditorDraft>(createSystemEditorDraft())
   const [systemEditorOriginalId, setSystemEditorOriginalId] = useState<string | null>(null)
   const [systemEditorSaving, setSystemEditorSaving] = useState(false)
+  const [systemEditorDeleting, setSystemEditorDeleting] = useState<string | null>(null)
   const [systemEditorError, setSystemEditorError] = useState<string | null>(null)
   const [templateDrafts, setTemplateDrafts] = useState<Record<string, TemplateDraft>>({})
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false)
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null)
   const [systemsLoading, setSystemsLoading] = useState(true)
+  const [filesystemTab, setFilesystemTab] = useState<'overrides' | 'systems'>('overrides')
   const [fsDrafts, setFsDrafts] = useState<Record<string, FilesystemMap>>({})
+  const [systemIdDrafts, setSystemIdDrafts] = useState<Record<string, string>>({})
   const [playerQuestStatuses, setPlayerQuestStatuses] = useState<Record<string, QuestLifecycleStatus>>({})
   const [questStatusTimestamp, setQuestStatusTimestamp] = useState<string | null>(null)
   const [questStateLoading, setQuestStateLoading] = useState(false)
@@ -1122,6 +1125,20 @@ export const QuestDesignerApp: React.FC = () => {
     })
   }, [systemIdsInUse])
 
+  useEffect(() => {
+    setSystemIdDrafts(prev => {
+      const next = { ...prev }
+      let changed = false
+      Object.keys(next).forEach(key => {
+        if (!systemIdsInUse.includes(key)) {
+          delete next[key]
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [systemIdsInUse])
+
   const applyFilesystemDraft = (systemId: string) => {
     if (!draft) return
     const working = fsDrafts[systemId]
@@ -1205,7 +1222,110 @@ export const QuestDesignerApp: React.FC = () => {
     })
   }, [setDraft, setFsDrafts])
 
+  const removeSystemIdReferences = useCallback((systemId: string) => {
+    if (!systemId) return
+    setDraft(prev => {
+      if (!prev) return prev
+      let changed = false
+      const nextSteps = prev.steps.map(step => {
+        if (step.target_system_id === systemId) {
+          changed = true
+          return { ...step, target_system_id: undefined }
+        }
+        return step
+      })
+      let nextEmbedded = prev.embedded_filesystems
+      if (prev.embedded_filesystems?.[systemId]) {
+        nextEmbedded = { ...(prev.embedded_filesystems || {}) }
+        delete nextEmbedded[systemId]
+        changed = true
+      }
+      const defaultChanged = prev.default_system_id === systemId
+      if (!changed && !defaultChanged) return prev
+      return {
+        ...prev,
+        steps: changed ? nextSteps : prev.steps,
+        default_system_id: defaultChanged ? undefined : prev.default_system_id,
+        embedded_filesystems: nextEmbedded
+      }
+    })
+    setFsDrafts(prev => {
+      if (!prev[systemId]) return prev
+      const next = { ...prev }
+      delete next[systemId]
+      return next
+    })
+  }, [setDraft, setFsDrafts])
+
+  const beginOverrideSystemEdit = useCallback((systemId: string) => {
+    setSystemIdDrafts(prev => ({ ...prev, [systemId]: Object.prototype.hasOwnProperty.call(prev, systemId) ? prev[systemId] : systemId }))
+  }, [])
+
+  const cancelOverrideSystemEdit = useCallback((systemId: string) => {
+    setSystemIdDrafts(prev => {
+      if (!Object.prototype.hasOwnProperty.call(prev, systemId)) return prev
+      const next = { ...prev }
+      delete next[systemId]
+      return next
+    })
+  }, [])
+
+  const updateOverrideSystemDraft = useCallback((systemId: string, value: string) => {
+    setSystemIdDrafts(prev => ({ ...prev, [systemId]: value }))
+  }, [])
+
+  const applyOverrideSystemEdit = useCallback((systemId: string) => {
+    if (!Object.prototype.hasOwnProperty.call(systemIdDrafts, systemId)) return
+    const draftValue = systemIdDrafts[systemId]
+    const normalized = sanitizeSystemId(draftValue || '')
+    if (!normalized) {
+      pushToast({
+        title: 'Invalid System ID',
+        message: 'Use letters, numbers, underscores, or dashes.',
+        kind: 'error',
+        dedupeKey: `system-rename-error-${systemId}`
+      })
+      return
+    }
+    if (normalized === systemId) {
+      cancelOverrideSystemEdit(systemId)
+      return
+    }
+    if (normalized !== systemId && systemIdsInUse.includes(normalized)) {
+      pushToast({
+        title: 'System ID In Use',
+        message: `${normalized} is already used in this quest. Choose another ID.`,
+        kind: 'warning',
+        dedupeKey: `system-rename-conflict-${normalized}`
+      })
+      return
+    }
+    replaceSystemIdReferences(systemId, normalized)
+    setSystemIdDrafts(prev => {
+      const next = { ...prev }
+      delete next[systemId]
+      return next
+    })
+    pushToast({
+      title: 'System ID Updated',
+      message: `${systemId} renamed to ${normalized}.`,
+      kind: 'success',
+      dedupeKey: `system-rename-success-${normalized}`
+    })
+  }, [cancelOverrideSystemEdit, pushToast, replaceSystemIdReferences, systemIdDrafts, systemIdsInUse])
+
+  const handleOverrideSystemIdKeyDown = useCallback((systemId: string) => (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      applyOverrideSystemEdit(systemId)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelOverrideSystemEdit(systemId)
+    }
+  }, [applyOverrideSystemEdit, cancelOverrideSystemEdit])
+
   const openSystemEditor = useCallback((mode: SystemEditorMode, systemId?: string) => {
+    setFilesystemTab('systems')
     setSystemEditorMode(mode)
     if (mode === 'edit') {
       const targetId = systemId || draft?.default_system_id || systemProfilesState[0]?.id
@@ -1294,6 +1414,43 @@ export const QuestDesignerApp: React.FC = () => {
       pushToast({ title: 'System Save Failed', message: friendly, kind: 'error', dedupeKey: 'system-save-error' })
     } finally {
       setSystemEditorSaving(false)
+    }
+  }
+
+  const handleSystemEditorDelete = async () => {
+    if (systemEditorMode !== 'edit') {
+      setSystemEditorError('Select a system before deleting it.')
+      return
+    }
+    const targetId = systemEditorOriginalId || sanitizeSystemId(systemEditorDraft.id)
+    if (!targetId) {
+      setSystemEditorError('System ID missing; unable to delete.')
+      return
+    }
+    const profile = systemProfilesState.find(entry => entry.id === targetId)
+    if (!profile) {
+      setSystemEditorError('System profile not found; it may have already been removed.')
+      return
+    }
+    const confirmed = typeof window === 'undefined'
+      ? true
+      : window.confirm(`Delete system "${profile.label}"? Overrides using this system will be cleared.`)
+    if (!confirmed) return
+    setSystemEditorDeleting(targetId)
+    setSystemEditorError(null)
+    try {
+      await deleteSystemProfile(targetId)
+      setSystemProfilesState(prev => prev.filter(entry => entry.id !== targetId))
+      removeSystemIdReferences(targetId)
+      setSystemEditorVisible(false)
+      pushToast({ title: 'System Deleted', message: `${profile.label} removed.`, kind: 'success', dedupeKey: `system-delete-${targetId}` })
+    } catch (err: any) {
+      console.error('[quest designer] failed to delete system profile', err)
+      const friendly = err?.message || 'Failed to delete system profile.'
+      setSystemEditorError(friendly)
+      pushToast({ title: 'System Delete Failed', message: friendly, kind: 'error', dedupeKey: 'system-delete-error' })
+    } finally {
+      setSystemEditorDeleting(null)
     }
   }
 
@@ -1828,76 +1985,6 @@ export const QuestDesignerApp: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                <div className="system-manager-row">
-                  <button type="button" onClick={() => openSystemEditor('create')} disabled={systemEditorSaving || systemsLoading}>+ New System</button>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => openSystemEditor('edit', draft.default_system_id || undefined)}
-                    disabled={systemProfilesState.length === 0 || systemEditorSaving}
-                  >
-                    Manage Systems
-                  </button>
-                </div>
-                {systemEditorVisible && (
-                  <div className="system-editor-panel">
-                    <div className="system-editor-header">
-                      <div>
-                        <strong>{systemEditorMode === 'create' ? 'Create System Profile' : 'Edit System Profile'}</strong>
-                        <p className="muted">IDs sanitize to lowercase alphanumeric with dashes/underscores.</p>
-                      </div>
-                      <button type="button" className="ghost" onClick={closeSystemEditor}>Close</button>
-                    </div>
-                    {systemProfilesState.length > 0 && (
-                      <div className="system-editor-chip-row">
-                        {systemProfilesState.map(profile => (
-                          <button
-                            type="button"
-                            key={profile.id}
-                            className={`system-chip ${systemEditorDraft.id === profile.id ? 'active' : ''}`}
-                            onClick={() => openSystemEditor('edit', profile.id)}
-                          >
-                            <span className="system-chip-label">{profile.label}</span>
-                            <span className="system-chip-id">{profile.id}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <div className="system-editor-grid">
-                      <label>
-                        System ID
-                        <input value={systemEditorDraft.id} onChange={e => handleSystemEditorChange('id', e.target.value)} placeholder="relay_alpha" />
-                      </label>
-                      <label>
-                        Display Label
-                        <input value={systemEditorDraft.label} onChange={e => handleSystemEditorChange('label', e.target.value)} placeholder="Atlas Relay" />
-                      </label>
-                      <label>
-                        Operator Username
-                        <input value={systemEditorDraft.username} onChange={e => handleSystemEditorChange('username', e.target.value)} placeholder="guest" />
-                      </label>
-                      <label>
-                        Starting Path
-                        <input value={systemEditorDraft.startingPath} onChange={e => handleSystemEditorChange('startingPath', e.target.value)} placeholder="/home/guest" />
-                      </label>
-                      <label>
-                        Primary IP
-                        <input value={systemEditorDraft.ip} onChange={e => handleSystemEditorChange('ip', e.target.value)} placeholder="10.0.0.5" />
-                      </label>
-                      <label className="full">
-                        Footprint / Notes
-                        <textarea value={systemEditorDraft.footprint} onChange={e => handleSystemEditorChange('footprint', e.target.value)} rows={2} placeholder="Relay maintained by Atlas." />
-                      </label>
-                    </div>
-                    {systemEditorError && <div className="inline-alert error">{systemEditorError}</div>}
-                    <div className="system-editor-actions">
-                      <button type="button" onClick={handleSystemEditorSave} disabled={systemEditorSaving}>
-                        {systemEditorSaving ? 'Saving…' : systemEditorMode === 'create' ? 'Create System' : 'Save System'}
-                      </button>
-                      <button type="button" className="ghost" onClick={closeSystemEditor}>Cancel</button>
-                    </div>
-                  </div>
-                )}
                 <label className="full" data-tooltip={FIELD_HINTS.description}>
                   Description
                   <textarea value={draft.description} onChange={e => updateCurrentQuest(prev => ({ ...prev, description: e.target.value }))} />
@@ -1942,113 +2029,269 @@ export const QuestDesignerApp: React.FC = () => {
 
             <section>
               <div className="section-header fs-section-header">
-                <h3>Filesystem Overrides</h3>
-                <div className="fs-header-actions">
-                  {systemsLoading && <span className="muted">Loading systems…</span>}
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() => setTemplateManagerOpen(prev => !prev)}
-                    disabled={systemsLoading}
-                  >
-                    {templateManagerOpen ? 'Hide Templates' : 'Manage Templates'}
-                  </button>
+                <div className="fs-header-main">
+                  <h3>Filesystem</h3>
+                  <div className="fs-tabs" role="tablist" aria-label="Filesystem views">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={filesystemTab === 'overrides'}
+                      className={`fs-tab ${filesystemTab === 'overrides' ? 'active' : ''}`}
+                      onClick={() => setFilesystemTab('overrides')}
+                    >
+                      Overrides
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={filesystemTab === 'systems'}
+                      className={`fs-tab ${filesystemTab === 'systems' ? 'active' : ''}`}
+                      onClick={() => setFilesystemTab('systems')}
+                    >
+                      Systems
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {!systemsLoading && !systemIdsInUse.length && (
-                <div className="muted empty">Assign a default system or set per-step targets to customize filesystems.</div>
-              )}
-              {systemIdsInUse.map(systemId => {
-                const label = systemLookup.get(systemId)?.label || systemId
-                const templateDraft = templateDrafts[systemId] || { label: '', description: '' }
-                const templatePlaceholder = `${label} Snapshot`
-                const isSavingTemplate = savingTemplateSystem === systemId
-                return (
-                  <div key={systemId} className="fs-override-card">
-                    <div className="fs-override-header">
-                      <strong>{label}</strong>
-                      <span className="muted">System ID: {systemId}</span>
-                    </div>
-                    <div className="fs-override-actions">
-                      <select
-                        defaultValue=""
-                        onChange={e => {
-                          if (!e.target.value) return
-                          applyTemplateToSystem(systemId, e.target.value)
-                          e.target.value = ''
-                        }}
-                      >
-                        <option value="">Apply template…</option>
-                        {systemTemplates.map(template => (
-                          <option key={template.id} value={template.id}>{template.label}</option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => applyFilesystemDraft(systemId)}>Apply Override</button>
-                      <button type="button" className="ghost" onClick={() => removeFilesystemOverride(systemId)} disabled={!draft.embedded_filesystems?.[systemId]}>Remove Override</button>
-                    </div>
-                    <div className="fs-template-save">
-                      <div className="fs-template-fields">
-                        <label>
-                          Template Name
-                          <input
-                            value={templateDraft.label}
-                            placeholder={templatePlaceholder}
-                            onChange={e => updateTemplateDraft(systemId, { label: e.target.value })}
-                          />
-                        </label>
-                        <label>
-                          Description
-                          <input
-                            value={templateDraft.description}
-                            placeholder="Optional context"
-                            onChange={e => updateTemplateDraft(systemId, { description: e.target.value })}
-                          />
-                        </label>
-                      </div>
+                <div className="fs-header-actions">
+                  {filesystemTab === 'overrides' && (
+                    <>
+                      {systemsLoading && <span className="muted">Loading systems…</span>}
                       <button
                         type="button"
-                        onClick={() => saveFilesystemTemplate(systemId)}
-                        disabled={isSavingTemplate || !templateDraft.label.trim()}
+                        className="ghost"
+                        onClick={() => setTemplateManagerOpen(prev => !prev)}
+                        disabled={systemsLoading}
                       >
-                        {isSavingTemplate ? 'Saving…' : 'Save as Template'}
+                        {templateManagerOpen ? 'Hide Templates' : 'Manage Templates'}
                       </button>
-                    </div>
-                    <FilesystemOverrideEditor
-                      systemId={systemId}
-                      value={fsDrafts[systemId] || createEmptyFilesystemMap()}
-                      onChange={(next: FilesystemMap) => setFsDrafts(prev => ({ ...prev, [systemId]: next }))}
-                    />
-                  </div>
-                )
-              })}
-              {templateManagerOpen && (
-                <div className="template-manager-panel">
-                  <div className="template-manager-header">
-                    <strong>Template Library</strong>
-                    <span className="muted">{systemTemplates.length} saved template{systemTemplates.length === 1 ? '' : 's'}</span>
-                  </div>
-                  {systemTemplates.length === 0 && <div className="muted empty">No filesystem templates yet. Save one above to get started.</div>}
-                  {systemTemplates.length > 0 && (
-                    <div className="template-manager-grid">
-                      {systemTemplates.map(template => (
-                        <div key={template.id} className="template-card">
-                          <div className="template-card-header">
-                            <div>
-                              <strong>{template.label}</strong>
-                              <span className="template-id">{template.id}</span>
+                    </>
+                  )}
+                  {filesystemTab === 'systems' && systemEditorVisible && (
+                    <button type="button" className="ghost" onClick={closeSystemEditor} disabled={systemEditorSaving}>
+                      Hide Editor
+                    </button>
+                  )}
+                </div>
+              </div>
+              {filesystemTab === 'overrides' && (
+                <>
+                  {!systemsLoading && !systemIdsInUse.length && (
+                    <div className="muted empty">Assign a default system or set per-step targets to customize filesystems.</div>
+                  )}
+                  {systemIdsInUse.map(systemId => {
+                    const label = systemLookup.get(systemId)?.label || systemId
+                    const templateDraft = templateDrafts[systemId] || { label: '', description: '' }
+                    const templatePlaceholder = `${label} Snapshot`
+                    const isSavingTemplate = savingTemplateSystem === systemId
+                    const isEditingSystemId = Object.prototype.hasOwnProperty.call(systemIdDrafts, systemId)
+                    const systemIdDraftValue = isEditingSystemId ? systemIdDrafts[systemId] : systemId
+                    const overrideApplied = Boolean(draft.embedded_filesystems?.[systemId])
+                    return (
+                      <div key={systemId} className="fs-override-card">
+                        <div className="fs-override-header">
+                          <div className="fs-override-header-details">
+                            <strong>{label}</strong>
+                            {!isEditingSystemId && <span className="muted">System ID: {systemId}</span>}
+                            {overrideApplied && !isEditingSystemId && (
+                              <span className="fs-override-pill" title="Custom filesystem override is active for this system.">Override Applied</span>
+                            )}
+                          </div>
+                          <div className="fs-override-header-controls">
+                            {isEditingSystemId ? (
+                              <div className="fs-id-edit-controls">
+                                <input
+                                  value={systemIdDraftValue}
+                                  onChange={e => updateOverrideSystemDraft(systemId, e.target.value)}
+                                  onKeyDown={handleOverrideSystemIdKeyDown(systemId)}
+                                  placeholder="relay_alpha"
+                                />
+                                <button type="button" onClick={() => applyOverrideSystemEdit(systemId)}>Save</button>
+                                <button type="button" className="ghost" onClick={() => cancelOverrideSystemEdit(systemId)}>Cancel</button>
+                              </div>
+                            ) : (
+                              <button type="button" className="ghost" onClick={() => beginOverrideSystemEdit(systemId)}>Edit ID</button>
+                            )}
+                          </div>
+                        </div>
+                        {isEditingSystemId && (
+                          <p className="muted fs-id-edit-hint">IDs sanitize to lowercase letters, numbers, underscores, and dashes.</p>
+                        )}
+                        <div className="fs-override-actions">
+                          <select
+                            defaultValue=""
+                            onChange={e => {
+                              if (!e.target.value) return
+                              applyTemplateToSystem(systemId, e.target.value)
+                              e.target.value = ''
+                            }}
+                          >
+                            <option value="">Apply template…</option>
+                            {systemTemplates.map(template => (
+                              <option key={template.id} value={template.id}>{template.label}</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => applyFilesystemDraft(systemId)}>Apply Override</button>
+                          <button type="button" className="ghost" onClick={() => removeFilesystemOverride(systemId)} disabled={!draft.embedded_filesystems?.[systemId]}>Remove Override</button>
+                        </div>
+                        <div className="fs-template-save">
+                          <div className="fs-template-fields">
+                            <label>
+                              Template Name
+                              <input
+                                value={templateDraft.label}
+                                placeholder={templatePlaceholder}
+                                onChange={e => updateTemplateDraft(systemId, { label: e.target.value })}
+                              />
+                            </label>
+                            <label>
+                              Description
+                              <input
+                                value={templateDraft.description}
+                                placeholder="Optional context"
+                                onChange={e => updateTemplateDraft(systemId, { description: e.target.value })}
+                              />
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => saveFilesystemTemplate(systemId)}
+                            disabled={isSavingTemplate || !templateDraft.label.trim()}
+                          >
+                            {isSavingTemplate ? 'Saving…' : 'Save as Template'}
+                          </button>
+                        </div>
+                        <FilesystemOverrideEditor
+                          systemId={systemId}
+                          value={fsDrafts[systemId] || createEmptyFilesystemMap()}
+                          onChange={(next: FilesystemMap) => setFsDrafts(prev => ({ ...prev, [systemId]: next }))}
+                        />
+                      </div>
+                    )
+                  })}
+                  {templateManagerOpen && (
+                    <div className="template-manager-panel">
+                      <div className="template-manager-header">
+                        <strong>Template Library</strong>
+                        <span className="muted">{systemTemplates.length} saved template{systemTemplates.length === 1 ? '' : 's'}</span>
+                      </div>
+                      {systemTemplates.length === 0 && <div className="muted empty">No filesystem templates yet. Save one above to get started.</div>}
+                      {systemTemplates.length > 0 && (
+                        <div className="template-manager-grid">
+                          {systemTemplates.map(template => (
+                            <div key={template.id} className="template-card">
+                              <div className="template-card-header">
+                                <div>
+                                  <strong>{template.label}</strong>
+                                  <span className="template-id">{template.id}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="ghost danger"
+                                  onClick={() => handleDeleteTemplate(template.id)}
+                                  disabled={deletingTemplateId === template.id}
+                                >
+                                  {deletingTemplateId === template.id ? 'Deleting…' : 'Delete'}
+                                </button>
+                              </div>
+                              {template.description && <p className="muted">{template.description}</p>}
                             </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+              {filesystemTab === 'systems' && (
+                <div className="system-tab-panel" role="tabpanel" aria-label="System editor">
+                  <p className="muted">Manage the system profiles that power quest defaults and per-step overrides.</p>
+                  <div className="system-manager-row">
+                    <button type="button" onClick={() => openSystemEditor('create')} disabled={systemEditorSaving || systemsLoading}>+ New System</button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => openSystemEditor('edit', draft?.default_system_id || undefined)}
+                      disabled={systemProfilesState.length === 0 || systemEditorSaving}
+                    >
+                      Manage Systems
+                    </button>
+                    {systemEditorVisible && (
+                      <button type="button" className="ghost" onClick={closeSystemEditor} disabled={systemEditorSaving}>
+                        Close Editor
+                      </button>
+                    )}
+                  </div>
+                  {systemEditorVisible ? (
+                    <div className="system-editor-panel">
+                      <div className="system-editor-header">
+                        <div>
+                          <strong>{systemEditorMode === 'create' ? 'Create System Profile' : 'Edit System Profile'}</strong>
+                          <p className="muted">IDs sanitize to lowercase alphanumeric with dashes/underscores.</p>
+                        </div>
+                        <button type="button" className="ghost" onClick={closeSystemEditor}>Close</button>
+                      </div>
+                      {systemProfilesState.length > 0 && (
+                        <div className="system-editor-chip-row">
+                          {systemProfilesState.map(profile => (
                             <button
                               type="button"
-                              className="ghost danger"
-                              onClick={() => handleDeleteTemplate(template.id)}
-                              disabled={deletingTemplateId === template.id}
+                              key={profile.id}
+                              className={`system-chip ${systemEditorDraft.id === profile.id ? 'active' : ''}`}
+                              onClick={() => openSystemEditor('edit', profile.id)}
                             >
-                              {deletingTemplateId === template.id ? 'Deleting…' : 'Delete'}
+                              <span className="system-chip-label">{profile.label}</span>
+                              <span className="system-chip-id">{profile.id}</span>
                             </button>
-                          </div>
-                          {template.description && <p className="muted">{template.description}</p>}
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      <div className="system-editor-grid">
+                        <label>
+                          System ID
+                          <input value={systemEditorDraft.id} onChange={e => handleSystemEditorChange('id', e.target.value)} placeholder="relay_alpha" />
+                        </label>
+                        <label>
+                          Display Label
+                          <input value={systemEditorDraft.label} onChange={e => handleSystemEditorChange('label', e.target.value)} placeholder="Atlas Relay" />
+                        </label>
+                        <label>
+                          Operator Username
+                          <input value={systemEditorDraft.username} onChange={e => handleSystemEditorChange('username', e.target.value)} placeholder="guest" />
+                        </label>
+                        <label>
+                          Starting Path
+                          <input value={systemEditorDraft.startingPath} onChange={e => handleSystemEditorChange('startingPath', e.target.value)} placeholder="/home/guest" />
+                        </label>
+                        <label>
+                          Primary IP
+                          <input value={systemEditorDraft.ip} onChange={e => handleSystemEditorChange('ip', e.target.value)} placeholder="10.0.0.5" />
+                        </label>
+                        <label className="full">
+                          Footprint / Notes
+                          <textarea value={systemEditorDraft.footprint} onChange={e => handleSystemEditorChange('footprint', e.target.value)} rows={2} placeholder="Relay maintained by Atlas." />
+                        </label>
+                      </div>
+                      {systemEditorError && <div className="inline-alert error">{systemEditorError}</div>}
+                      <div className="system-editor-actions">
+                        {systemEditorMode === 'edit' && (
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={handleSystemEditorDelete}
+                            disabled={!!systemEditorDeleting || systemEditorSaving}
+                          >
+                            {systemEditorDeleting ? 'Deleting…' : 'Delete System'}
+                          </button>
+                        )}
+                        <button type="button" onClick={handleSystemEditorSave} disabled={systemEditorSaving}>
+                          {systemEditorSaving ? 'Saving…' : systemEditorMode === 'create' ? 'Create System' : 'Save System'}
+                        </button>
+                        <button type="button" className="ghost" onClick={closeSystemEditor}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="system-editor-placeholder">
+                      <p>Select “+ New System” or “Manage Systems” to edit a profile.</p>
                     </div>
                   )}
                 </div>
