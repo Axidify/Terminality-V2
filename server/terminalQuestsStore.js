@@ -30,6 +30,8 @@ function readStore() {
       const normalized = {
         ...quest,
         status: normalizeStatus(quest?.status)
+      ,
+        completion_flag: typeof quest?.completion_flag === 'string' ? quest.completion_flag.trim() : undefined
       }
       if (normalized?.rewards && Array.isArray(normalized.rewards.flags)) {
         normalized.rewards = {
@@ -295,6 +297,15 @@ function buildQuestWarnings(quest, storeQuests) {
     }
   })
   const questFlagTokens = buildFlagTokenSet(quest.rewards?.flags)
+  // Check completion flags across quests
+  const completionFlag = normalizeId(quest.completion_flag)
+  if (completionFlag) {
+    storeQuests.forEach(q => {
+      if (q.id !== quest.id && q.completion_flag && q.completion_flag.trim() === completionFlag) {
+        warnings.push(`Completion flag '${completionFlag}' is also used by quest ${q.id}.`)
+      }
+    })
+  }
   requirements.required_flags?.forEach(flag => {
     if (!knownFlags.has(flag) && !questFlagTokens.has(flag)) {
       warnings.push(`Requirement references flag '${flag}' that no quest emits yet.`)
@@ -390,6 +401,7 @@ function validateQuestPayload(input, storeQuests, { allowIdReuse = false } = {})
     requirements,
     default_system_id: defaultSystemId || undefined,
     embedded_filesystems: Object.keys(embeddedFilesystems).length ? embeddedFilesystems : undefined,
+    completion_flag: normalizeId(input?.completion_flag) || undefined,
     status
   }
   const warnings = buildQuestWarnings(quest, existing)

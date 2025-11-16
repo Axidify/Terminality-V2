@@ -105,7 +105,97 @@
         "required_quests": []
       },
       "status": "published"
+    },
+    {
+      "id": "quest_flag_test1",
+      "title": "Test quest quest_flag_test1",
+      "description": "Integration test quest",
+      "trigger": {
+        "type": "ON_FIRST_TERMINAL_OPEN"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "type": "SCAN_HOST",
+          "target_system_id": "atlas_relay",
+          "params": {
+            "target_ip": "10.23.4.8"
+          },
+          "auto_advance": true
+        }
+      ],
+      "rewards": {
+        "flags": [],
+        "unlocks_commands": []
+      },
+      "requirements": {
+        "required_flags": [],
+        "required_quests": []
+      },
+      "default_system_id": "atlas_relay",
+      "completion_flag": "unit_completed_1",
+      "status": "published"
+    },
+    {
+      "id": "quest_flag_test_a",
+      "title": "Test quest quest_flag_test_a",
+      "description": "Integration test quest",
+      "trigger": {
+        "type": "ON_FIRST_TERMINAL_OPEN"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "type": "SCAN_HOST",
+          "target_system_id": "atlas_relay",
+          "params": {
+            "target_ip": "10.23.4.8"
+          },
+          "auto_advance": true
+        }
+      ],
+      "rewards": {
+        "flags": [],
+        "unlocks_commands": []
+      },
+      "requirements": {
+        "required_flags": [],
+        "required_quests": []
+      },
+      "default_system_id": "atlas_relay",
+      "completion_flag": "shared_flag",
+      "status": "published"
+    },
+    {
+      "id": "quest_flag_test_b",
+      "title": "Test quest quest_flag_test_b",
+      "description": "Integration test quest",
+      "trigger": {
+        "type": "ON_FIRST_TERMINAL_OPEN"
+      },
+      "steps": [
+        {
+          "id": "s1",
+          "type": "SCAN_HOST",
+          "target_system_id": "atlas_relay",
+          "params": {
+            "target_ip": "10.23.4.8"
+          },
+          "auto_advance": true
+        }
+      ],
+      "rewards": {
+        "flags": [],
+        "unlocks_commands": []
+      },
+      "requirements": {
+        "required_flags": [],
+        "required_quests": []
+      },
+      "default_system_id": "atlas_relay",
+      "completion_flag": "shared_flag",
+      "status": "published"
     }
   ],
-  "lastUpdated": "2025-11-15T21:53:23.540Z"
+  "lastUpdated": "2025-11-16T02:16:33.561Z"
 }
