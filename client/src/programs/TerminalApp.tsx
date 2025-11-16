@@ -298,13 +298,19 @@ export const TerminalApp: React.FC = () => {
   }, [persistQuestState])
 
   useEffect(() => {
+    // Don't print the intro until quest definitions and hydration are finished
+    if (!definitionsReady || !hydrationComplete || !questStateInitializedRef.current) return
     if (questIntroPrinted.current) return
     questIntroPrinted.current = true
     const inbox = getInboxEntries(questState)
+    if (!inbox.length) {
+      print('Inbox empty. Await new directives.')
+      return
+    }
     inbox.forEach(entry => {
       print(`[inbox] ${entry.title}: ${entry.description}`)
     })
-  }, [questState])
+  }, [definitionsReady, hydrationComplete, questState])
 
   const showInbox = () => {
     const entries = getInboxEntries(questState)
