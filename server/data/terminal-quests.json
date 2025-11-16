@@ -76,7 +76,7 @@
     },
     {
       "id": "quest_1763270097682",
-      "title": "Untitled Quest",
+      "title": "test quest",
       "description": "Describe this operation.",
       "trigger": {
         "type": "ON_QUEST_COMPLETION",
@@ -88,13 +88,26 @@
         {
           "id": "step_1",
           "type": "SCAN_HOST",
-          "target_system_id": "atlas_relay",
+          "target_system_id": "mega_systems",
           "params": {
             "target_ip": "dfgdfgfd"
           },
           "hints": {
-            "prompt": "dfgdfgdf",
+            "prompt": "scan 10.10.10.10",
             "command_example": "scan 10.10.10.10"
+          },
+          "auto_advance": true
+        },
+        {
+          "id": "step_2",
+          "type": "SCAN_HOST",
+          "target_system_id": "mega_systems",
+          "params": {
+            "target_ip": "delete logs.txt"
+          },
+          "hints": {
+            "prompt": "find and delete logs.txt",
+            "command_example": "del logs.txt"
           },
           "auto_advance": true
         }
@@ -109,9 +122,73 @@
           "intro_001_wipe_evidence"
         ]
       },
-      "default_system_id": "atlas_relay",
-      "status": "draft"
+      "default_system_id": "mega_systems",
+      "embedded_filesystems": {
+        "mega_systems": {
+          "/": {
+            "type": "dir",
+            "name": "/",
+            "path": "/",
+            "children": [
+              "/var",
+              "/logs",
+              "/zebra"
+            ]
+          },
+          "/var": {
+            "type": "dir",
+            "name": "var",
+            "path": "/var",
+            "children": [
+              "/var/test.md"
+            ]
+          },
+          "/var/test.md": {
+            "type": "file",
+            "name": "test.md",
+            "path": "/var/test.md",
+            "content": "hellow"
+          },
+          "/logs": {
+            "type": "dir",
+            "name": "logs",
+            "path": "/logs",
+            "children": [
+              "/logs/logs.txt"
+            ]
+          },
+          "/logs/logs.txt": {
+            "type": "file",
+            "name": "logs.txt",
+            "path": "/logs/logs.txt",
+            "content": ""
+          },
+          "/zebra": {
+            "type": "dir",
+            "name": "zebra",
+            "path": "/zebra",
+            "children": [
+              "/zebra/test"
+            ]
+          },
+          "/zebra/test": {
+            "type": "dir",
+            "name": "test",
+            "path": "/zebra/test",
+            "children": [
+              "/zebra/test/systme. log"
+            ]
+          },
+          "/zebra/test/systme. log": {
+            "type": "file",
+            "name": "systme. log",
+            "path": "/zebra/test/systme. log",
+            "content": "hello"
+          }
+        }
+      },
+      "status": "published"
     }
   ],
-  "lastUpdated": "2025-11-16T06:08:32.659Z"
+  "lastUpdated": "2025-11-16T12:16:30.226Z"
 }

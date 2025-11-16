@@ -7,6 +7,8 @@ import {
   hydrateQuestState,
   processQuestEvent,
   QuestEngineState,
+  QuestEvent,
+  QuestEventResult,
   QuestEventType,
   SerializedQuestState,
   serializeQuestState,
@@ -56,6 +58,7 @@ const LOCAL_COMMANDS: CommandDescriptor[] = [
   { name: 'inbox', description: 'Review mission messages' },
   { name: 'scan <ip>', description: 'Probe a host for reachability' },
   { name: 'connect <ip>', description: 'Open a remote shell' },
+  { name: 'quest_debug', description: 'Dump quest engine debug info' },
   { name: 'exit', description: 'Close the terminal session' }
 ]
 
@@ -71,6 +74,35 @@ const REMOTE_COMMANDS: CommandDescriptor[] = [
 const formatCommandList = (commands: CommandDescriptor[]) => (
   ['Available commands:'].concat(commands.map(entry => `${entry.name.padEnd(18, ' ')}${entry.description}`)).join('\n')
 )
+
+const QUEST_DEBUG_ENABLED = typeof import.meta !== 'undefined' && !!import.meta.env?.DEV
+
+const logQuestDebugInfo = (event: QuestEvent, result: QuestEventResult) => {
+  if (!QUEST_DEBUG_ENABLED) return
+  const activeSummary = result.state.active.map(instance => ({
+    questId: instance.quest.id,
+    step: `${Math.min(instance.currentStepIndex + 1, instance.quest.steps.length)}/${instance.quest.steps.length || 0}`,
+    completed: instance.completed
+  }))
+  const groupLabel = `[quest-debug] ${event.type}`
+  if (typeof console.groupCollapsed === 'function') {
+    console.groupCollapsed(groupLabel)
+    console.debug('event', event)
+    console.debug('active', activeSummary)
+    console.debug('completedIds', result.state.completedIds)
+    if (result.notifications.length) {
+      console.debug('notifications', result.notifications)
+    }
+    console.groupEnd?.()
+    return
+  }
+  console.debug(groupLabel, {
+    event,
+    active: activeSummary,
+    completedIds: result.state.completedIds,
+    notifications: result.notifications
+  })
+}
 
 export const TerminalApp: React.FC = () => {
   const [questState, setQuestState] = useState(createQuestEngineState)
@@ -99,7 +131,9 @@ export const TerminalApp: React.FC = () => {
   const emitEvent = (type: QuestEventType, payload: { target_ip?: string; file_path?: string } = {}) => {
     setQuestState(prev => {
       const event = { type, payload: { playerId: PLAYER_ID, ...payload } }
-      const { state, notifications } = processQuestEvent(prev, event)
+      const result = processQuestEvent(prev, event)
+      logQuestDebugInfo(event, result)
+      const { state, notifications } = result
       notifications.forEach(note => {
         const key = `${event.type}:${event.payload.target_ip || 'local'}:${note}`
         if (lastNotificationRef.current === key) return
@@ -288,6 +322,32 @@ export const TerminalApp: React.FC = () => {
     })
   }
 
+  const printQuestDebug = () => {
+    print('[quest-debug]')
+    const activeQuests = questState.active
+    print('Active:')
+    if (!activeQuests.length) {
+      print('- (none)')
+    } else {
+      activeQuests.forEach(instance => {
+        const totalSteps = instance.quest.steps.length
+        const safeIndex = totalSteps > 0 ? Math.min(instance.currentStepIndex, totalSteps - 1) : 0
+        const stepNumber = totalSteps > 0 ? Math.min(instance.currentStepIndex + 1, totalSteps) : 0
+        const stepType = instance.quest.steps[safeIndex]?.type || 'N/A'
+        const titlePart = instance.quest.title ? ` • ${instance.quest.title}` : ''
+        print(`- ${instance.quest.id}${titlePart}: step ${stepNumber}/${totalSteps || 0} (${stepType})`)
+      })
+    }
+    print('Completed:')
+    if (!questState.completedIds.length) {
+      print('- (none)')
+    } else {
+      questState.completedIds.forEach(id => {
+        print(`- ${id}`)
+      })
+    }
+  }
+
   const handleLocalCommand = async (command: string, args: string) => {
     switch (command) {
       case 'help':
@@ -349,6 +409,10 @@ export const TerminalApp: React.FC = () => {
         emitEvent('SESSION_CONNECTED', { target_ip: host.ip })
         break
       }
+      case 'quest_debug':
+      case 'quest-debug':
+        printQuestDebug()
+        break
       case 'exit':
         print('[exit] Close the window to terminate the session.')
         break

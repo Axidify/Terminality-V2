@@ -5,7 +5,9 @@
       "id": "atlas_relay",
       "label": "Atlas Relay",
       "identifiers": {
-        "ips": ["10.23.4.8"],
+        "ips": [
+          "10.23.4.8"
+        ],
         "hostnames": []
       },
       "metadata": {
@@ -174,7 +176,84 @@
           "content": "Atlas Relay MOTD: unauthorized access prohibited."
         }
       }
+    },
+    {
+      "id": "test",
+      "label": "Test",
+      "identifiers": {
+        "ips": [
+          "0.0.0.0"
+        ],
+        "hostnames": []
+      },
+      "metadata": {
+        "username": "template",
+        "startingPath": "/",
+        "footprint": "test"
+      },
+      "filesystem": {
+        "/": {
+          "type": "dir",
+          "name": "",
+          "path": "/",
+          "children": [
+            "/var",
+            "/logs",
+            "/zebra"
+          ]
+        },
+        "/var": {
+          "type": "dir",
+          "name": "var",
+          "path": "/var",
+          "children": [
+            "/var/test.md"
+          ]
+        },
+        "/var/test.md": {
+          "type": "file",
+          "name": "test.md",
+          "path": "/var/test.md",
+          "content": "hellow"
+        },
+        "/logs": {
+          "type": "dir",
+          "name": "logs",
+          "path": "/logs",
+          "children": [
+            "/logs/logs.txt"
+          ]
+        },
+        "/logs/logs.txt": {
+          "type": "file",
+          "name": "logs.txt",
+          "path": "/logs/logs.txt",
+          "content": ""
+        },
+        "/zebra": {
+          "type": "dir",
+          "name": "zebra",
+          "path": "/zebra",
+          "children": [
+            "/zebra/test"
+          ]
+        },
+        "/zebra/test": {
+          "type": "dir",
+          "name": "test",
+          "path": "/zebra/test",
+          "children": [
+            "/zebra/test/systme. log"
+          ]
+        },
+        "/zebra/test/systme. log": {
+          "type": "file",
+          "name": "systme. log",
+          "path": "/zebra/test/systme. log",
+          "content": "hello"
+        }
+      }
     }
   ],
-  "lastUpdated": "2025-11-16T00:00:00.000Z"
+  "lastUpdated": "2025-11-16T12:12:41.161Z"
 }

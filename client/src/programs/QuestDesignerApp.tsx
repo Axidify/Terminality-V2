@@ -187,6 +187,7 @@ const sanitizeRewardFlags = (flags?: Array<QuestRewardFlag | string>): QuestRewa
 }
 
 const STEP_TYPES: StepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST']
+const COMPLETION_STEP_TYPES = new Set<StepType>(STEP_TYPES)
 type SystemTemplateDTO = SystemProfilesResponse['templates'][number]
 type SystemEditorMode = 'create' | 'edit'
 type SystemEditorDraft = {
@@ -221,6 +222,102 @@ const sanitizeTrigger = (raw?: OperationTrigger | null): OperationTrigger => {
     return flag_value ? { type, flag_key, flag_value } : { type, flag_key }
   }
   return { type }
+}
+
+type RelationshipEntry = {
+  quest: DesignerQuest
+  reason: string
+}
+
+const resolveCompletionFlagId = (quest: DesignerQuest): string => (
+  quest.completion_flag?.trim() || `quest_completed_${quest.id}`
+)
+
+const matchesExpectedFlagValue = (actualValue?: string | null, expectedValue?: string | null): boolean => {
+  const normalizedExpected = expectedValue?.trim()
+  if (!normalizedExpected) return true
+  const normalizedActual = (actualValue?.trim() || 'true')
+  return normalizedActual === normalizedExpected
+}
+
+const questEmitsFlag = (quest: DesignerQuest, flagKey: string, expectedValue?: string | null): boolean => {
+  const normalizedKey = flagKey?.trim()
+  if (!normalizedKey) return false
+  const completionFlagId = resolveCompletionFlagId(quest)
+  if (completionFlagId === normalizedKey && matchesExpectedFlagValue('true', expectedValue)) {
+    return true
+  }
+  const rewardFlags = sanitizeRewardFlags(quest.rewards?.flags)
+  return rewardFlags.some(flag => (
+    flag.key === normalizedKey && matchesExpectedFlagValue(flag.value || 'true', expectedValue)
+  ))
+}
+
+const findFollowUpQuests = (quest: DesignerQuest, quests: DesignerQuest[]): DesignerQuest[] => {
+  const completionFlagId = resolveCompletionFlagId(quest)
+  return quests.filter(candidate => {
+    if (candidate.id === quest.id) return false
+    const trigger = candidate.trigger
+    if (!trigger) return false
+    if (trigger.type === 'ON_QUEST_COMPLETION') {
+      return (trigger.quest_ids || []).some(id => id?.trim() === quest.id)
+    }
+    if (trigger.type === 'ON_FLAG_SET') {
+      return trigger.flag_key?.trim() === completionFlagId
+    }
+    return false
+  })
+}
+
+const gatherDesignerValidationIssues = (quest: DesignerQuest | null, quests: DesignerQuest[]) => {
+  const errors: string[] = []
+  const warnings: string[] = []
+  if (!quest) {
+    return { errors, warnings }
+  }
+
+  const knownQuestIds = new Set(quests.map(entry => entry.id))
+  const steps = quest.steps || []
+  if (!steps.length) {
+    warnings.push('Warning: Quest has no steps, so it will never complete.')
+  } else {
+    const lastStep = steps[steps.length - 1]
+    if (!COMPLETION_STEP_TYPES.has(lastStep.type)) {
+      warnings.push(`Warning: Last step "${lastStep.id || lastStep.type}" uses unsupported type "${lastStep.type}", so completion will never fire.`)
+    }
+  }
+
+  if (steps.length > 0 && !(quest.completion_flag && quest.completion_flag.trim())) {
+    const followUps = findFollowUpQuests(quest, quests)
+    if (!followUps.length) {
+      warnings.push('Warning: Quest has steps but no completion flag or follow-up quests; it may be a dead end.')
+    }
+  }
+
+  const trigger = quest.trigger || { type: DEFAULT_TRIGGER }
+  if (trigger.type === 'ON_QUEST_COMPLETION') {
+    const questIds = trigger.quest_ids || []
+    questIds.forEach((questId, index) => {
+      const trimmed = questId?.trim()
+      if (!trimmed) return
+      if (trimmed === quest.id) {
+        warnings.push(`Warning: Trigger quest_ids[${index}] references this quest (${quest.id}); self dependency detected.`)
+      }
+      if (!knownQuestIds.has(trimmed)) {
+        errors.push(`Error: Trigger quest_ids[${index}] references unknown quest "${trimmed}".`)
+      }
+    })
+  } else if (trigger.type === 'ON_FLAG_SET') {
+    const flagKey = trigger.flag_key?.trim()
+    if (flagKey) {
+      const flagProvided = quests.some(candidate => questEmitsFlag(candidate, flagKey, trigger.flag_value))
+      if (!flagProvided) {
+        warnings.push(`Warning: Trigger flag "${flagKey}" is never granted by any quest.`)
+      }
+    }
+  }
+
+  return { errors, warnings }
 }
 
 const createEmptyQuest = (): DesignerQuest => ({
@@ -1064,6 +1161,68 @@ export const QuestDesignerApp: React.FC = () => {
     return { questLinks, flagDependents }
   }, [draft, quests])
 
+  const relationships = useMemo(() => {
+    if (!draft) return null
+    const completionFlagId = resolveCompletionFlagId(draft)
+    const questMap = new Map(quests.map(quest => [quest.id, quest]))
+    const previous: RelationshipEntry[] = []
+    const next: RelationshipEntry[] = []
+    const prevSeen = new Set<string>()
+    const nextSeen = new Set<string>()
+
+    const pushPrev = (quest: DesignerQuest, reason: string) => {
+      const key = `${quest.id}|${reason}`
+      if (prevSeen.has(key)) return
+      prevSeen.add(key)
+      previous.push({ quest, reason })
+    }
+
+    const pushNext = (quest: DesignerQuest, reason: string) => {
+      const key = `${quest.id}|${reason}`
+      if (nextSeen.has(key)) return
+      nextSeen.add(key)
+      next.push({ quest, reason })
+    }
+
+    if (draft.trigger?.type === 'ON_QUEST_COMPLETION') {
+      (draft.trigger.quest_ids || []).forEach(questId => {
+        const quest = questMap.get(questId)
+        if (quest) pushPrev(quest, 'ON_QUEST_COMPLETION')
+      })
+    }
+
+    if (draft.trigger?.type === 'ON_FLAG_SET' && draft.trigger.flag_key) {
+      quests.forEach(quest => {
+        if (quest.id === draft.id) return
+        if (questEmitsFlag(quest, draft.trigger!.flag_key!, draft.trigger.flag_value)) {
+          const flagLabel = draft.trigger.flag_value
+            ? `${draft.trigger.flag_key}=${draft.trigger.flag_value}`
+            : draft.trigger.flag_key
+          pushPrev(quest, `ON_FLAG_SET: ${flagLabel}`)
+        }
+      })
+    }
+
+    quests.forEach(quest => {
+      if (quest.id === draft.id) return
+      if (quest.trigger?.type === 'ON_QUEST_COMPLETION' && quest.trigger.quest_ids?.includes(draft.id)) {
+        pushNext(quest, 'ON_QUEST_COMPLETION')
+      }
+      if (quest.trigger?.type === 'ON_FLAG_SET' && quest.trigger.flag_key === completionFlagId) {
+        const flagLabel = quest.trigger.flag_value
+          ? `${quest.trigger.flag_key}=${quest.trigger.flag_value}`
+          : quest.trigger.flag_key
+        pushNext(quest, `ON_FLAG_SET: ${flagLabel}`)
+      }
+    })
+
+    const shared = quests
+      .filter(quest => quest.id !== draft.id && resolveCompletionFlagId(quest) === completionFlagId)
+      .map(quest => ({ quest, reason: `completionFlagId = ${completionFlagId}` }))
+
+    return { completionFlagId, previous, next, shared }
+  }, [draft, quests])
+
   const pendingDeleteQuest = deleteDialogOpen && draft && !draft.__unsaved ? draft : null
 
   const systemOptions = useMemo(() => (
@@ -1647,9 +1806,13 @@ export const QuestDesignerApp: React.FC = () => {
     setValidating(true)
     try {
       const result = await validateTerminalQuest(questToPayload(draft))
-      const issues = result.errors || []
-      setValidationMessages(issues.length ? issues : ['Quest validated successfully.'])
-      setWarnings(result.warnings || [])
+      const designerIssues = gatherDesignerValidationIssues(draft, quests)
+      const serverErrors = result.errors || []
+      const serverWarnings = result.warnings || []
+      const combinedErrors = [...serverErrors, ...designerIssues.errors]
+      const combinedWarnings = [...serverWarnings, ...designerIssues.warnings]
+      setValidationMessages(combinedErrors.length ? combinedErrors : ['Quest validated successfully.'])
+      setWarnings(combinedWarnings)
     } catch (err: any) {
       console.error('[quest designer] validation failed', err)
       setValidationMessages([err?.message || 'Validation failed.'])
@@ -1904,6 +2067,44 @@ export const QuestDesignerApp: React.FC = () => {
                   {validationMessages.map(msg => <li key={msg}>{msg}</li>)}
                 </ul>
               </div>
+            )}
+
+            {relationships && (
+              <section className="quest-relationships-panel" aria-label="Quest relationships">
+                <div className="relationships-header">
+                  <h3>Relationships</h3>
+                  <div className="relationships-flag">
+                    <span>Completion flag</span>
+                    <code>{relationships.completionFlagId}</code>
+                  </div>
+                </div>
+                <div className="relationships-grid">
+                  {[
+                    { title: 'Previous', items: relationships.previous, empty: 'No quests unlock this one yet.' },
+                    { title: 'Next', items: relationships.next, empty: 'No quests unlocked by this quest yet.' },
+                    { title: 'Shared flags', items: relationships.shared, empty: 'No other quests share this completion flag.' }
+                  ].map(column => (
+                    <div key={column.title} className="relationship-column">
+                      <span className="relationship-column-title">{column.title}</span>
+                      {column.items.length === 0 ? (
+                        <p className="muted empty">{column.empty}</p>
+                      ) : (
+                        <ul>
+                          {column.items.map(entry => (
+                            <li key={`${column.title}-${entry.quest.id}-${entry.reason}`}>
+                              <div className="relationship-row">
+                                <span className="relationship-id">{entry.quest.id}</span>
+                                {entry.quest.title && <span className="relationship-title">{entry.quest.title}</span>}
+                              </div>
+                              <span className="relationship-reason">{entry.reason}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
 
             <section>
