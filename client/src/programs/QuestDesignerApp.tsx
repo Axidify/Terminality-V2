@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import './QuestDesignerApp.css'
-import type { FileSystemNode, QuestDefinition, QuestLifecycleStatus, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
+
+import { signalSessionActivity } from '../os/SessionActivityContext'
+import { useToasts } from '../os/ToastContext'
+import { useUser } from '../os/UserContext'
+import { getCachedDesktop, hydrateFromServer } from '../services/saveService'
+import { listSystemProfiles, SystemProfileDTO, SystemProfilesResponse } from '../services/systemProfiles'
 import {
   listTerminalQuests,
   createTerminalQuest,
@@ -9,10 +14,9 @@ import {
   deleteTerminalQuest,
   validateTerminalQuest
 } from '../services/terminalQuests'
-import { listSystemProfiles, SystemProfileDTO, SystemProfilesResponse } from '../services/systemProfiles'
-import { useUser } from '../os/UserContext'
+
 import type { SerializedQuestState } from './questSystem'
-import { getCachedDesktop, hydrateFromServer } from '../services/saveService'
+import type { FileSystemNode, QuestDefinition, QuestLifecycleStatus, QuestRewardFlag, QuestStep, QuestStepType, QuestTrigger, QuestTriggerType } from './terminalQuests/types'
 
 interface DesignerQuest extends QuestDefinition {
   __unsaved?: boolean
@@ -79,6 +83,62 @@ const FIELD_HINTS = {
   stepCommandExample: 'Optional concrete command example shown with the hint.'
 } as const
 
+const sortQuests = (entries: DesignerQuest[]): DesignerQuest[] => (
+  [...entries].sort((a, b) => {
+    const nameA = (a.title || a.id).toLowerCase()
+    const nameB = (b.title || b.id).toLowerCase()
+    if (nameA === nameB) return a.id.localeCompare(b.id)
+    return nameA.localeCompare(nameB)
+  })
+)
+
+const StatusIcon: React.FC<{ status: StatusFilterValue }> = ({ status }) => {
+  switch (status) {
+    case 'in_progress':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" opacity="0.3" />
+          <path d="M12 3a9 9 0 0 1 9 9" strokeWidth="2.5">
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 12 12"
+              to="360 12 12"
+              dur="2s"
+              repeatCount="indefinite"
+            />
+          </path>
+          <circle cx="12" cy="12" r="3" fill="currentColor" />
+        </svg>
+      )
+    case 'completed':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" opacity="0.3" />
+          <path d="M7 13l3 3 7-7" />
+        </svg>
+      )
+    case 'not_started':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" opacity="0.3" />
+          <circle cx="12" cy="12" r="4" strokeWidth="2.5" />
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      )
+    case 'all':
+    default:
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" opacity="0.3" />
+          <line x1="8" y1="9" x2="16" y2="9" strokeWidth="2.5" />
+          <line x1="8" y1="12" x2="16" y2="12" strokeWidth="2.5" />
+          <line x1="8" y1="15" x2="13" y2="15" strokeWidth="2.5" />
+        </svg>
+      )
+  }
+}
+
 type Operation = QuestDefinition
 type OperationTrigger = QuestTrigger
 type OperationTriggerType = QuestTriggerType
@@ -124,25 +184,6 @@ const STEP_TYPES: StepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DIS
 type SystemTemplateDTO = SystemProfilesResponse['templates'][number]
 
 type FilesystemMap = Record<string, FileSystemNode>
-
-interface FsTreeNode extends FileSystemNode {
-  childrenNodes: FsTreeNode[]
-}
-
-interface FsAddDraft {
-  parentPath: string
-  nodeType: 'file' | 'dir'
-  name: string
-}
-
-type StoredFsTemplate = {
-  id: string
-  label: string
-  description?: string
-  filesystem: FilesystemMap
-}
-
-const FS_TEMPLATE_STORAGE_KEY = 'questDesignerFsTemplates'
 
 const normalizeFilesystemPath = (input: string): string => {
   if (!input) return '/'
@@ -463,6 +504,7 @@ const validateQuestDraft = (quest?: DesignerQuest): string[] => {
 
 export const QuestDesignerApp: React.FC = () => {
   const { isAdmin } = useUser()
+  const { push: pushToast } = useToasts()
   const [quests, setQuests] = useState<DesignerQuest[]>([])
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<DesignerQuest | null>(null)
@@ -637,7 +679,7 @@ export const QuestDesignerApp: React.FC = () => {
       try {
         const data = await listTerminalQuests({ includeDrafts: true })
         if (cancelled) return
-        setQuests(data.map(normalizeQuest))
+        setQuests(sortQuests(data.map(normalizeQuest)))
       } catch (err) {
         console.error('[quest designer] failed to load quests', err)
         if (!cancelled) setErrors(['Failed to load quests from server.'])
@@ -684,7 +726,7 @@ export const QuestDesignerApp: React.FC = () => {
       snapshot[systemId] = stringifyFilesystemMap(normalized)
     })
     setFsDrafts(snapshot)
-  }, [draft?.id])
+  }, [draft])
 
   const selectQuest = (quest: DesignerQuest) => {
     setSelectedKey(quest.id)
@@ -697,8 +739,9 @@ export const QuestDesignerApp: React.FC = () => {
 
   const handleCreateQuest = () => {
     const fresh = createEmptyQuest()
-    setQuests(prev => [...prev, fresh])
+    setQuests(prev => sortQuests([...prev, fresh]))
     selectQuest(fresh)
+    signalSessionActivity('quest-create')
   }
 
   const updateCurrentQuest = (updater: (prev: DesignerQuest) => DesignerQuest) => {
@@ -797,7 +840,12 @@ export const QuestDesignerApp: React.FC = () => {
       .map(q => q.title || q.id)
   }, [draft, quests])
 
-  const questIdSuggestions = useMemo(() => quests.map(q => q.id), [quests])
+  const questIdSuggestions = useMemo(() => {
+    const currentId = draft?.id
+    return quests
+      .filter(q => !currentId || q.id !== currentId)
+      .map(q => q.id)
+  }, [draft?.id, quests])
 
   const completionTriggerInput = useTagInput({
     values: draft?.trigger?.quest_ids || [],
@@ -952,7 +1000,7 @@ export const QuestDesignerApp: React.FC = () => {
         ...prev,
         [systemId]: stringifyFilesystemMap(normalized)
       }))
-    } catch (err) {
+    } catch (_err) {
       setErrors([`Filesystem override for ${systemId} is invalid JSON.`])
     }
   }
@@ -987,6 +1035,7 @@ export const QuestDesignerApp: React.FC = () => {
 
   const runSave = async (statusOverride?: 'draft' | 'published') => {
     if (!draft) return
+    signalSessionActivity('quest-save-attempt')
     const targetDraft = statusOverride ? { ...draft, status: statusOverride } : draft
     if (statusOverride) {
       setDraft(targetDraft)
@@ -994,6 +1043,12 @@ export const QuestDesignerApp: React.FC = () => {
     const validation = validateQuestDraft(targetDraft)
     if (validation.length) {
       setErrors(validation)
+      pushToast({
+        title: 'Fix Validation Issues',
+        message: validation[0],
+        kind: 'error',
+        dedupeKey: 'quest-save-error'
+      })
       return
     }
     const wasUnsaved = !!targetDraft.__unsaved
@@ -1017,11 +1072,18 @@ export const QuestDesignerApp: React.FC = () => {
       setWarnings(response.warnings || [])
       setQuests(prev => {
         const others = prev.filter(q => q.id !== (selectedKey || targetDraft.id))
-        return [...others, savedQuest]
+        return sortQuests([...others, savedQuest])
       })
       setSelectedKey(savedQuest.id)
       persistedIdRef.current = savedQuest.id
       setDraft(savedQuest)
+      pushToast({
+        title: isPublishing ? 'Quest Published' : 'Draft Saved',
+        message: `${savedQuest.title || savedQuest.id} ${isPublishing ? 'is now live for players.' : 'changes saved successfully.'}`,
+        kind: 'success',
+        dedupeKey: isPublishing ? 'quest-publish-success' : 'quest-save-success'
+      })
+      signalSessionActivity(isPublishing ? 'quest-publish-success' : 'quest-save-success')
       if (typeof window !== 'undefined') {
         const action = isPublishing ? 'publish' : wasUnsaved ? 'create' : 'update'
         window.dispatchEvent(new CustomEvent('terminalQuestsUpdated', {
@@ -1030,7 +1092,15 @@ export const QuestDesignerApp: React.FC = () => {
       }
     } catch (err: any) {
       console.error('[quest designer] save failed', err)
-      setErrors([err?.message || 'Failed to save quest.'])
+      const friendly = err?.message || 'Failed to save quest.'
+      setErrors([friendly])
+      pushToast({
+        title: isPublishing ? 'Publish Failed' : 'Save Failed',
+        message: friendly,
+        kind: 'error',
+        dedupeKey: isPublishing ? 'quest-publish-error' : 'quest-save-error'
+      })
+      signalSessionActivity('quest-save-error')
     } finally {
       if (isPublishing) {
         setPublishing(false)
@@ -1062,11 +1132,18 @@ export const QuestDesignerApp: React.FC = () => {
   const handleDelete = () => {
     if (!draft) return
     if (draft.__unsaved) {
-      setQuests(prev => prev.filter(q => q.id !== draft.id))
+      setQuests(prev => sortQuests(prev.filter(q => q.id !== draft.id)))
       setDraft(null)
       setSelectedKey(null)
       persistedIdRef.current = null
       setDeleteDialogOpen(false)
+      pushToast({
+        title: 'Draft Discarded',
+        message: `${draft.title || draft.id} removed from the queue.`,
+        kind: 'info',
+        dedupeKey: 'quest-delete-success'
+      })
+      signalSessionActivity('quest-delete-draft')
       return
     }
     setDeleteDialogOpen(true)
@@ -1083,13 +1160,28 @@ export const QuestDesignerApp: React.FC = () => {
           detail: { action: 'delete', questId: targetDraft.id }
         }))
       }
-      setQuests(prev => prev.filter(q => q.id !== targetDraft.id))
+      setQuests(prev => sortQuests(prev.filter(q => q.id !== targetDraft.id)))
       setDraft(null)
       setSelectedKey(null)
       persistedIdRef.current = null
+      pushToast({
+        title: 'Quest Deleted',
+        message: `${targetDraft.title || targetDraft.id} removed.`,
+        kind: 'warning',
+        dedupeKey: 'quest-delete-success'
+      })
+      signalSessionActivity('quest-delete-success')
     } catch (err: any) {
       console.error('[quest designer] delete failed', err)
-      setErrors([err?.message || 'Failed to delete quest.'])
+      const friendly = err?.message || 'Failed to delete quest.'
+      setErrors([friendly])
+      pushToast({
+        title: 'Delete Failed',
+        message: friendly,
+        kind: 'error',
+        dedupeKey: 'quest-delete-error'
+      })
+      signalSessionActivity('quest-delete-error')
     } finally {
       setDeleteInProgress(false)
       setDeleteDialogOpen(false)
@@ -1134,17 +1226,23 @@ export const QuestDesignerApp: React.FC = () => {
           onChange={e => setSearch(e.target.value)}
         />
         <div className="quest-status-filter" data-tooltip={FIELD_HINTS.questStatusFilter}>
+          <div className="legend-heading">Quest Lifecycle</div>
           {STATUS_FILTERS.map(option => {
             const count = option.lifecycle ? questStatusCounters[option.lifecycle] : quests.length
             return (
               <button
                 key={option.value}
                 type="button"
-                className={`status-filter-chip ${questStatusFilter === option.value ? 'active' : ''}`}
+                className={`status-filter-chip status-${option.value} ${questStatusFilter === option.value ? 'active' : ''}`}
                 onClick={() => setQuestStatusFilter(option.value)}
               >
-                <span>{option.label}</span>
-                <span className="chip-count">{count}</span>
+                <span className="status-icon-wrapper" aria-hidden="true">
+                  <StatusIcon status={option.value} />
+                </span>
+                <span className="status-text">
+                  <span className="status-label">{option.label}</span>
+                  <span className="chip-count">{count}</span>
+                </span>
               </button>
             )
           })}
@@ -1162,6 +1260,7 @@ export const QuestDesignerApp: React.FC = () => {
           {filteredQuests.map(quest => {
             const isActive = !!draft && (quest.id === draft.id || quest.id === (selectedKey || ''))
             const lifecycleStatus = playerQuestStatuses[quest.id] || DEFAULT_LIFECYCLE_STATUS
+            const lifecycleLabel = STATUS_LABELS[lifecycleStatus]
             return (
               <button
                 key={quest.id}
@@ -1174,8 +1273,12 @@ export const QuestDesignerApp: React.FC = () => {
                     <span className={`tag quest-status ${quest.status}`}>
                       {quest.status === 'published' ? 'Published' : 'Draft'}
                     </span>
-                    <span className={`tag lifecycle-status ${lifecycleStatus}`}>
-                      {STATUS_LABELS[lifecycleStatus]}
+                    <span
+                      className={`tag lifecycle-status ${lifecycleStatus}`}
+                      aria-label={lifecycleLabel}
+                    >
+                      <span className="sr-only">{lifecycleLabel}</span>
+                      <StatusIcon status={lifecycleStatus} />
                     </span>
                   </div>
                 </div>

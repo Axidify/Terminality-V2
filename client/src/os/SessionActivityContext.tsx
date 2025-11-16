@@ -4,6 +4,48 @@ import { useToasts } from './ToastContext'
 import { useUser } from './UserContext'
 import { useWindowManager } from './WindowManager'
 
+const ACTIVITY_STORAGE_KEY = 'terminality:last-activity'
+export const SESSION_ACTIVITY_EVENT = 'session-activity' as const
+
+const readStoredActivity = (): number | null => {
+  if (typeof window === 'undefined' || !window.localStorage) return null
+  try {
+    const raw = localStorage.getItem(ACTIVITY_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = Number(raw)
+    return Number.isFinite(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+const writeStoredActivity = (timestamp: number) => {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  try {
+    localStorage.setItem(ACTIVITY_STORAGE_KEY, String(timestamp))
+  } catch {
+    /* ignore */
+  }
+}
+
+const clearStoredActivity = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  try {
+    localStorage.removeItem(ACTIVITY_STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+export const signalSessionActivity = (reason?: string) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.dispatchEvent(new CustomEvent(SESSION_ACTIVITY_EVENT, { detail: { reason } }))
+  } catch {
+    /* ignore */
+  }
+}
+
 interface SessionActivityContextValue {
   reportActivity: () => void
   timeoutMs: number
@@ -25,7 +67,7 @@ export const SessionActivityProvider: React.FC<SessionActivityProviderProps> = (
   const { user, logout } = useUser()
   const wm = useWindowManager()
   const { push, dismiss } = useToasts()
-  const lastActivityRef = useRef<number>(Date.now())
+  const lastActivityRef = useRef<number>(typeof window !== 'undefined' ? (readStoredActivity() ?? Date.now()) : Date.now())
   const warningToastRef = useRef<string | null>(null)
   const timerRef = useRef<number | null>(null)
   const timedOutRef = useRef(false)
@@ -37,17 +79,36 @@ export const SessionActivityProvider: React.FC<SessionActivityProviderProps> = (
       dismiss(warningToastRef.current)
       warningToastRef.current = null
     }
+    writeStoredActivity(lastActivityRef.current)
   }, [dismiss])
 
   const handleTimeout = useCallback(() => {
     if (timedOutRef.current) return
     timedOutRef.current = true
     wm.clearAll()
+    clearStoredActivity()
     logout()
     try {
       window.dispatchEvent(new CustomEvent('sessionExpired', { detail: { reason: 'inactivity' } }))
     } catch { /* ignore */ }
   }, [logout, wm])
+
+  React.useEffect(() => {
+    if (!user) {
+      clearStoredActivity()
+      return
+    }
+    const stored = typeof window !== 'undefined' ? readStoredActivity() : null
+    if (stored) {
+      lastActivityRef.current = stored
+      if (Date.now() - stored >= timeoutMs) {
+        handleTimeout()
+        return
+      }
+    } else {
+      writeStoredActivity(lastActivityRef.current)
+    }
+  }, [user, timeoutMs, handleTimeout])
 
   React.useEffect(() => {
     if (!user) {
@@ -61,21 +122,35 @@ export const SessionActivityProvider: React.FC<SessionActivityProviderProps> = (
     reportActivity()
     const activityHandler = () => reportActivity()
     const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'wheel', 'focus']
+    if (typeof window === 'undefined') {
+      return () => {}
+    }
     events.forEach(evt => {
       window.addEventListener(evt, activityHandler as EventListener, evt === 'touchstart' ? { passive: true } : undefined)
     })
-    window.addEventListener('session-activity', activityHandler as EventListener)
+    window.addEventListener(SESSION_ACTIVITY_EVENT, activityHandler as EventListener)
 
     return () => {
       events.forEach(evt => {
         window.removeEventListener(evt, activityHandler as EventListener)
       })
-      window.removeEventListener('session-activity', activityHandler as EventListener)
+      window.removeEventListener(SESSION_ACTIVITY_EVENT, activityHandler as EventListener)
     }
   }, [user, reportActivity, dismiss])
 
   React.useEffect(() => {
-    if (!user) return undefined
+    if (!user || typeof document === 'undefined') return undefined
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        reportActivity()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [user, reportActivity])
+
+  React.useEffect(() => {
+    if (!user || typeof window === 'undefined') return undefined
     timerRef.current = window.setInterval(() => {
       const now = Date.now()
       const elapsed = now - lastActivityRef.current
