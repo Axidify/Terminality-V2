@@ -231,11 +231,23 @@ describe('QuestDesigner wizard summary', () => {
     await screen.findByRole('heading', { level: 2, name: /Intro Email/i })
     await jumpToSummary()
 
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
-    expect(confirmSpy).toHaveBeenCalledWith('Discard wizard progress? Unsaved quest edits and staged mails will be lost.')
+    const confirmDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
+    expect(confirmDialog).toBeInTheDocument()
+    expect(within(confirmDialog).getByText(/Unsaved Progress/i)).toBeInTheDocument()
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: /Resume Wizard/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Leave the Wizard/i })).not.toBeInTheDocument()
+    })
     expect(screen.getByRole('heading', { level: 2, name: /Summary & Save/i })).toBeInTheDocument()
-    confirmSpy.mockRestore()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+    const secondDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
+    fireEvent.click(within(secondDialog).getByRole('button', { name: /Discard & Close/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 2, name: /Summary & Save/i })).not.toBeInTheDocument()
+    })
   })
 
   it('persists mails and quest when Save & Finish succeeds', async () => {

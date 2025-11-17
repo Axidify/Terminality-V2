@@ -1093,6 +1093,7 @@ export const QuestDesignerApp: React.FC = () => {
   const [wizardCompletionMailErrors, setWizardCompletionMailErrors] = useState<string[]>([])
   const [wizardSummaryErrors, setWizardSummaryErrors] = useState<string[]>([])
   const [wizardFinishing, setWizardFinishing] = useState(false)
+  const [wizardCancelConfirmOpen, setWizardCancelConfirmOpen] = useState(false)
   const flagKeyListId = useId()
   const rewardFlagKeyListId = useId()
   const wizardRewardFlagListId = useId()
@@ -2656,6 +2657,12 @@ export const QuestDesignerApp: React.FC = () => {
     }
   }, [wizardStep])
 
+  useEffect(() => {
+    if (!wizardOpen) {
+      setWizardCancelConfirmOpen(false)
+    }
+  }, [wizardOpen])
+
   const focusWizardAlert = useCallback(() => {
     if (typeof window === 'undefined') return
     window.requestAnimationFrame(() => {
@@ -2752,12 +2759,19 @@ export const QuestDesignerApp: React.FC = () => {
     goToNextWizardStep()
   }
 
+  const dismissWizardCancelPrompt = useCallback(() => {
+    setWizardCancelConfirmOpen(false)
+  }, [])
+
+  const confirmWizardCancel = useCallback(() => {
+    setWizardCancelConfirmOpen(false)
+    closeWizard()
+  }, [closeWizard])
+
   const handleWizardCancel = useCallback(() => {
-    if (wizardHasUnsavedChanges && typeof window !== 'undefined') {
-      const confirmed = window.confirm('Discard wizard progress? Unsaved quest edits and staged mails will be lost.')
-      if (!confirmed) {
-        return
-      }
+    if (wizardHasUnsavedChanges) {
+      setWizardCancelConfirmOpen(true)
+      return
     }
     closeWizard()
   }, [closeWizard, wizardHasUnsavedChanges])
@@ -5133,6 +5147,40 @@ export const QuestDesignerApp: React.FC = () => {
               >
                 {wizardAtLastStep ? (wizardFinishing ? 'Saving…' : 'Save & Finish') : 'Next'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {wizardCancelConfirmOpen && (
+        <div
+          className="quest-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wizard-cancel-title"
+          onClick={dismissWizardCancelPrompt}
+        >
+          <div className="quest-modal quest-wizard-cancel" onClick={event => event.stopPropagation()}>
+            <header className="quest-modal-header">
+              <div>
+                <p className="muted">Guided Build • Unsaved Progress</p>
+                <h2 id="wizard-cancel-title">Leave the Wizard?</h2>
+              </div>
+            </header>
+            <div className="quest-modal-body">
+              <p>
+                {draft ? (
+                  <>
+                    Discarding now will abandon changes to <strong>{draft.title || draft.id}</strong> and any staged mails.
+                  </>
+                ) : (
+                  'Discarding now will abandon any staged quest progress.'
+                )}
+              </p>
+              <p className="muted">Choose Resume to keep editing, or Discard to exit the guided flow.</p>
+            </div>
+            <div className="quest-modal-actions">
+              <button type="button" className="ghost" onClick={dismissWizardCancelPrompt}>Resume Wizard</button>
+              <button type="button" className="danger" onClick={confirmWizardCancel}>Discard &amp; Close</button>
             </div>
           </div>
         </div>
