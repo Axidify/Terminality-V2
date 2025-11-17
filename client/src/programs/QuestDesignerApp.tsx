@@ -829,7 +829,7 @@ const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: 
     if (!value) return
     if (values.includes(value)) {
       setInput('')
-      return
+      return false
     }
     onChange([...values, value])
     setInput('')
@@ -1102,6 +1102,8 @@ export const QuestDesignerApp: React.FC = () => {
   const tooltipNodeRef = useRef<HTMLDivElement | null>(null)
   const serverMailIdsRef = useRef<Set<string>>(new Set())
   const mailSnapshotRef = useRef<Record<string, string>>({})
+  const wizardBodyRef = useRef<HTMLDivElement | null>(null)
+  const wizardAlertRef = useRef<HTMLDivElement | null>(null)
 
   const persistQuestOrder = useCallback((order: string[]) => {
     if (typeof window === 'undefined') return
@@ -1274,10 +1276,16 @@ export const QuestDesignerApp: React.FC = () => {
     setMailValidationErrors([])
   }
 
-  const selectQuest = useCallback((quest: DesignerQuest) => {
-    setSelectedKey(quest.id)
-    setDraft(normalizeQuest(quest))
-    persistedIdRef.current = quest.__unsaved ? null : quest.id
+  const selectQuest = useCallback((quest: DesignerQuest | null) => {
+    if (!quest) {
+      setSelectedKey(null)
+      setDraft(null)
+      persistedIdRef.current = null
+    } else {
+      setSelectedKey(quest.id)
+      setDraft(normalizeQuest(quest))
+      persistedIdRef.current = quest.__unsaved ? null : quest.id
+    }
     setErrors([])
     setWarnings([])
     setValidationMessages([])
@@ -1863,7 +1871,12 @@ export const QuestDesignerApp: React.FC = () => {
       return (
         <div className="quest-wizard-form intro-mail-form">
           {wizardIntroMailErrors.length > 0 && (
-            <div className="inline-alert error">
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'introEmail' ? wizardAlertRef : undefined}
+            >
               <strong>Fix these before continuing</strong>
               <ul>
                 {wizardIntroMailErrors.map(error => <li key={error}>{error}</li>)}
@@ -2030,7 +2043,12 @@ export const QuestDesignerApp: React.FC = () => {
       return (
         <div className="quest-wizard-form quest-core-form">
           {wizardQuestDetailsErrors.length > 0 && (
-            <div className="inline-alert error">
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'questCore' ? wizardAlertRef : undefined}
+            >
               <strong>Fix these before continuing</strong>
               <ul>
                 {wizardQuestDetailsErrors.map(error => <li key={error}>{error}</li>)}
@@ -2158,7 +2176,12 @@ export const QuestDesignerApp: React.FC = () => {
       return (
         <div className="quest-wizard-form quest-steps-form">
           {wizardQuestStepsErrors.length > 0 && (
-            <div className="inline-alert error">
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'questSteps' ? wizardAlertRef : undefined}
+            >
               <strong>Resolve these step issues</strong>
               <ul>
                 {wizardQuestStepsErrors.map(error => <li key={error}>{error}</li>)}
@@ -2290,7 +2313,12 @@ export const QuestDesignerApp: React.FC = () => {
       return (
         <div className="quest-wizard-form completion-mail-form">
           {wizardCompletionMailErrors.length > 0 && (
-            <div className="inline-alert error">
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'completionEmail' ? wizardAlertRef : undefined}
+            >
               <strong>Resolve these completion mail issues</strong>
               <ul>
                 {wizardCompletionMailErrors.map(error => <li key={error}>{error}</li>)}
@@ -2469,7 +2497,12 @@ export const QuestDesignerApp: React.FC = () => {
       return (
         <div className="quest-wizard-form summary-form">
           {wizardSummaryErrors.length > 0 && (
-            <div className="inline-alert error">
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'summary' ? wizardAlertRef : undefined}
+            >
               <strong>Resolve before saving</strong>
               <ul>
                 {wizardSummaryErrors.map(message => <li key={message}>{message}</li>)}
@@ -2568,7 +2601,7 @@ export const QuestDesignerApp: React.FC = () => {
         </div>
       )
     }
-    const details = QUEST_WIZARD_STEP_DETAILS[wizardStep]
+    const details = QUEST_WIZARD_STEP_DETAILS[wizardStep as QuestWizardStep]
     return (
       <div className="quest-wizard-placeholder">
         <p>
@@ -2622,6 +2655,42 @@ export const QuestDesignerApp: React.FC = () => {
       setWizardSummaryErrors([])
     }
   }, [wizardStep])
+
+  const focusWizardAlert = useCallback(() => {
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      const target = wizardAlertRef.current
+      if (!target) return
+      target.focus()
+      if (target.scrollIntoView) {
+        target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!wizardOpen) return
+    const bodyNode = wizardBodyRef.current
+    if (!bodyNode) return
+    if (bodyNode.scrollTo) {
+      bodyNode.scrollTo({ top: 0 })
+    } else {
+      bodyNode.scrollTop = 0
+    }
+  }, [wizardOpen, wizardStep])
+
+  useEffect(() => {
+    if (!wizardOpen) return
+    const hasErrors =
+      (wizardStep === 'introEmail' && wizardIntroMailErrors.length > 0) ||
+      (wizardStep === 'questCore' && wizardQuestDetailsErrors.length > 0) ||
+      (wizardStep === 'questSteps' && wizardQuestStepsErrors.length > 0) ||
+      (wizardStep === 'completionEmail' && wizardCompletionMailErrors.length > 0) ||
+      (wizardStep === 'summary' && wizardSummaryErrors.length > 0)
+    if (hasErrors) {
+      focusWizardAlert()
+    }
+  }, [focusWizardAlert, wizardCompletionMailErrors, wizardIntroMailErrors, wizardOpen, wizardQuestDetailsErrors, wizardQuestStepsErrors, wizardStep, wizardSummaryErrors])
 
   const wizardQuestDirty = useMemo(() => {
     if (!draft) return false
@@ -2967,6 +3036,14 @@ export const QuestDesignerApp: React.FC = () => {
 
   const handleQuestSelection = (quest: DesignerQuest) => {
     if (draggingQuestId) return
+    if (draft && draft.id === quest.id) {
+      selectQuest(null)
+      return
+    }
+    if (!draft && selectedKey === quest.id) {
+      selectQuest(null)
+      return
+    }
     selectQuest(quest)
   }
 
@@ -3892,8 +3969,8 @@ export const QuestDesignerApp: React.FC = () => {
 
   const handleWizardFinish = useCallback(async () => {
     if (!draft) return
-    const introMail = draft.introEmailId ? mailDefinitions.find(entry => entry.id === draft.introEmailId) : null
-    const completionMail = draft.completionEmailId ? mailDefinitions.find(entry => entry.id === draft.completionEmailId) : null
+    const introMail = draft.introEmailId ? (mailDefinitions.find(entry => entry.id === draft.introEmailId) ?? null) : null
+    const completionMail = draft.completionEmailId ? (mailDefinitions.find(entry => entry.id === draft.completionEmailId) ?? null) : null
     const issues: string[] = []
     if (!introMail) issues.push('Intro email is missing or not staged yet.')
     if (!completionMail) issues.push('Completion email is missing or not staged yet.')
@@ -5033,7 +5110,7 @@ export const QuestDesignerApp: React.FC = () => {
                 <p className="muted">{currentWizardStepDetails.description}</p>
               </div>
             </header>
-            <div className="quest-modal-body quest-wizard-body">
+            <div className="quest-modal-body quest-wizard-body" ref={wizardBodyRef}>
               {wizardStepContent}
             </div>
             <div className="quest-modal-actions quest-wizard-actions">
