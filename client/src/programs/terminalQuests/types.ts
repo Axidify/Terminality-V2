@@ -1,10 +1,19 @@
 import type { SerializedMailState } from '../mailSystem'
 
 export type QuestTriggerType = 'ON_FIRST_TERMINAL_OPEN' | 'ON_QUEST_COMPLETION' | 'ON_FLAG_SET'
+export type QuestIntroDeliveryCondition = 'game_start' | 'after_quest' | 'flag_set' | 'manual'
+export type QuestIntroStartBehavior = 'startQuest' | 'loreOnly'
 
 export type QuestStepType = 'SCAN_HOST' | 'CONNECT_HOST' | 'DELETE_FILE' | 'DISCONNECT_HOST'
 
 export type QuestLifecycleStatus = 'not_started' | 'in_progress' | 'completed'
+
+export interface QuestIntroMailDelivery {
+  condition: QuestIntroDeliveryCondition
+  questId?: string
+  flagKey?: string
+  flagValue?: string
+}
 
 export interface QuestTrigger {
   type: QuestTriggerType
@@ -63,6 +72,11 @@ export interface QuestDefinition {
   id: string
   title: string
   description: string
+  summary?: string
+  designerNotes?: string
+  difficulty?: string
+  faction?: string
+  tags?: string[]
   trigger: QuestTrigger
   steps: QuestStep[]
   rewards: QuestRewards
@@ -72,6 +86,11 @@ export interface QuestDefinition {
   status?: 'draft' | 'published'
   completion_flag?: string
   mail?: QuestMailConfig
+  introEmailId?: string
+  introMailDelivery?: QuestIntroMailDelivery
+  introMailStartBehavior?: QuestIntroStartBehavior
+  followUpQuestId?: string
+  completionEmailId?: string
 }
 
 export interface FileSystemNode {

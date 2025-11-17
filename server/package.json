@@ -32,10 +32,10 @@
     "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22",
+    "nodemon": "^3.1.11",
     "prisma": "^5.6.0",
     "supertest": "^6.3.3",
-    "vitest": "^1.2.0"
+    "vitest": "^4.0.9"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

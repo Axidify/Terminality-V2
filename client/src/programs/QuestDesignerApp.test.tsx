@@ -3,14 +3,22 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-import { QuestDesignerApp } from './QuestDesignerApp'
-
 import type { QuestDefinition, QuestLifecycleStatus } from './terminalQuests/types'
 
-const mockListTerminalQuests = vi.fn()
-const mockListSystemProfiles = vi.fn()
-const mockGetCachedDesktop = vi.fn()
-const mockHydrateFromServer = vi.fn()
+const questDesignerMocks = vi.hoisted(() => ({
+  listTerminalQuests: vi.fn<() => Promise<QuestDefinition[]>>(),
+  listSystemProfiles: vi.fn(),
+  getCachedDesktop: vi.fn(),
+  hydrateFromServer: vi.fn(),
+  pushToast: vi.fn()
+}))
+
+const {
+  listTerminalQuests: mockListTerminalQuests,
+  listSystemProfiles: mockListSystemProfiles,
+  getCachedDesktop: mockGetCachedDesktop,
+  hydrateFromServer: mockHydrateFromServer
+} = questDesignerMocks
 
 vi.mock('../os/UserContext', () => ({
   useUser: () => ({
@@ -23,8 +31,16 @@ vi.mock('../os/UserContext', () => ({
   })
 }))
 
+vi.mock('../os/ToastContext', () => ({
+  useToasts: () => ({
+    push: (...args: unknown[]) => questDesignerMocks.pushToast(...args),
+    dismiss: vi.fn(),
+    dismissAll: vi.fn()
+  })
+}))
+
 vi.mock('../services/terminalQuests', () => ({
-  listTerminalQuests: (...args: unknown[]) => mockListTerminalQuests(...args),
+  listTerminalQuests: (...args: unknown[]) => questDesignerMocks.listTerminalQuests(...args),
   createTerminalQuest: vi.fn(),
   updateTerminalQuest: vi.fn(),
   deleteTerminalQuest: vi.fn(),
@@ -32,13 +48,19 @@ vi.mock('../services/terminalQuests', () => ({
 }))
 
 vi.mock('../services/systemProfiles', () => ({
-  listSystemProfiles: (...args: unknown[]) => mockListSystemProfiles(...args)
+  listSystemProfiles: (...args: unknown[]) => questDesignerMocks.listSystemProfiles(...args)
 }))
 
 vi.mock('../services/saveService', () => ({
-  getCachedDesktop: (...args: unknown[]) => mockGetCachedDesktop(...args),
-  hydrateFromServer: (...args: unknown[]) => mockHydrateFromServer(...args)
+  getCachedDesktop: (...args: unknown[]) => questDesignerMocks.getCachedDesktop(...args),
+  hydrateFromServer: (...args: unknown[]) => questDesignerMocks.hydrateFromServer(...args)
 }))
+
+vi.mock('../services/terminalMail', () => ({
+  listAdminTerminalMail: vi.fn().mockResolvedValue([])
+}))
+
+import { QuestDesignerApp } from './QuestDesignerApp'
 
 const baseQuest = (overrides: Partial<QuestDefinition> = {}): QuestDefinition => ({
   id: 'quest_alpha',
