@@ -2,34 +2,6 @@
   "version": 1,
   "messages": [
     {
-      "id": "ops_wipe_evidence",
-      "fromName": "Atlas Ops",
-      "fromAddress": "ops@atlasnet",
-      "subject": "Directive: Wipe the Evidence",
-      "previewLine": "Remote relay logs picked up your alias. Sanitize the device before audit begins.",
-      "body": "Operator,\\n\\nTelemetry shows a relay in the Atlas outskirts captured your alias on a trace log. Corporate audit will hit the rack in under an hour.\\n\\n1) Scan 10.23.4.8 to make sure the relay is still awake.\\n2) Connect and locate /var/logs/evidence.log.\\n3) Delete the artifact and clear any shell history you touch.\\n\\nNo chatter with on-site staff. Once complete, reply with DONE in the terminal log.\\n\\n-- Atlas Ops",
-      "inUniverseDate": "2089-06-01 14:22",
-      "folder": "inbox",
-      "emailCategory": "main",
-      "isUnreadByDefault": true,
-      "linkedQuestId": "intro_001_wipe_evidence",
-      "status": "published"
-    },
-    {
-      "id": "sysadmin_maintenance",
-      "fromName": "Atlas SysAdmin",
-      "fromAddress": "sysadmin@atlasnet",
-      "subject": "Scheduled Maintenance Window",
-      "previewLine": "Expect intermittent auth hiccups on all relay clusters tonight.",
-      "body": "Heads up Operators,\\n\\nWe are cycling firmware on the relay clusters between 02:00 and 04:00 local. Auth tokens may require reissue and remote shells could drop once or twice.\\n\\nIf you are mid-run, checkpoint and resume after the window. Report any anomalies via the fault form, not over broadcast channels.\\n\\n-- Atlas SysAdmin",
-      "inUniverseDate": "2089-06-01 03:45",
-      "folder": "inbox",
-      "emailCategory": "lore",
-      "isUnreadByDefault": true,
-      "linkedQuestId": null,
-      "status": "published"
-    },
-    {
       "id": "atlas_city_news",
       "fromName": "Atlas City Newswire",
       "fromAddress": "bulletin@atlascity.news",
@@ -58,61 +30,19 @@
       "status": "published"
     },
     {
-      "id": "atlas_hr_onboarding",
-      "fromName": "Atlas HR",
-      "fromAddress": "hr@atlasnet",
-      "subject": "Policy Reminder: Field Conduct",
-      "previewLine": "Reminder that unauthorized signal injectors violate section 8.",
-      "body": "Operator,\\n\\nField reports flagged an uptick in unauthorized signal injectors. Section 8 prohibits personal hardware on municipal networks without clearance.\\n\\nWe expect you to acknowledge this reminder by week end. Reply ACK via terminal if you understand.\\n\\n-- Atlas HR",
-      "inUniverseDate": "2089-05-29 11:00",
-      "folder": "inbox",
-      "emailCategory": "side",
-      "isUnreadByDefault": true,
-      "linkedQuestId": null,
-      "status": "published"
-    },
-    {
-      "id": "wipe_evidence_complete",
-      "fromName": "Terminality OS",
-      "fromAddress": "admin@terminality.os",
-      "subject": "Well done",
-      "previewLine": "Well done",
-      "body": "well done",
-      "inUniverseDate": "2025-11-16T23:08:34.766Z",
-      "folder": "inbox",
-      "emailCategory": "main",
-      "isUnreadByDefault": true,
-      "linkedQuestId": "intro_001_wipe_evidence",
-      "status": "published"
-    },
-    {
-      "id": "intro_001_wipe_evidence_intro_mail",
+      "id": "quest_1763366957008_completion_mail",
       "fromName": "Atlas Ops",
       "fromAddress": "ops@atlasnet",
-      "subject": "Wipe the Evidence — Briefing 2",
-      "previewLine": "test",
-      "body": "test",
-      "inUniverseDate": "2025-11-17 04:01",
+      "subject": "Untitled Quest — Debrief",
+      "previewLine": "asdasdasdasd",
+      "body": "asdasdasdasd",
+      "inUniverseDate": "2025-11-17 12:09",
       "folder": "inbox",
       "emailCategory": "main",
       "isUnreadByDefault": true,
-      "linkedQuestId": "wipe_the_evidence",
-      "status": "draft"
-    },
-    {
-      "id": "wipe_the_evidence_completion_mail",
-      "fromName": "Atlas Ops",
-      "fromAddress": "ops@atlasnet",
-      "subject": "Wipe the Evidence — Debrief",
-      "previewLine": "congrats {player_handle}",
-      "body": "congrats {player_handle}\n\nyou just got {reward_credits} for your fine work",
-      "inUniverseDate": "2025-11-17 04:08",
-      "folder": "inbox",
-      "emailCategory": "main",
-      "isUnreadByDefault": true,
-      "linkedQuestId": "wipe_the_evidence",
-      "status": "draft"
+      "linkedQuestId": "quest_1763366957008",
+      "status": "published"
     }
   ],
-  "lastUpdated": "2025-11-17T04:11:50.763Z"
+  "lastUpdated": "2025-11-17T12:10:08.090Z"
 }
