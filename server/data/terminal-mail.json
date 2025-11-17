@@ -84,7 +84,35 @@
       "isUnreadByDefault": true,
       "linkedQuestId": "intro_001_wipe_evidence",
       "status": "published"
+    },
+    {
+      "id": "intro_001_wipe_evidence_intro_mail",
+      "fromName": "Atlas Ops",
+      "fromAddress": "ops@atlasnet",
+      "subject": "Wipe the Evidence — Briefing 2",
+      "previewLine": "test",
+      "body": "test",
+      "inUniverseDate": "2025-11-17 04:01",
+      "folder": "inbox",
+      "emailCategory": "main",
+      "isUnreadByDefault": true,
+      "linkedQuestId": "wipe_the_evidence",
+      "status": "draft"
+    },
+    {
+      "id": "wipe_the_evidence_completion_mail",
+      "fromName": "Atlas Ops",
+      "fromAddress": "ops@atlasnet",
+      "subject": "Wipe the Evidence — Debrief",
+      "previewLine": "congrats {player_handle}",
+      "body": "congrats {player_handle}\n\nyou just got {reward_credits} for your fine work",
+      "inUniverseDate": "2025-11-17 04:08",
+      "folder": "inbox",
+      "emailCategory": "main",
+      "isUnreadByDefault": true,
+      "linkedQuestId": "wipe_the_evidence",
+      "status": "draft"
     }
   ],
-  "lastUpdated": "2025-11-16T23:11:37.459Z"
+  "lastUpdated": "2025-11-17T04:11:50.763Z"
 }

@@ -1071,6 +1071,7 @@ export const QuestDesignerApp: React.FC = () => {
   const [draggingQuestId, setDraggingQuestId] = useState<string | null>(null)
   const [dragOverQuestId, setDragOverQuestId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [unsavedDeletePromptOpen, setUnsavedDeletePromptOpen] = useState(false)
   const [deleteInProgress, setDeleteInProgress] = useState(false)
   const [mailDefinitions, setMailDefinitionsState] = useState<MailMessageDefinition[]>([])
   const [mailLoading, setMailLoading] = useState(true)
@@ -1103,6 +1104,9 @@ export const QuestDesignerApp: React.FC = () => {
   const tooltipNodeRef = useRef<HTMLDivElement | null>(null)
   const serverMailIdsRef = useRef<Set<string>>(new Set())
   const mailSnapshotRef = useRef<Record<string, string>>({})
+  const wizardEntryQuestIdRef = useRef<string | null>(null)
+  const wizardPreviousQuestIdRef = useRef<string | null>(null)
+  const wizardCreatedQuestRef = useRef(false)
   const wizardBodyRef = useRef<HTMLDivElement | null>(null)
   const wizardAlertRef = useRef<HTMLDivElement | null>(null)
 
@@ -1411,8 +1415,19 @@ export const QuestDesignerApp: React.FC = () => {
     setWizardCompletionMailDraft(prev => ({ ...prev, ...patch }))
   }, [])
 
+  const resetWizardEntryTracking = useCallback(() => {
+    wizardEntryQuestIdRef.current = null
+    wizardPreviousQuestIdRef.current = null
+    wizardCreatedQuestRef.current = false
+  }, [])
+
   const openWizard = useCallback(() => {
+    const previousQuestId = draft?.id || null
+    const hadDraft = !!draft
     const activeQuest = ensureQuestDraft()
+    wizardEntryQuestIdRef.current = activeQuest.id
+    wizardCreatedQuestRef.current = !hadDraft
+    wizardPreviousQuestIdRef.current = !hadDraft ? previousQuestId : null
     const linkedMail = activeQuest.mail?.briefingMailId
       ? mailDefinitions.find(entry => entry.id === activeQuest.mail?.briefingMailId)
       : undefined
@@ -1430,13 +1445,15 @@ export const QuestDesignerApp: React.FC = () => {
     setWizardStep(QUEST_WIZARD_STEPS[0])
     setWizardOpen(true)
     signalSessionActivity('quest-wizard-open')
-  }, [ensureQuestDraft, mailDefinitions])
+  }, [draft, ensureQuestDraft, mailDefinitions])
 
   const closeWizard = useCallback(() => {
     setWizardOpen(false)
     setWizardFinishing(false)
+    setWizardCancelConfirmOpen(false)
+    resetWizardEntryTracking()
     signalSessionActivity('quest-wizard-close')
-  }, [])
+  }, [resetWizardEntryTracking])
 
   const goToNextWizardStep = useCallback(() => {
     setWizardStep(prev => {
@@ -2657,11 +2674,42 @@ export const QuestDesignerApp: React.FC = () => {
     }
   }, [wizardStep])
 
+  const discardWizardQuestChanges = useCallback(() => {
+    const questId = wizardEntryQuestIdRef.current
+    const createdByWizard = wizardCreatedQuestRef.current
+    const previousQuestId = wizardPreviousQuestIdRef.current
+    resetWizardEntryTracking()
+    if (!questId) return
+
+    if (createdByWizard) {
+      syncQuestList(prev => prev.filter(q => q.id !== questId))
+      if (previousQuestId) {
+        const previousQuest = quests.find(q => q.id === previousQuestId)
+        if (previousQuest) {
+          selectQuest(previousQuest)
+        } else {
+          selectQuest(null)
+        }
+      } else {
+        selectQuest(null)
+      }
+      return
+    }
+
+    const fallbackQuest = quests.find(q => q.id === questId)
+    if (fallbackQuest) {
+      selectQuest(fallbackQuest)
+    } else {
+      selectQuest(null)
+    }
+  }, [quests, resetWizardEntryTracking, selectQuest, syncQuestList])
+
   useEffect(() => {
     if (!wizardOpen) {
       setWizardCancelConfirmOpen(false)
+      resetWizardEntryTracking()
     }
-  }, [wizardOpen])
+  }, [resetWizardEntryTracking, wizardOpen])
 
   const focusWizardAlert = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -2764,9 +2812,10 @@ export const QuestDesignerApp: React.FC = () => {
   }, [])
 
   const confirmWizardCancel = useCallback(() => {
+    discardWizardQuestChanges()
     setWizardCancelConfirmOpen(false)
     closeWizard()
-  }, [closeWizard])
+  }, [closeWizard, discardWizardQuestChanges])
 
   const handleWizardCancel = useCallback(() => {
     if (wizardHasUnsavedChanges) {
@@ -4045,18 +4094,7 @@ export const QuestDesignerApp: React.FC = () => {
   const handleDelete = () => {
     if (!draft) return
     if (draft.__unsaved) {
-      syncQuestList(prev => prev.filter(q => q.id !== draft.id))
-      setDraft(null)
-      setSelectedKey(null)
-      persistedIdRef.current = null
-      setDeleteDialogOpen(false)
-      pushToast({
-        title: 'Draft Discarded',
-        message: `${draft.title || draft.id} removed from the queue.`,
-        kind: 'info',
-        dedupeKey: 'quest-delete-success'
-      })
-      signalSessionActivity('quest-delete-draft')
+      setUnsavedDeletePromptOpen(true)
       return
     }
     setDeleteDialogOpen(true)
@@ -4104,6 +4142,29 @@ export const QuestDesignerApp: React.FC = () => {
   const cancelDeleteQuest = () => {
     if (deleteInProgress) return
     setDeleteDialogOpen(false)
+  }
+
+  const confirmDiscardUnsavedQuest = () => {
+    if (!draft || !draft.__unsaved) {
+      setUnsavedDeletePromptOpen(false)
+      return
+    }
+    syncQuestList(prev => prev.filter(q => q.id !== draft.id))
+    setDraft(null)
+    setSelectedKey(null)
+    persistedIdRef.current = null
+    setUnsavedDeletePromptOpen(false)
+    pushToast({
+      title: 'Draft Discarded',
+      message: `${draft.title || draft.id} removed from the queue.`,
+      kind: 'info',
+      dedupeKey: 'quest-delete-success'
+    })
+    signalSessionActivity('quest-delete-draft')
+  }
+
+  const cancelDiscardUnsavedQuest = () => {
+    setUnsavedDeletePromptOpen(false)
   }
 
   if (!isAdmin) {
@@ -5181,6 +5242,34 @@ export const QuestDesignerApp: React.FC = () => {
             <div className="quest-modal-actions">
               <button type="button" className="ghost" onClick={dismissWizardCancelPrompt}>Resume Wizard</button>
               <button type="button" className="danger" onClick={confirmWizardCancel}>Discard &amp; Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {unsavedDeletePromptOpen && draft && draft.__unsaved && (
+        <div
+          className="quest-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quest-discard-draft-title"
+          onClick={cancelDiscardUnsavedQuest}
+        >
+          <div className="quest-modal" onClick={event => event.stopPropagation()}>
+            <header className="quest-modal-header">
+              <div>
+                <p className="muted">Quest Management • Draft</p>
+                <h2 id="quest-discard-draft-title">Discard Draft Quest?</h2>
+              </div>
+            </header>
+            <div className="quest-modal-body">
+              <p>
+                Removing <strong>{draft.title || draft.id || 'Untitled Quest'}</strong> will delete this unsaved draft and any wizard progress.
+              </p>
+              <p className="muted">You can always create a fresh quest later from the sidebar.</p>
+            </div>
+            <div className="quest-modal-actions">
+              <button type="button" className="ghost" onClick={cancelDiscardUnsavedQuest}>Keep Draft</button>
+              <button type="button" className="danger" onClick={confirmDiscardUnsavedQuest}>Discard Draft</button>
             </div>
           </div>
         </div>

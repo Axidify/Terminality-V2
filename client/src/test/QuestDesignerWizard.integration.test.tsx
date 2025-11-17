@@ -250,6 +250,27 @@ describe('QuestDesigner wizard summary', () => {
     })
   })
 
+  it('removes wizard-created quests when discarding progress', async () => {
+    mockListTerminalQuests.mockResolvedValue([])
+    await renderDesigner()
+
+    await screen.findByText(/0 quests/i)
+    fireEvent.click(screen.getByRole('button', { name: /Guided Wizard/i }))
+    await screen.findByRole('heading', { level: 2, name: /Intro Email/i })
+    await screen.findByText(/1 quest/i)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+    const confirmDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: /Discard & Close/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Leave the Wizard/i })).not.toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/0 quests/i)).toBeInTheDocument()
+    })
+  })
+
   it('persists mails and quest when Save & Finish succeeds', async () => {
     await openWizardForQuest()
     await jumpToSummary()
