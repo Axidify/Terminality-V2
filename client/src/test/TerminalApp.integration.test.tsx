@@ -18,7 +18,8 @@ vi.mock('../services/systemProfiles', () => ({
   listSystemProfiles: (...args: unknown[]) => mockListSystemProfiles(...args)
 }))
 vi.mock('../services/terminalMail', () => ({
-  listTerminalMail: (...args: unknown[]) => mockListTerminalMail(...args)
+  listTerminalMail: (...args: unknown[]) => mockListTerminalMail(...args),
+  listPublishedTerminalMail: (...args: unknown[]) => mockListTerminalMail(...args)
 }))
 vi.mock('../services/saveService', () => ({
   getCachedDesktop: (...args: unknown[]) => mockGetCachedDesktop(...args),

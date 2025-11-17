@@ -5,25 +5,68 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 import App from '../App'
 
-// In-memory mock state
-let state: any = { version: 1, desktop: { isLocked: true }, story: {} }
+function createState() {
+  return { version: 1, desktop: { isLocked: true }, story: {} as Record<string, unknown> }
+}
+const stateStore = vi.hoisted(() => ({ current: createState() }))
+
+const resetState = () => {
+  stateStore.current = createState()
+}
+
+function createWindowManagerStub() {
+  return {
+    windows: [],
+    open: vi.fn(),
+    close: vi.fn(),
+    focus: vi.fn(),
+    move: vi.fn(),
+    resize: vi.fn(),
+    minimize: vi.fn(),
+    maximize: vi.fn(),
+    restore: vi.fn(),
+    commitBounds: vi.fn(),
+    clearAll: vi.fn()
+  }
+}
+const windowManagerStub = vi.hoisted(() => createWindowManagerStub())
+const resetWindowManagerStub = () => {
+  const fresh = createWindowManagerStub()
+  Object.keys(fresh).forEach(key => {
+    // @ts-expect-error indexing for reassignment of fn references
+    windowManagerStub[key] = fresh[key as keyof typeof fresh]
+  })
+}
 
 vi.mock('../services/saveService', () => {
   return {
     saveDesktopState: vi.fn().mockImplementation(async (partial: any) => {
-      state = { ...state, desktop: { ...state.desktop, ...partial } }
-      return state
+      stateStore.current = { ...stateStore.current, desktop: { ...stateStore.current.desktop, ...partial } }
+      return stateStore.current
     }),
-    hydrateFromServer: vi.fn().mockImplementation(async () => state),
-    getCachedDesktop: vi.fn(() => state.desktop)
+    hydrateFromServer: vi.fn().mockImplementation(async () => stateStore.current),
+    getCachedDesktop: vi.fn(() => stateStore.current.desktop)
   }
 })
 
 // Minimal mocks for contexts used by App
 vi.mock('../os/ThemeContext', () => ({ ThemeProvider: ({ children }: any) => <>{children}</> }))
 vi.mock('../os/NotificationContext', () => ({ NotificationProvider: ({ children }: any) => <>{children}</> }))
-vi.mock('../os/UserContext', () => ({ UserProvider: ({ children }: any) => <>{children}</> }))
-vi.mock('../os/WindowManager', () => ({ WindowManagerProvider: ({ children }: any) => <>{children}</> }))
+vi.mock('../os/UserContext', () => ({
+  UserProvider: ({ children }: any) => <>{children}</>,
+  useUser: () => ({
+    user: { id: 1, username: 'tester', isAdmin: true },
+    loading: false,
+    isAdmin: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+    refresh: vi.fn()
+  })
+}))
+vi.mock('../os/WindowManager', () => ({
+  WindowManagerProvider: ({ children }: any) => <>{children}</>,
+  useWindowManager: () => windowManagerStub
+}))
 vi.mock('../os/components/SessionExpiredOverlay', () => ({ default: () => null }))
 vi.mock('../pages/HomePage', () => ({ HomePage: () => null }))
 vi.mock('../os/components/LockScreen', () => ({ LockScreen: ({ onUnlock, onRegister }: any) => (<div><button onClick={onUnlock}>Unlock</button><button onClick={onRegister}>Register</button></div>) }))
@@ -32,7 +75,8 @@ vi.mock('../os/Desktop', () => ({ Desktop: ({ onLock }: any) => (<div><button on
 
 describe('Lock state persistence', () => {
   beforeEach(() => {
-    state = { version: 1, desktop: { isLocked: true }, story: {} }
+    resetState()
+    resetWindowManagerStub()
     // Gate allows /app only if logged in; simulate an authenticated user
     try {
       localStorage.setItem('authToken', 'test-token')
@@ -54,10 +98,10 @@ describe('Lock state persistence', () => {
 
     // Unlock -> should persist isLocked=false
     await userEvent.click(screen.getByRole('button', { name: 'Unlock' }))
-    expect(state.desktop.isLocked).toBe(false)
+    expect(stateStore.current.desktop.isLocked).toBe(false)
 
     // App rendered desktop; lock again -> persists true
     await userEvent.click(screen.getByRole('button', { name: 'Lock' }))
-    expect(state.desktop.isLocked).toBe(true)
+    expect(stateStore.current.desktop.isLocked).toBe(true)
   })
 })

@@ -37,7 +37,11 @@ import type {
   QuestLifecycleStatus,
   QuestMailConfig,
   QuestRewardFlag,
+  QuestIntroDeliveryCondition,
+  QuestIntroMailDelivery,
+  QuestIntroStartBehavior,
   QuestStep,
+  QuestStepParamsBase,
   QuestStepType,
   QuestTrigger,
   QuestTriggerType
@@ -101,6 +105,11 @@ const FIELD_HINTS = {
   completionQuests: 'Select quests whose completion automatically fires this quest trigger.',
   triggerFlagKey: 'Flag key watched for ON_FLAG_SET triggers.',
   triggerFlagValue: 'Optional flag value to match; leave blank to match any value.',
+  questSummary: 'Short blurb surfaced in quest listings and search.',
+  designerNotes: 'Internal-only notes for other designers and operators.',
+  questDifficulty: 'Signals relative complexity for future balancing and analytics.',
+  questFaction: 'Faction or category label surfaced in player UI and reporting.',
+  questTags: 'Keywords to help search, filters, and automation scripts.',
   defaultSystem: 'System profile applied to steps without their own target.',
   description: 'Briefing text shown to the player.',
   requiredQuests: 'Prerequisite quests that must be done before this one unlocks.',
@@ -125,6 +134,74 @@ const MAIL_FOLDER_OPTIONS: MailFolder[] = ['inbox', 'news', 'spam', 'archive']
 const MAIL_CATEGORY_OPTIONS: MailCategory[] = ['main', 'side', 'lore', 'spam']
 const MAIL_STATUS_OPTIONS: Array<'draft' | 'published'> = ['draft', 'published']
 
+interface WizardIntroMailDraft {
+  id: string
+  fromName: string
+  fromAddress: string
+  subject: string
+  previewLine: string
+  body: string
+  inUniverseDate: string
+  deliveryCondition: QuestIntroDeliveryCondition
+  deliveryQuestId?: string
+  deliveryFlagKey?: string
+  deliveryFlagValue?: string
+  startBehavior: QuestIntroStartBehavior
+}
+
+interface WizardCompletionMailDraft {
+  id: string
+  fromName: string
+  fromAddress: string
+  subject: string
+  previewLine: string
+  body: string
+  inUniverseDate: string
+}
+
+const INTRO_MAIL_DELIVERY_OPTIONS: Array<{ value: QuestIntroDeliveryCondition; label: string; description: string }> = [
+  { value: 'game_start', label: 'On game start / new save', description: 'Delivered to every operator mailbox when a new save or profile starts.' },
+  { value: 'after_quest', label: 'After another quest completes', description: 'Delivered immediately after the selected quest resolves.' },
+  { value: 'flag_set', label: 'When a specific flag is set', description: 'Delivered once the matching state flag is applied.' },
+  { value: 'manual', label: 'Manual / script triggered', description: 'Designer is responsible for dispatching this mail via scripting or tooling.' }
+]
+
+const INTRO_MAIL_START_BEHAVIOR_OPTIONS: Array<{ value: QuestIntroStartBehavior; label: string; helper: string }> = [
+  { value: 'startQuest', label: 'Start quest immediately', helper: 'Opening the email automatically accepts and activates the quest.' },
+  { value: 'loreOnly', label: 'Show lore only', helper: 'Email is informational; players must accept the quest another way.' }
+]
+
+const QUEST_DIFFICULTY_OPTIONS = ['Easy', 'Normal', 'Hard']
+const QUEST_CATEGORY_SUGGESTIONS = ['Atlas', 'Underground', 'Corporate', 'Civic', 'Freelance']
+const QUEST_TAG_SUGGESTIONS = ['stealth', 'data theft', 'cleanup', 'ops', 'heist']
+
+type QuestWizardStep = 'introEmail' | 'questCore' | 'questSteps' | 'completionEmail' | 'summary'
+
+const QUEST_WIZARD_STEPS: QuestWizardStep[] = ['introEmail', 'questCore', 'questSteps', 'completionEmail', 'summary']
+
+const QUEST_WIZARD_STEP_DETAILS: Record<QuestWizardStep, { title: string; description: string }> = {
+  introEmail: {
+    title: 'Intro Email',
+    description: 'Draft the in-universe briefing mail before players accept the quest.'
+  },
+  questCore: {
+    title: 'Quest Details',
+    description: 'Set the quest id, title, trigger, and default system context.'
+  },
+  questSteps: {
+    title: 'Quest Steps',
+    description: 'Outline the interactive steps players must complete.'
+  },
+  completionEmail: {
+    title: 'Completion Email',
+    description: 'Author the wrap-up mail that fires when the quest ends.'
+  },
+  summary: {
+    title: 'Summary & Save',
+    description: 'Review the generated quest package and save or publish it.'
+  }
+}
+
 const createEmptyMailDraft = (): MailMessageDefinition & { status?: 'draft' | 'published' } => ({
   id: '',
   fromName: '',
@@ -139,6 +216,87 @@ const createEmptyMailDraft = (): MailMessageDefinition & { status?: 'draft' | 'p
   emailCategory: 'lore',
   status: 'draft'
 })
+
+const defaultInUniverseTimestamp = () => {
+  const iso = new Date().toISOString()
+  return iso.slice(0, 16).replace('T', ' ')
+}
+
+const buildIntroMailId = (quest?: DesignerQuest | null) => {
+  if (quest?.id?.trim()) {
+    return `${quest.id.trim()}_intro_mail`
+  }
+  return `intro_mail_${Date.now()}`
+}
+
+const createWizardIntroMailDraft = (quest?: DesignerQuest | null, mail?: MailMessageDefinition | null): WizardIntroMailDraft => {
+  const fallbackSubject = quest?.title ? `${quest.title} — Briefing` : 'New Operation'
+  const delivery = quest?.introMailDelivery
+  const startBehavior = quest?.introMailStartBehavior || 'startQuest'
+  return {
+    id: mail?.id || quest?.introEmailId || buildIntroMailId(quest),
+    fromName: mail?.fromName || 'Atlas Ops',
+    fromAddress: mail?.fromAddress || 'ops@atlasnet',
+    subject: mail?.subject || fallbackSubject,
+    previewLine: mail?.previewLine || '',
+    body: mail?.body || '',
+    inUniverseDate: mail?.inUniverseDate || defaultInUniverseTimestamp(),
+    deliveryCondition: delivery?.condition || 'game_start',
+    deliveryQuestId: delivery?.questId,
+    deliveryFlagKey: delivery?.flagKey,
+    deliveryFlagValue: delivery?.flagValue,
+    startBehavior
+  }
+}
+
+const buildCompletionMailId = (quest?: DesignerQuest | null) => {
+  if (quest?.id?.trim()) {
+    return `${quest.id.trim()}_completion_mail`
+  }
+  return `completion_mail_${Date.now()}`
+}
+
+const createWizardCompletionMailDraft = (quest?: DesignerQuest | null, mail?: MailMessageDefinition | null): WizardCompletionMailDraft => {
+  const fallbackSubject = quest?.title ? `${quest.title} — Debrief` : 'Mission Complete'
+  return {
+    id: mail?.id || quest?.completionEmailId || buildCompletionMailId(quest),
+    fromName: mail?.fromName || 'Atlas Ops',
+    fromAddress: mail?.fromAddress || 'ops@atlasnet',
+    subject: mail?.subject || fallbackSubject,
+    previewLine: mail?.previewLine || '',
+    body: mail?.body || '',
+    inUniverseDate: mail?.inUniverseDate || defaultInUniverseTimestamp()
+  }
+}
+
+const COMPLETION_PLACEHOLDER_HINTS = [
+  { token: '{reward_credits}', helper: 'Displays the credits reward amount.' },
+  { token: '{reward_flag_list}', helper: 'Lists reward flags (key/value).' },
+  { token: '{reward_unlocks}', helper: 'Lists unlocked commands/items.' },
+  { token: '{player_handle}', helper: 'Player call sign or handle.' },
+  { token: '{quest_title}', helper: 'Current quest title.' },
+  { token: '{next_quest_title}', helper: 'Follow-up quest title if selected.' }
+]
+
+const SAMPLE_PLAYER_HANDLE = 'Operator'
+
+const renderCompletionMailPreview = (body: string, quest: DesignerQuest | null, followUp: DesignerQuest | undefined): string => {
+  if (!body) return ''
+  const flagList = quest?.rewards?.flags?.map(flag => (flag.value ? `${flag.key}=${flag.value}` : flag.key)).filter(Boolean).join(', ') || 'flag tokens pending'
+  const unlockList = quest?.rewards?.unlocks_commands?.join(', ') || 'systems access'
+  const replacements: Record<string, string> = {
+    reward_credits: quest?.rewards?.credits != null ? `${quest.rewards.credits}` : '0',
+    reward_flag_list: flagList,
+    reward_unlocks: unlockList,
+    player_handle: SAMPLE_PLAYER_HANDLE,
+    quest_title: quest?.title || quest?.id || 'this operation',
+    next_quest_title: followUp?.title || followUp?.id || 'your next lead'
+  }
+  return body.replace(/\{([^}]+)\}/g, (_, token) => {
+    const key = token.trim()
+    return replacements[key] ?? `{${key}}`
+  })
+}
 
 const StatusIcon: React.FC<{ status: StatusFilterValue }> = ({ status }) => {
   switch (status) {
@@ -213,6 +371,19 @@ const sanitizeRewardFlagEntry = (entry?: QuestRewardFlag | string | null): Quest
   return rawValue ? { key, value: rawValue } : { key }
 }
 
+const sanitizeStringList = (entries?: string[] | null): string[] => {
+  if (!entries || !entries.length) return []
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  entries.forEach(entry => {
+    const token = entry?.trim()
+    if (!token || seen.has(token)) return
+    seen.add(token)
+    normalized.push(token)
+  })
+  return normalized
+}
+
 const sanitizeRewardFlags = (flags?: Array<QuestRewardFlag | string>): QuestRewardFlag[] => {
   if (!flags?.length) return []
   const seen = new Set<string>()
@@ -278,6 +449,141 @@ const normalizeQuestMailConfig = (mail?: QuestMailConfig | null): QuestMailConfi
 }
 
 const STEP_TYPES: StepType[] = ['SCAN_HOST', 'CONNECT_HOST', 'DELETE_FILE', 'DISCONNECT_HOST']
+const STEP_TYPE_LABELS: Record<StepType, string> = {
+  SCAN_HOST: 'Scan Host',
+  CONNECT_HOST: 'Connect to Host',
+  DELETE_FILE: 'Delete File',
+  DISCONNECT_HOST: 'Disconnect'
+}
+interface StepTemplateStep {
+  id: string
+  type: StepType
+  params?: QuestStepParamsBase
+  description?: string
+  commandExample?: string
+}
+interface QuestStepTemplate {
+  id: string
+  label: string
+  description: string
+  steps: StepTemplateStep[]
+}
+
+const DEFAULT_TEMPLATE_IP = '10.0.0.42'
+
+const STEP_TEMPLATES: QuestStepTemplate[] = [
+  {
+    id: 'connect_delete_disconnect',
+    label: 'Connect and purge a log',
+    description: 'Scan the host, connect, delete a log file, then disconnect cleanly.',
+    steps: [
+      {
+        id: 'scan_target',
+        type: 'SCAN_HOST',
+        params: { target_ip: DEFAULT_TEMPLATE_IP },
+        description: 'Survey the relay for open services.',
+        commandExample: 'scan 10.0.0.42'
+      },
+      {
+        id: 'connect_cleanup',
+        type: 'CONNECT_HOST',
+        params: { target_ip: DEFAULT_TEMPLATE_IP },
+        description: 'Establish a session on the compromised relay.',
+        commandExample: 'connect 10.0.0.42'
+      },
+      {
+        id: 'delete_log',
+        type: 'DELETE_FILE',
+        params: { target_ip: DEFAULT_TEMPLATE_IP, file_path: '/var/log/trace.log' },
+        description: 'Navigate to /var/log and remove trace.log.',
+        commandExample: 'cd /var/log && rm trace.log'
+      },
+      {
+        id: 'disconnect_cleanup',
+        type: 'DISCONNECT_HOST',
+        params: { target_ip: DEFAULT_TEMPLATE_IP },
+        description: 'Drop the session to avoid detection.',
+        commandExample: 'disconnect'
+      }
+    ]
+  },
+  {
+    id: 'scan_then_delete',
+    label: 'Scan then wipe evidence',
+    description: 'Quick two-step job: ping the box and immediately delete a file.',
+    steps: [
+      {
+        id: 'scan_probe',
+        type: 'SCAN_HOST',
+        params: { target_ip: DEFAULT_TEMPLATE_IP },
+        description: 'Confirm the host is online before acting.',
+        commandExample: 'scan 10.0.0.42'
+      },
+      {
+        id: 'delete_artifact',
+        type: 'DELETE_FILE',
+        params: { target_ip: DEFAULT_TEMPLATE_IP, file_path: '/home/ops/artifact.txt' },
+        description: 'Remove the specified artifact file.',
+        commandExample: 'rm /home/ops/artifact.txt'
+      }
+    ]
+  },
+  {
+    id: 'connect_run_command',
+    label: 'Connect and clear traces',
+    description: 'Direct connect / disconnect sequence for light-touch jobs.',
+    steps: [
+      {
+        id: 'connect_direct',
+        type: 'CONNECT_HOST',
+        params: { target_ip: DEFAULT_TEMPLATE_IP },
+        description: 'Jack into the relay specified in intel.',
+        commandExample: 'connect 10.0.0.42'
+      },
+      {
+        id: 'delete_log_direct',
+        type: 'DELETE_FILE',
+        params: { target_ip: DEFAULT_TEMPLATE_IP, file_path: '/tmp/run.log' },
+        description: 'Clear the temporary log file the operator left behind.',
+        commandExample: 'rm /tmp/run.log'
+      },
+      {
+        id: 'disconnect_direct',
+        type: 'DISCONNECT_HOST',
+        params: { target_ip: DEFAULT_TEMPLATE_IP },
+        description: 'Exit immediately once complete.',
+        commandExample: 'disconnect'
+      }
+    ]
+  }
+]
+
+const instantiateStepTemplate = (template: QuestStepTemplate, questId: string): OperationStep[] => {
+  const slugBase = sanitizeSystemId(questId || 'quest') || 'quest'
+  const stamp = Date.now().toString(36)
+  return template.steps.map((entry, index) => ({
+    id: `${slugBase}_${entry.id}_${index + 1}_${stamp}`,
+    type: entry.type,
+    params: {
+      target_ip: DEFAULT_TEMPLATE_IP,
+      ...entry.params
+    },
+    hints: entry.description || entry.commandExample
+      ? {
+        ...(entry.description ? { prompt: entry.description } : {}),
+        ...(entry.commandExample ? { command_example: entry.commandExample } : {})
+      }
+      : undefined,
+    auto_advance: true
+  }))
+}
+
+const createBlankStep = (index: number): OperationStep => ({
+  id: `step_${index + 1}`,
+  type: 'SCAN_HOST',
+  params: { target_ip: '' },
+  auto_advance: true
+})
 const COMPLETION_STEP_TYPES = new Set<StepType>(STEP_TYPES)
 type SystemTemplateDTO = SystemProfilesResponse['templates'][number]
 type SystemEditorMode = 'create' | 'edit'
@@ -415,6 +721,11 @@ const createEmptyQuest = (): DesignerQuest => ({
   id: `quest_${Date.now()}`,
   title: 'Untitled Quest',
   description: 'Describe this operation.',
+  summary: '',
+  designerNotes: '',
+  difficulty: '',
+  faction: '',
+  tags: [],
   trigger: sanitizeTrigger({ type: DEFAULT_TRIGGER }),
   steps: [],
   rewards: { credits: 0, flags: [], unlocks_commands: [] },
@@ -424,6 +735,11 @@ const createEmptyQuest = (): DesignerQuest => ({
   completion_flag: undefined,
   status: 'draft',
   mail: undefined,
+  introEmailId: undefined,
+  introMailDelivery: undefined,
+  introMailStartBehavior: 'startQuest',
+  followUpQuestId: undefined,
+  completionEmailId: undefined,
   __unsaved: true
 })
 
@@ -449,6 +765,16 @@ const normalizeQuest = (quest: Operation | DesignerQuest): DesignerQuest => ({
   completion_flag: quest.completion_flag?.trim() || undefined,
   status: quest.status === 'published' ? 'published' : 'draft',
   mail: normalizeQuestMailConfig(quest.mail),
+  summary: quest.summary || '',
+  designerNotes: quest.designerNotes || '',
+  difficulty: quest.difficulty || '',
+  faction: quest.faction || '',
+  tags: sanitizeStringList((quest as DesignerQuest).tags || []),
+  introEmailId: quest.introEmailId?.trim() || undefined,
+  introMailDelivery: quest.introMailDelivery ? { ...quest.introMailDelivery } as QuestIntroMailDelivery : undefined,
+  introMailStartBehavior: quest.introMailStartBehavior || 'startQuest',
+  followUpQuestId: quest.followUpQuestId?.trim() || undefined,
+  completionEmailId: quest.completionEmailId?.trim() || undefined,
   __unsaved: (quest as DesignerQuest).__unsaved
 })
 
@@ -458,6 +784,11 @@ const questToPayload = (quest: DesignerQuest): Operation => {
     id: quest.id.trim(),
     title: quest.title,
     description: quest.description,
+    summary: quest.summary?.trim() || undefined,
+    designerNotes: quest.designerNotes?.trim() || undefined,
+    difficulty: quest.difficulty?.trim() || undefined,
+    faction: quest.faction?.trim() || undefined,
+    tags: sanitizeStringList(quest.tags),
     trigger: sanitizeTrigger(quest.trigger),
     steps: quest.steps.map(step => ({
       ...step,
@@ -480,6 +811,11 @@ const questToPayload = (quest: DesignerQuest): Operation => {
     embedded_filesystems: quest.embedded_filesystems,
     completion_flag: quest.completion_flag?.trim() || undefined,
     status: quest.status === 'published' ? 'published' : 'draft',
+    introEmailId: quest.introEmailId?.trim() || undefined,
+    introMailDelivery: quest.introMailDelivery,
+    introMailStartBehavior: quest.introMailStartBehavior,
+    followUpQuestId: quest.followUpQuestId?.trim() || undefined,
+    completionEmailId: quest.completionEmailId?.trim() || undefined,
     ...(mail ? { mail } : {})
   }
 }
@@ -493,7 +829,7 @@ const useTagInput = ({ values, onChange, suggestions, placeholder, ariaLabel }: 
     if (!value) return
     if (values.includes(value)) {
       setInput('')
-      return
+      return false
     }
     onChange([...values, value])
     setInput('')
@@ -735,6 +1071,7 @@ export const QuestDesignerApp: React.FC = () => {
   const [draggingQuestId, setDraggingQuestId] = useState<string | null>(null)
   const [dragOverQuestId, setDragOverQuestId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [unsavedDeletePromptOpen, setUnsavedDeletePromptOpen] = useState(false)
   const [deleteInProgress, setDeleteInProgress] = useState(false)
   const [mailDefinitions, setMailDefinitionsState] = useState<MailMessageDefinition[]>([])
   const [mailLoading, setMailLoading] = useState(true)
@@ -747,21 +1084,179 @@ export const QuestDesignerApp: React.FC = () => {
   const [mailValidating, setMailValidating] = useState(false)
   const [mailValidationErrors, setMailValidationErrors] = useState<string[]>([])
   const [mailDeletingId, setMailDeletingId] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardStep, setWizardStep] = useState<QuestWizardStep>(QUEST_WIZARD_STEPS[0])
+  const [wizardIntroMailDraft, setWizardIntroMailDraft] = useState<WizardIntroMailDraft>(() => createWizardIntroMailDraft())
+  const [wizardIntroMailErrors, setWizardIntroMailErrors] = useState<string[]>([])
+  const [wizardQuestDetailsErrors, setWizardQuestDetailsErrors] = useState<string[]>([])
+  const [wizardQuestStepsErrors, setWizardQuestStepsErrors] = useState<string[]>([])
+  const [wizardCompletionMailDraft, setWizardCompletionMailDraft] = useState<WizardCompletionMailDraft>(() => createWizardCompletionMailDraft())
+  const [wizardCompletionMailErrors, setWizardCompletionMailErrors] = useState<string[]>([])
+  const [wizardSummaryErrors, setWizardSummaryErrors] = useState<string[]>([])
+  const [wizardFinishing, setWizardFinishing] = useState(false)
+  const [wizardCancelConfirmOpen, setWizardCancelConfirmOpen] = useState(false)
   const flagKeyListId = useId()
   const rewardFlagKeyListId = useId()
+  const wizardRewardFlagListId = useId()
   const persistedIdRef = useRef<string | null>(null)
   const questOrderRef = useRef<string[]>([])
   const [questOrderHydrated, setQuestOrderHydrated] = useState(false)
   const tooltipNodeRef = useRef<HTMLDivElement | null>(null)
+  const serverMailIdsRef = useRef<Set<string>>(new Set())
+  const mailSnapshotRef = useRef<Record<string, string>>({})
+  const wizardEntryQuestIdRef = useRef<string | null>(null)
+  const wizardPreviousQuestIdRef = useRef<string | null>(null)
+  const wizardCreatedQuestRef = useRef(false)
+  const wizardBodyRef = useRef<HTMLDivElement | null>(null)
+  const wizardAlertRef = useRef<HTMLDivElement | null>(null)
 
-  const upsertMailDefinition = (message: MailMessageDefinition) => {
+  const persistQuestOrder = useCallback((order: string[]) => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(QUEST_ORDER_STORAGE_KEY, JSON.stringify(order))
+    } catch (err) {
+      console.warn('[quest designer] unable to persist quest order', err)
+    }
+  }, [])
+
+  const syncQuestList = useCallback((updater: (prev: DesignerQuest[]) => DesignerQuest[]) => {
+    setQuests(prev => {
+      const next = updater(prev)
+      if (next === prev) {
+        return prev
+      }
+      questOrderRef.current = next.map(q => q.id)
+      persistQuestOrder(questOrderRef.current)
+      return next
+    })
+  }, [persistQuestOrder])
+
+  const updateCurrentQuest = useCallback((updater: (prev: DesignerQuest) => DesignerQuest) => {
+    setDraft(prev => (prev ? updater(prev) : prev))
+  }, [setDraft])
+
+  const updateQuestMailConfig = useCallback((patch: Partial<QuestMailConfig> | null) => {
+    if (patch === null) {
+      updateCurrentQuest(prev => {
+        if (!prev?.mail) return prev
+        const clone = { ...prev }
+        delete clone.mail
+        return clone
+      })
+      return
+    }
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        mail: { ...(prev.mail || {}), ...patch }
+      }
+    })
+  }, [updateCurrentQuest])
+
+  const updateMailPreviewField = useCallback((field: keyof SerializedMailState, values: string[]) => {
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      const nextMail = { ...(prev.mail || {}) }
+      const nextPreview = { ...(nextMail.previewState || {}) }
+      if (values.length) {
+        nextPreview[field] = values
+      } else {
+        delete nextPreview[field]
+      }
+      if (Object.keys(nextPreview).length) {
+        nextMail.previewState = nextPreview
+      } else {
+        delete nextMail.previewState
+      }
+      return { ...prev, mail: nextMail }
+    })
+  }, [updateCurrentQuest])
+
+  const removeMailIdFromQuest = useCallback((mailId: string) => {
+    if (!mailId) return
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      const next: DesignerQuest = { ...prev }
+      let changed = false
+      if (next.introEmailId === mailId) {
+        next.introEmailId = undefined
+        changed = true
+      }
+      if (next.completionEmailId === mailId) {
+        next.completionEmailId = undefined
+        changed = true
+      }
+      if (next.mail) {
+        const nextMail: QuestMailConfig = { ...next.mail }
+        let mailChanged = false
+        if (nextMail.briefingMailId === mailId) {
+          delete nextMail.briefingMailId
+          mailChanged = true
+        }
+        if (nextMail.completionMailId === mailId) {
+          delete nextMail.completionMailId
+          mailChanged = true
+        }
+        if (nextMail.autoDeliverOnAccept?.length) {
+          const filtered = nextMail.autoDeliverOnAccept.filter(id => id !== mailId)
+          if (filtered.length !== nextMail.autoDeliverOnAccept.length) {
+            nextMail.autoDeliverOnAccept = filtered
+            mailChanged = true
+          }
+          if (!nextMail.autoDeliverOnAccept.length) delete nextMail.autoDeliverOnAccept
+        }
+        if (nextMail.autoDeliverOnComplete?.length) {
+          const filtered = nextMail.autoDeliverOnComplete.filter(id => id !== mailId)
+          if (filtered.length !== nextMail.autoDeliverOnComplete.length) {
+            nextMail.autoDeliverOnComplete = filtered
+            mailChanged = true
+          }
+          if (!nextMail.autoDeliverOnComplete.length) delete nextMail.autoDeliverOnComplete
+        }
+        if (nextMail.previewState) {
+          const preview = { ...nextMail.previewState }
+          const scrub = (key: keyof SerializedMailState) => {
+            const list = preview[key]
+            if (!Array.isArray(list) || !list.length) return
+            const filtered = list.filter(id => id !== mailId)
+            if (filtered.length !== list.length) {
+              preview[key] = filtered
+              mailChanged = true
+            }
+            if (!filtered.length) delete preview[key]
+          }
+          scrub('deliveredIds')
+          scrub('readIds')
+          scrub('archivedIds')
+          scrub('deletedIds')
+          if (Object.keys(preview).length) {
+            nextMail.previewState = preview
+          } else {
+            delete nextMail.previewState
+          }
+        }
+        if (mailChanged) {
+          if (!nextMail.briefingMailId && !nextMail.completionMailId && !nextMail.autoDeliverOnAccept?.length && !nextMail.autoDeliverOnComplete?.length && !nextMail.previewState) {
+            delete next.mail
+          } else {
+            next.mail = nextMail
+          }
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [updateCurrentQuest])
+
+  const upsertMailDefinition = useCallback((message: MailMessageDefinition) => {
     setMailDefinitionsState(prev => {
       const next = prev.filter(entry => entry.id !== message.id)
       next.push(message)
       next.sort((a, b) => new Date(b.inUniverseDate).getTime() - new Date(a.inUniverseDate).getTime())
       return next
     })
-  }
+  }, [])
 
   const handleMailSelect = (message: MailMessageDefinition) => {
     setMailSelectedId(message.id)
@@ -785,6 +1280,21 @@ export const QuestDesignerApp: React.FC = () => {
     }))
     setMailValidationErrors([])
   }
+
+  const selectQuest = useCallback((quest: DesignerQuest | null) => {
+    if (!quest) {
+      setSelectedKey(null)
+      setDraft(null)
+      persistedIdRef.current = null
+    } else {
+      setSelectedKey(quest.id)
+      setDraft(normalizeQuest(quest))
+      persistedIdRef.current = quest.__unsaved ? null : quest.id
+    }
+    setErrors([])
+    setWarnings([])
+    setValidationMessages([])
+  }, [])
 
   const handleMailFieldChange = (field: keyof (MailMessageDefinition & { status?: 'draft' | 'published' }), value: any) => {
     setMailDraft(prev => ({ ...prev, [field]: value }))
@@ -811,6 +1321,8 @@ export const QuestDesignerApp: React.FC = () => {
       const result = exists
         ? await updateTerminalMail(id, payload)
         : await createTerminalMail(payload)
+      serverMailIdsRef.current.add(result.id)
+      mailSnapshotRef.current[result.id] = JSON.stringify(result)
       upsertMailDefinition(result)
       setMailDraft({ ...result, body: result.body || '', status: result.status || payload.status })
       setMailSelectedId(result.id)
@@ -854,6 +1366,8 @@ export const QuestDesignerApp: React.FC = () => {
     try {
       await deleteTerminalMail(id)
       setMailDefinitionsState(prev => prev.filter(entry => entry.id !== id))
+      serverMailIdsRef.current.delete(id)
+      delete mailSnapshotRef.current[id]
       removeMailIdFromQuest(id)
       handleNewMail()
       pushToast({ title: 'Mail Deleted', message: `${id} removed from library.`, kind: 'warning', dedupeKey: `mail-delete-${id}` })
@@ -875,6 +1389,1441 @@ export const QuestDesignerApp: React.FC = () => {
       dedupeKey: `quest-mail-${slot}-${mailId}`
     })
   }
+
+  const ensureQuestDraft = useCallback((): DesignerQuest => {
+    if (draft) {
+      return draft
+    }
+    const fresh = createEmptyQuest()
+    syncQuestList(prev => [fresh, ...prev])
+    selectQuest(fresh)
+    signalSessionActivity('quest-create')
+    return fresh
+  }, [draft, selectQuest, syncQuestList])
+
+  const handleCreateQuest = () => {
+    ensureQuestDraft()
+  }
+
+
+  const updateWizardIntroMail = useCallback((patch: Partial<WizardIntroMailDraft>) => {
+    setWizardIntroMailDraft(prev => ({ ...prev, ...patch }))
+  }, [])
+
+  const updateWizardCompletionMail = useCallback((patch: Partial<WizardCompletionMailDraft>) => {
+    setWizardCompletionMailErrors([])
+    setWizardCompletionMailDraft(prev => ({ ...prev, ...patch }))
+  }, [])
+
+  const resetWizardEntryTracking = useCallback(() => {
+    wizardEntryQuestIdRef.current = null
+    wizardPreviousQuestIdRef.current = null
+    wizardCreatedQuestRef.current = false
+  }, [])
+
+  const openWizard = useCallback(() => {
+    const previousQuestId = draft?.id || null
+    const hadDraft = !!draft
+    const activeQuest = ensureQuestDraft()
+    wizardEntryQuestIdRef.current = activeQuest.id
+    wizardCreatedQuestRef.current = !hadDraft
+    wizardPreviousQuestIdRef.current = !hadDraft ? previousQuestId : null
+    const linkedMail = activeQuest.mail?.briefingMailId
+      ? mailDefinitions.find(entry => entry.id === activeQuest.mail?.briefingMailId)
+      : undefined
+    const completionMail = activeQuest.mail?.completionMailId
+      ? mailDefinitions.find(entry => entry.id === activeQuest.mail?.completionMailId)
+      : undefined
+    setWizardIntroMailDraft(createWizardIntroMailDraft(activeQuest, linkedMail))
+    setWizardIntroMailErrors([])
+    setWizardQuestDetailsErrors([])
+    setWizardQuestStepsErrors([])
+    setWizardCompletionMailDraft(createWizardCompletionMailDraft(activeQuest, completionMail))
+    setWizardCompletionMailErrors([])
+    setWizardSummaryErrors([])
+    setWizardFinishing(false)
+    setWizardStep(QUEST_WIZARD_STEPS[0])
+    setWizardOpen(true)
+    signalSessionActivity('quest-wizard-open')
+  }, [draft, ensureQuestDraft, mailDefinitions])
+
+  const closeWizard = useCallback(() => {
+    setWizardOpen(false)
+    setWizardFinishing(false)
+    setWizardCancelConfirmOpen(false)
+    resetWizardEntryTracking()
+    signalSessionActivity('quest-wizard-close')
+  }, [resetWizardEntryTracking])
+
+  const goToNextWizardStep = useCallback(() => {
+    setWizardStep(prev => {
+      const index = QUEST_WIZARD_STEPS.indexOf(prev)
+      const nextIndex = Math.min(index + 1, QUEST_WIZARD_STEPS.length - 1)
+      return QUEST_WIZARD_STEPS[nextIndex]
+    })
+  }, [])
+
+  const goToPreviousWizardStep = useCallback(() => {
+    setWizardStep(prev => {
+      const index = QUEST_WIZARD_STEPS.indexOf(prev)
+      const nextIndex = Math.max(index - 1, 0)
+      return QUEST_WIZARD_STEPS[nextIndex]
+    })
+  }, [])
+
+  const jumpToWizardStep = useCallback((step: QuestWizardStep) => {
+    setWizardStep(step)
+  }, [])
+
+  const handleIntroEmailNext = useCallback(() => {
+    const activeQuest = ensureQuestDraft()
+    const trimmed = {
+      id: wizardIntroMailDraft.id?.trim() || buildIntroMailId(activeQuest),
+      fromName: wizardIntroMailDraft.fromName?.trim() || '',
+      fromAddress: wizardIntroMailDraft.fromAddress?.trim() || '',
+      subject: wizardIntroMailDraft.subject?.trim() || '',
+      previewLine: wizardIntroMailDraft.previewLine?.trim() || '',
+      body: wizardIntroMailDraft.body || '',
+      inUniverseDate: wizardIntroMailDraft.inUniverseDate?.trim() || defaultInUniverseTimestamp(),
+      deliveryCondition: wizardIntroMailDraft.deliveryCondition,
+      deliveryQuestId: wizardIntroMailDraft.deliveryQuestId?.trim() || undefined,
+      deliveryFlagKey: wizardIntroMailDraft.deliveryFlagKey?.trim() || undefined,
+      deliveryFlagValue: wizardIntroMailDraft.deliveryFlagValue?.trim() || undefined,
+      startBehavior: wizardIntroMailDraft.startBehavior
+    }
+    const errors: string[] = []
+    if (!trimmed.fromName) errors.push('Sender name is required.')
+    if (!trimmed.fromAddress) errors.push('Sender address is required.')
+    if (!trimmed.subject) errors.push('Subject is required.')
+    if (!trimmed.body.trim()) errors.push('Body content is required.')
+    if (!trimmed.inUniverseDate) errors.push('In-universe date/time is required.')
+    if (trimmed.deliveryCondition === 'after_quest' && !trimmed.deliveryQuestId) {
+      errors.push('Select a quest that unlocks this email.')
+    }
+    if (trimmed.deliveryCondition === 'flag_set' && !trimmed.deliveryFlagKey) {
+      errors.push('Provide a flag key for the delivery condition.')
+    }
+    setWizardIntroMailErrors(errors)
+    if (errors.length) {
+      return
+    }
+    const emailId = trimmed.id || buildIntroMailId(activeQuest)
+    const existingMail = mailDefinitions.find(entry => entry.id === emailId)
+    const previewLine = trimmed.previewLine || trimmed.body.split('\n').find(line => line.trim().length > 0)?.slice(0, 120) || ''
+    const mailRecord: MailMessageDefinition = {
+      ...(existingMail || {}),
+      id: emailId,
+      fromName: trimmed.fromName,
+      fromAddress: trimmed.fromAddress,
+      subject: trimmed.subject,
+      previewLine,
+      body: trimmed.body,
+      inUniverseDate: trimmed.inUniverseDate,
+      folder: existingMail?.folder || 'inbox',
+      isUnreadByDefault: existingMail?.isUnreadByDefault ?? true,
+      linkedQuestId: activeQuest.id,
+      emailCategory: existingMail?.emailCategory || 'main',
+      status: existingMail?.status || 'draft'
+    }
+    upsertMailDefinition(mailRecord)
+    updateQuestMailConfig({ briefingMailId: emailId })
+    updateCurrentQuest(prev => ({
+      ...prev,
+      introEmailId: emailId,
+      introMailDelivery: {
+        condition: trimmed.deliveryCondition,
+        questId: trimmed.deliveryCondition === 'after_quest' ? trimmed.deliveryQuestId : undefined,
+        flagKey: trimmed.deliveryCondition === 'flag_set' ? trimmed.deliveryFlagKey : undefined,
+        flagValue: trimmed.deliveryCondition === 'flag_set' ? trimmed.deliveryFlagValue : undefined
+      },
+      introMailStartBehavior: trimmed.startBehavior
+    }))
+    setWizardIntroMailDraft(prev => ({ ...prev, ...trimmed, id: emailId, previewLine }))
+    setWizardIntroMailErrors([])
+    pushToast({
+      title: 'Intro Email Staged',
+      message: `Linked ${emailId} to ${activeQuest.title || activeQuest.id}.`,
+      kind: 'success',
+      dedupeKey: `intro-mail-${emailId}`
+    })
+    goToNextWizardStep()
+  }, [ensureQuestDraft, goToNextWizardStep, mailDefinitions, pushToast, updateCurrentQuest, updateQuestMailConfig, upsertMailDefinition, wizardIntroMailDraft])
+
+  const handleQuestDetailsNext = useCallback(() => {
+    const quest = ensureQuestDraft()
+    const trimmed = {
+      id: quest.id?.trim() || '',
+      title: quest.title?.trim() || '',
+      summary: quest.summary?.trim() || '',
+      description: quest.description?.trim() || '',
+      designerNotes: quest.designerNotes?.trim() || '',
+      difficulty: quest.difficulty?.trim() || '',
+      faction: quest.faction?.trim() || ''
+    }
+    const errors: string[] = []
+    if (!trimmed.title) errors.push('Quest title cannot be empty.')
+    if (!trimmed.id) errors.push('Quest id cannot be empty.')
+    if (!trimmed.summary) errors.push('Provide a short summary for mission lists.')
+    if (!trimmed.description) errors.push('Add a player-facing description.')
+    setWizardQuestDetailsErrors(errors)
+    if (errors.length) {
+      return
+    }
+    updateCurrentQuest(prev => ({
+      ...prev,
+      ...trimmed
+    }))
+    setWizardQuestDetailsErrors([])
+    goToNextWizardStep()
+  }, [ensureQuestDraft, goToNextWizardStep, updateCurrentQuest])
+
+  const handleQuestMetadataChange = useCallback((field: keyof DesignerQuest, value: any) => {
+    setWizardQuestDetailsErrors([])
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      return { ...prev, [field]: value }
+    })
+  }, [setWizardQuestDetailsErrors, updateCurrentQuest])
+
+  const handleQuestStepsNext = useCallback(() => {
+    const quest = ensureQuestDraft()
+    const errors: string[] = []
+    if (!quest.steps.length) {
+      errors.push('Add at least one quest step to define the mission flow.')
+    }
+    quest.steps.forEach((step, idx) => {
+      const label = `Step ${idx + 1}`
+      if (!step.id?.trim()) {
+        errors.push(`${label} is missing an internal id.`)
+      }
+      if (!STEP_TYPES.includes(step.type as StepType)) {
+        errors.push(`${label} has an unsupported step type.`)
+      }
+      const targetIp = step.params?.target_ip?.trim()
+      if (!targetIp) {
+        errors.push(`${label} requires a target host / IP.`)
+      }
+      if (step.type === 'DELETE_FILE' && !step.params?.file_path?.trim()) {
+        errors.push(`${label} must include a file path.`)
+      }
+    })
+    setWizardQuestStepsErrors(errors)
+    if (errors.length) {
+      return
+    }
+    goToNextWizardStep()
+  }, [ensureQuestDraft, goToNextWizardStep])
+
+  const handleWizardStepUpdate = useCallback((index: number, updater: (step: OperationStep) => OperationStep) => {
+    setWizardQuestStepsErrors([])
+    updateCurrentQuest(prev => {
+      if (!prev || !prev.steps[index]) return prev
+      const steps = prev.steps.map((step, idx) => (idx === index ? updater(step) : step))
+      return { ...prev, steps }
+    })
+  }, [updateCurrentQuest])
+
+  const handleWizardStepParamChange = useCallback((index: number, field: keyof QuestStepParamsBase, value: string) => {
+    handleWizardStepUpdate(index, step => {
+      const nextParams: QuestStepParamsBase = { ...(step.params || {}) }
+      if (value?.trim()) {
+        nextParams[field] = value
+      } else {
+        delete nextParams[field]
+      }
+      return { ...step, params: nextParams }
+    })
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepTypeChange = useCallback((index: number, type: StepType) => {
+    handleWizardStepUpdate(index, step => {
+      const nextParams: QuestStepParamsBase = { ...(step.params || {}) }
+      if (type !== 'DELETE_FILE') {
+        delete nextParams.file_path
+      }
+      return { ...step, type, params: nextParams }
+    })
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepIdChange = useCallback((index: number, value: string) => {
+    handleWizardStepUpdate(index, step => ({ ...step, id: value }))
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepDescriptionChange = useCallback((index: number, value: string) => {
+    handleWizardStepUpdate(index, step => ({
+      ...step,
+      hints: {
+        ...(step.hints || {}),
+        prompt: value
+      }
+    }))
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepCommandExampleChange = useCallback((index: number, value: string) => {
+    handleWizardStepUpdate(index, step => ({
+      ...step,
+      hints: {
+        ...(step.hints || {}),
+        command_example: value
+      }
+    }))
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepAutoAdvanceChange = useCallback((index: number, value: boolean) => {
+    handleWizardStepUpdate(index, step => ({ ...step, auto_advance: value }))
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepMove = useCallback((index: number, dir: -1 | 1) => {
+    setWizardQuestStepsErrors([])
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      const target = index + dir
+      if (target < 0 || target >= prev.steps.length) return prev
+      const steps = [...prev.steps]
+      const temp = steps[index]
+      steps[index] = steps[target]
+      steps[target] = temp
+      return { ...prev, steps }
+    })
+  }, [updateCurrentQuest])
+
+  const handleWizardStepDuplicate = useCallback((index: number) => {
+    setWizardQuestStepsErrors([])
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      const step = prev.steps[index]
+      if (!step) return prev
+      const clone: OperationStep = {
+        ...step,
+        id: `${step.id || 'step'}_copy`,
+        params: { ...step.params },
+        hints: step.hints ? { ...step.hints } : undefined
+      }
+      const steps = [...prev.steps]
+      steps.splice(index + 1, 0, clone)
+      return { ...prev, steps }
+    })
+  }, [updateCurrentQuest])
+
+  const handleWizardStepDelete = useCallback((index: number) => {
+    setWizardQuestStepsErrors([])
+    updateCurrentQuest(prev => {
+      if (!prev) return prev
+      if (!prev.steps[index]) return prev
+      const steps = prev.steps.filter((_, idx) => idx !== index)
+      return { ...prev, steps }
+    })
+  }, [updateCurrentQuest])
+
+  const handleWizardAddStep = useCallback(() => {
+    const quest = ensureQuestDraft()
+    const nextIndex = quest.steps.length
+    const blank = createBlankStep(nextIndex)
+    setWizardQuestStepsErrors([])
+    updateCurrentQuest(prev => ({
+      ...prev,
+      steps: [...prev.steps, blank]
+    }))
+  }, [ensureQuestDraft, updateCurrentQuest])
+
+  const handleWizardApplyTemplate = useCallback((templateId: string) => {
+    const quest = ensureQuestDraft()
+    const template = STEP_TEMPLATES.find(entry => entry.id === templateId)
+    if (!template) return
+    const instantiated = instantiateStepTemplate(template, quest.id)
+    setWizardQuestStepsErrors([])
+    updateCurrentQuest(prev => ({
+      ...prev,
+      steps: [...prev.steps, ...instantiated]
+    }))
+    pushToast({
+      title: 'Template Applied',
+      message: `${template.label} added ${instantiated.length} step${instantiated.length === 1 ? '' : 's'}.`,
+      kind: 'info',
+      dedupeKey: `wizard-template-${template.id}`
+    })
+  }, [ensureQuestDraft, pushToast, updateCurrentQuest])
+
+  const handleCompletionEmailNext = useCallback(() => {
+    const quest = ensureQuestDraft()
+    const trimmed = {
+      id: wizardCompletionMailDraft.id?.trim() || buildCompletionMailId(quest),
+      fromName: wizardCompletionMailDraft.fromName?.trim() || '',
+      fromAddress: wizardCompletionMailDraft.fromAddress?.trim() || '',
+      subject: wizardCompletionMailDraft.subject?.trim() || '',
+      previewLine: wizardCompletionMailDraft.previewLine?.trim() || '',
+      body: wizardCompletionMailDraft.body || '',
+      inUniverseDate: wizardCompletionMailDraft.inUniverseDate?.trim() || defaultInUniverseTimestamp()
+    }
+    const errors: string[] = []
+    if (!trimmed.fromName) errors.push('Sender name is required.')
+    if (!trimmed.fromAddress) errors.push('Sender address is required.')
+    if (!trimmed.subject) errors.push('Subject is required.')
+    if (!trimmed.body.trim()) errors.push('Body content is required.')
+    if (!trimmed.inUniverseDate) errors.push('In-universe date/time is required.')
+    setWizardCompletionMailErrors(errors)
+    if (errors.length) {
+      return
+    }
+    const emailId = trimmed.id || buildCompletionMailId(quest)
+    const existingMail = mailDefinitions.find(entry => entry.id === emailId)
+    const previewLine = trimmed.previewLine || trimmed.body.split('\n').find(line => line.trim().length > 0)?.slice(0, 120) || ''
+    const mailRecord: MailMessageDefinition = {
+      ...(existingMail || {}),
+      id: emailId,
+      fromName: trimmed.fromName,
+      fromAddress: trimmed.fromAddress,
+      subject: trimmed.subject,
+      previewLine,
+      body: trimmed.body,
+      inUniverseDate: trimmed.inUniverseDate,
+      folder: existingMail?.folder || 'inbox',
+      isUnreadByDefault: existingMail?.isUnreadByDefault ?? true,
+      linkedQuestId: quest.id,
+      emailCategory: existingMail?.emailCategory || 'main',
+      status: existingMail?.status || 'draft'
+    }
+    upsertMailDefinition(mailRecord)
+    updateQuestMailConfig({ completionMailId: emailId })
+    updateCurrentQuest(prev => ({
+      ...prev,
+      completionEmailId: emailId
+    }))
+    setWizardCompletionMailDraft(prev => ({ ...prev, ...trimmed, id: emailId, previewLine }))
+    setWizardCompletionMailErrors([])
+    pushToast({
+      title: 'Completion Email Staged',
+      message: `Linked ${emailId} to ${quest.title || quest.id}.`,
+      kind: 'success',
+      dedupeKey: `completion-mail-${emailId}`
+    })
+    goToNextWizardStep()
+  }, [ensureQuestDraft, goToNextWizardStep, mailDefinitions, pushToast, updateCurrentQuest, updateQuestMailConfig, upsertMailDefinition, wizardCompletionMailDraft])
+
+  const persistWizardMail = useCallback(async (mail: MailMessageDefinition | null) => {
+    if (!mail?.id) return null
+    const payload = {
+      ...mail,
+      body: mail.body || '',
+      linkedQuestId: mail.linkedQuestId || draft?.id || null,
+      status: mail.status || 'draft'
+    }
+    const existsOnServer = serverMailIdsRef.current.has(mail.id)
+    const result = existsOnServer
+      ? await updateTerminalMail(mail.id, payload)
+      : await createTerminalMail(payload)
+    serverMailIdsRef.current.add(result.id)
+    mailSnapshotRef.current[result.id] = JSON.stringify(result)
+    upsertMailDefinition(result)
+    return result
+  }, [draft?.id, upsertMailDefinition])
+
+  const wizardQuestTagInput = useTagInput({
+    values: draft?.tags || [],
+    onChange: values => updateCurrentQuest(prev => (prev ? { ...prev, tags: values } : prev)),
+    placeholder: 'stealth',
+    suggestions: QUEST_TAG_SUGGESTIONS,
+    ariaLabel: 'Quest tags'
+  })
+
+  const rewardFlags = draft?.rewards?.flags || []
+
+  const addRewardFlag = useCallback(() => {
+    updateCurrentQuest(prev => ({
+      ...prev,
+      rewards: {
+        ...prev.rewards,
+        flags: [...(prev.rewards?.flags || []), { key: '', value: '' }]
+      }
+    }))
+  }, [updateCurrentQuest])
+
+  const updateRewardFlag = useCallback((index: number, patch: Partial<QuestRewardFlag>) => {
+    updateCurrentQuest(prev => {
+      const flags = [...(prev.rewards?.flags || [])]
+      flags[index] = { ...flags[index], ...patch }
+      return {
+        ...prev,
+        rewards: { ...prev.rewards, flags }
+      }
+    })
+  }, [updateCurrentQuest])
+
+  const removeRewardFlag = useCallback((index: number) => {
+    updateCurrentQuest(prev => ({
+      ...prev,
+      rewards: {
+        ...prev.rewards,
+        flags: (prev.rewards?.flags || []).filter((_, idx) => idx !== index)
+      }
+    }))
+  }, [updateCurrentQuest])
+
+  const questFlagSuggestions = useMemo(() => {
+    const flags = new Set<string>()
+    const source = draft ? [...quests.filter(q => q.id !== draft.id), draft] : quests
+    source.forEach(q => q.rewards?.flags?.forEach(entry => {
+      const flag = sanitizeRewardFlagEntry(entry)
+      if (!flag) return
+      flags.add(flag.key)
+      if (flag.value) flags.add(`${flag.key}=${flag.value}`)
+    }))
+    source.forEach(q => {
+      const completionFlag = q.completion_flag?.trim()
+      if (!completionFlag) return
+      flags.add(completionFlag)
+    })
+    return Array.from(flags)
+  }, [draft, quests])
+
+  const unlockCommandInput = useTagInput({
+    values: draft?.rewards?.unlocks_commands || [],
+    onChange: values => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, unlocks_commands: values } })),
+    placeholder: 'command name',
+    ariaLabel: 'Unlock command list'
+  })
+
+  const wizardStepContent = useMemo(() => {
+    if (wizardStep === 'introEmail') {
+      const deliveryOption = INTRO_MAIL_DELIVERY_OPTIONS.find(option => option.value === wizardIntroMailDraft.deliveryCondition)
+      return (
+        <div className="quest-wizard-form intro-mail-form">
+          {wizardIntroMailErrors.length > 0 && (
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'introEmail' ? wizardAlertRef : undefined}
+            >
+              <strong>Fix these before continuing</strong>
+              <ul>
+                {wizardIntroMailErrors.map(error => <li key={error}>{error}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="wizard-field-grid">
+            <label>
+              Sender Name
+              <input
+                value={wizardIntroMailDraft.fromName}
+                onChange={e => updateWizardIntroMail({ fromName: e.target.value })}
+                placeholder="Atlas Ops"
+              />
+            </label>
+            <label>
+              Sender Address
+              <input
+                value={wizardIntroMailDraft.fromAddress}
+                onChange={e => updateWizardIntroMail({ fromAddress: e.target.value })}
+                placeholder="ops@atlasnet"
+              />
+            </label>
+            <label className="full">
+              Subject / Hook
+              <input
+                value={wizardIntroMailDraft.subject}
+                onChange={e => updateWizardIntroMail({ subject: e.target.value })}
+                placeholder="Directive: Wipe the Evidence"
+              />
+            </label>
+            <label className="full">
+              Preview / Snippet (optional)
+              <input
+                value={wizardIntroMailDraft.previewLine}
+                onChange={e => updateWizardIntroMail({ previewLine: e.target.value })}
+                placeholder="Remote relay logs picked up your alias."
+              />
+            </label>
+            <label className="full">
+              Body
+              <textarea
+                value={wizardIntroMailDraft.body}
+                onChange={e => updateWizardIntroMail({ body: e.target.value })}
+                rows={8}
+                placeholder={'Operator,\n\nTelemetry shows a relay...'}
+              />
+            </label>
+            <label>
+              In-universe Date/Time
+              <input
+                value={wizardIntroMailDraft.inUniverseDate}
+                onChange={e => updateWizardIntroMail({ inUniverseDate: e.target.value })}
+                placeholder="2089-06-01 14:22"
+              />
+            </label>
+          </div>
+          <div className="wizard-field-group">
+            <label>
+              Delivery Condition
+              <select
+                value={wizardIntroMailDraft.deliveryCondition}
+                onChange={e => updateWizardIntroMail({ deliveryCondition: e.target.value as QuestIntroDeliveryCondition })}
+              >
+                {INTRO_MAIL_DELIVERY_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {deliveryOption && <p className="muted description">{deliveryOption.description}</p>}
+            {wizardIntroMailDraft.deliveryCondition === 'after_quest' && (
+              <label className="full">
+                Deliver after quest
+                <select
+                  value={wizardIntroMailDraft.deliveryQuestId || ''}
+                  onChange={e => updateWizardIntroMail({ deliveryQuestId: e.target.value || undefined })}
+                >
+                  <option value="">Select quest</option>
+                  {quests.map(quest => (
+                    <option key={`delivery-quest-${quest.id}`} value={quest.id}>
+                      {quest.title || quest.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {wizardIntroMailDraft.deliveryCondition === 'flag_set' && (
+              <div className="wizard-flag-fields">
+                <label>
+                  Flag Key
+                  <input
+                    value={wizardIntroMailDraft.deliveryFlagKey || ''}
+                    onChange={e => updateWizardIntroMail({ deliveryFlagKey: e.target.value })}
+                    placeholder="quest_intro_complete"
+                  />
+                </label>
+                <label>
+                  Flag Value (optional)
+                  <input
+                    value={wizardIntroMailDraft.deliveryFlagValue || ''}
+                    onChange={e => updateWizardIntroMail({ deliveryFlagValue: e.target.value })}
+                    placeholder="true"
+                  />
+                </label>
+              </div>
+            )}
+            {wizardIntroMailDraft.deliveryCondition === 'manual' && (
+              <p className="muted description">
+                Document how and when scripting should trigger this mail so automation engineers can wire it up later.
+              </p>
+            )}
+          </div>
+          <div className="wizard-field-group">
+            <span className="field-label">When player reads this email…</span>
+            <div className="wizard-radio-group">
+              {INTRO_MAIL_START_BEHAVIOR_OPTIONS.map(option => (
+                <label key={option.value} className={`wizard-radio ${wizardIntroMailDraft.startBehavior === option.value ? 'active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="intro-mail-start-behavior"
+                    value={option.value}
+                    checked={wizardIntroMailDraft.startBehavior === option.value}
+                      onChange={e => updateWizardIntroMail({ startBehavior: e.target.value as QuestIntroStartBehavior })}
+                  />
+                  <div>
+                    <strong>{option.label}</strong>
+                    <p className="muted">{option.helper}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+    if (wizardStep === 'questCore') {
+      if (!draft) {
+        return (
+          <div className="quest-wizard-placeholder">
+            <p>Select or create a quest before editing its metadata.</p>
+          </div>
+        )
+      }
+      const introMail = draft.introEmailId ? mailDefinitions.find(entry => entry.id === draft.introEmailId) : null
+      const deliverySummary = (() => {
+        if (!draft.introMailDelivery) return null
+        const delivery = draft.introMailDelivery
+        switch (delivery.condition) {
+          case 'game_start':
+            return 'Delivered when a new save/profile boots up.'
+          case 'after_quest':
+            return delivery.questId ? `Delivered after ${delivery.questId} completes.` : 'Delivered after the selected quest resolves.'
+          case 'flag_set':
+            return `Delivered when flag ${delivery.flagKey}${delivery.flagValue ? `=${delivery.flagValue}` : ''} is set.`
+          case 'manual':
+            return 'Delivery handled manually or via scripting.'
+          default:
+            return null
+        }
+      })()
+      const introStartText = draft.introMailStartBehavior === 'startQuest'
+        ? 'Reading the mail starts this quest automatically.'
+        : 'Mail is lore-only; quest activates elsewhere.'
+      return (
+        <div className="quest-wizard-form quest-core-form">
+          {wizardQuestDetailsErrors.length > 0 && (
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'questCore' ? wizardAlertRef : undefined}
+            >
+              <strong>Fix these before continuing</strong>
+              <ul>
+                {wizardQuestDetailsErrors.map(error => <li key={error}>{error}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="wizard-field-grid">
+            <label data-tooltip={FIELD_HINTS.questTitle}>
+              Quest Title
+              <input
+                value={draft.title}
+                onChange={e => handleQuestMetadataChange('title', e.target.value)}
+                placeholder="Wipe the Evidence"
+              />
+            </label>
+            <label data-tooltip={FIELD_HINTS.questId}>
+              Quest ID
+              <div className="wizard-inline-input">
+                <input
+                  value={draft.id}
+                  onChange={e => handleQuestMetadataChange('id', e.target.value)}
+                  onBlur={e => handleQuestMetadataChange('id', sanitizeSystemId(e.target.value))}
+                  placeholder="atlas_wipe_evidence"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuestMetadataChange('id', sanitizeSystemId(draft.title || draft.id))}
+                  title="Generate id from title"
+                >
+                  Auto ID
+                </button>
+              </div>
+              <span className="muted helper">Letters, numbers, underscores, and hyphens only.</span>
+            </label>
+            <label className="full" data-tooltip={FIELD_HINTS.questSummary}>
+              Summary (1-2 sentences)
+              <textarea
+                value={draft.summary}
+                onChange={e => handleQuestMetadataChange('summary', e.target.value)}
+                rows={3}
+                placeholder="Atlas intercepted a wipe order. Clean the relay before it lands."
+              />
+            </label>
+            <label className="full" data-tooltip={FIELD_HINTS.description}>
+              Player-facing Description
+              <textarea
+                value={draft.description}
+                onChange={e => handleQuestMetadataChange('description', e.target.value)}
+                rows={5}
+                placeholder="Atlas needs you to…"
+              />
+            </label>
+          </div>
+          <div className="wizard-field-grid">
+            <label data-tooltip={FIELD_HINTS.questDifficulty}>
+              Difficulty
+              <select
+                value={draft.difficulty}
+                onChange={e => handleQuestMetadataChange('difficulty', e.target.value)}
+              >
+                <option value="">Select difficulty</option>
+                {QUEST_DIFFICULTY_OPTIONS.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <label data-tooltip={FIELD_HINTS.questFaction}>
+              Faction / Category
+              <input
+                value={draft.faction}
+                onChange={e => handleQuestMetadataChange('faction', e.target.value)}
+                placeholder="Atlas"
+                list="quest-faction-suggestions"
+              />
+              <datalist id="quest-faction-suggestions">
+                {QUEST_CATEGORY_SUGGESTIONS.map(option => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
+            </label>
+            <label className="full" data-tooltip={FIELD_HINTS.questTags}>
+              Tags
+              {wizardQuestTagInput.Input}
+            </label>
+          </div>
+          <div className="wizard-field-group">
+            <label className="full" data-tooltip={FIELD_HINTS.designerNotes}>
+              Designer Notes (internal)
+              <textarea
+                value={draft.designerNotes}
+                onChange={e => handleQuestMetadataChange('designerNotes', e.target.value)}
+                rows={3}
+                placeholder="Call out special scripting or dependencies for other designers."
+              />
+            </label>
+          </div>
+          <div className="wizard-field-group">
+            <span className="field-label">Intro Email Link</span>
+            {draft.introEmailId ? (
+              <div>
+                <p>
+                  <code>{draft.introEmailId}</code>
+                  {introMail?.subject ? ` — ${introMail.subject}` : ''}
+                </p>
+                <p className="muted">
+                  {introStartText}
+                  {deliverySummary ? ` ${deliverySummary}` : ''}
+                </p>
+              </div>
+            ) : (
+              <p className="muted">Complete the Intro Email step to auto-link the quest briefing.</p>
+            )}
+          </div>
+        </div>
+      )
+    }
+    if (wizardStep === 'questSteps') {
+      if (!draft) {
+        return (
+          <div className="quest-wizard-placeholder">
+            <p>Create or select a quest to define its gameplay flow.</p>
+          </div>
+        )
+      }
+      return (
+        <div className="quest-wizard-form quest-steps-form">
+          {wizardQuestStepsErrors.length > 0 && (
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'questSteps' ? wizardAlertRef : undefined}
+            >
+              <strong>Resolve these step issues</strong>
+              <ul>
+                {wizardQuestStepsErrors.map(error => <li key={error}>{error}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="wizard-template-section">
+            <div className="wizard-template-header">
+              <div>
+                <span className="field-label">Start from a template</span>
+                <p className="muted">Drop in a proven sequence and tweak the details.</p>
+              </div>
+            </div>
+            <div className="wizard-template-grid">
+              {STEP_TEMPLATES.map(template => (
+                <button key={template.id} type="button" className="wizard-template-card" onClick={() => handleWizardApplyTemplate(template.id)}>
+                  <div>
+                    <strong>{template.label}</strong>
+                    <p className="muted">{template.description}</p>
+                  </div>
+                  <span className="wizard-template-meta">{template.steps.length} step{template.steps.length === 1 ? '' : 's'}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="wizard-step-list">
+            {draft.steps.length === 0 ? (
+              <div className="wizard-step-empty">
+                <p>No steps yet. Use a template or add a custom step.</p>
+              </div>
+            ) : (
+              draft.steps.map((step, index) => (
+                <div key={step.id || `step-${index}`} className="wizard-step-card">
+                  <div className="wizard-step-card-header">
+                    <div>
+                      <span className="muted">Step {index + 1}</span>
+                      <input
+                        value={step.id}
+                        onChange={e => handleWizardStepIdChange(index, e.target.value)}
+                        placeholder={`step_${index + 1}`}
+                        data-tooltip={FIELD_HINTS.stepId}
+                      />
+                    </div>
+                    <div className="wizard-step-card-actions">
+                      <button type="button" onClick={() => handleWizardStepMove(index, -1)} disabled={index === 0} title="Move up">↑</button>
+                      <button type="button" onClick={() => handleWizardStepMove(index, 1)} disabled={index === draft.steps.length - 1} title="Move down">↓</button>
+                      <button type="button" onClick={() => handleWizardStepDuplicate(index)} title="Duplicate step">⧉</button>
+                      <button type="button" onClick={() => handleWizardStepDelete(index)} title="Remove step">🗑</button>
+                    </div>
+                  </div>
+                  <div className="wizard-field-grid">
+                    <label data-tooltip={FIELD_HINTS.stepType}>
+                      Step Type
+                      <select value={step.type} onChange={e => handleWizardStepTypeChange(index, e.target.value as StepType)}>
+                        {STEP_TYPES.map(type => (
+                          <option key={type} value={type}>{STEP_TYPE_LABELS[type]}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label data-tooltip={FIELD_HINTS.stepAutoAdvance}>
+                      Auto Advance
+                      <input
+                        type="checkbox"
+                        checked={step.auto_advance !== false}
+                        onChange={e => handleWizardStepAutoAdvanceChange(index, e.target.checked)}
+                      />
+                    </label>
+                  </div>
+                  <div className="wizard-field-grid">
+                    <label className="full" data-tooltip={FIELD_HINTS.stepTargetIp}>
+                      Target Host / IP
+                      <input
+                        value={step.params?.target_ip || ''}
+                        onChange={e => handleWizardStepParamChange(index, 'target_ip', e.target.value)}
+                        placeholder="10.0.0.42"
+                      />
+                    </label>
+                    {step.type === 'DELETE_FILE' && (
+                      <label className="full" data-tooltip={FIELD_HINTS.stepFilePath}>
+                        File Path
+                        <input
+                          value={step.params?.file_path || ''}
+                          onChange={e => handleWizardStepParamChange(index, 'file_path', e.target.value)}
+                          placeholder="/var/log/trace.log"
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <div className="wizard-field-grid">
+                    <label className="full" data-tooltip={FIELD_HINTS.stepHintPrompt}>
+                      Designer Description
+                      <textarea
+                        value={step.hints?.prompt || ''}
+                        onChange={e => handleWizardStepDescriptionChange(index, e.target.value)}
+                        rows={3}
+                        placeholder="Remind the operator what to accomplish."
+                      />
+                    </label>
+                    <label className="full" data-tooltip={FIELD_HINTS.stepCommandExample}>
+                      Command Example (optional)
+                      <textarea
+                        value={step.hints?.command_example || ''}
+                        onChange={e => handleWizardStepCommandExampleChange(index, e.target.value)}
+                        rows={2}
+                        placeholder="connect 10.0.0.42"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <button type="button" className="wizard-add-step" onClick={handleWizardAddStep}>
+            + Add custom step
+          </button>
+        </div>
+      )
+    }
+    if (wizardStep === 'completionEmail') {
+      if (!draft) {
+        return (
+          <div className="quest-wizard-placeholder">
+            <p>Stage a quest earlier in the wizard before drafting its completion mail.</p>
+          </div>
+        )
+      }
+      const followUpQuest = draft.followUpQuestId ? quests.find(q => q.id === draft.followUpQuestId) : undefined
+      const completionPreview = renderCompletionMailPreview(wizardCompletionMailDraft.body, draft, followUpQuest)
+      return (
+        <div className="quest-wizard-form completion-mail-form">
+          {wizardCompletionMailErrors.length > 0 && (
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'completionEmail' ? wizardAlertRef : undefined}
+            >
+              <strong>Resolve these completion mail issues</strong>
+              <ul>
+                {wizardCompletionMailErrors.map(error => <li key={error}>{error}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="wizard-field-grid">
+            <label>
+              Sender Name
+              <input
+                value={wizardCompletionMailDraft.fromName}
+                onChange={e => updateWizardCompletionMail({ fromName: e.target.value })}
+                placeholder="Atlas Ops"
+              />
+            </label>
+            <label>
+              Sender Address
+              <input
+                value={wizardCompletionMailDraft.fromAddress}
+                onChange={e => updateWizardCompletionMail({ fromAddress: e.target.value })}
+                placeholder="ops@atlasnet"
+              />
+            </label>
+            <label className="full">
+              Subject / Wrap-up headline
+              <input
+                value={wizardCompletionMailDraft.subject}
+                onChange={e => updateWizardCompletionMail({ subject: e.target.value })}
+                placeholder="Debrief: Evidence Purged"
+              />
+            </label>
+            <label className="full">
+              Preview / Snippet (optional)
+              <input
+                value={wizardCompletionMailDraft.previewLine}
+                onChange={e => updateWizardCompletionMail({ previewLine: e.target.value })}
+                placeholder="Atlas tallied your reward and the relay is clean."
+              />
+            </label>
+            <label>
+              In-universe Date/Time
+              <input
+                value={wizardCompletionMailDraft.inUniverseDate}
+                onChange={e => updateWizardCompletionMail({ inUniverseDate: e.target.value })}
+                placeholder="2089-06-02 09:44"
+              />
+            </label>
+          </div>
+          <div className="completion-mail-body-grid">
+            <label>
+              Body
+              <textarea
+                rows={9}
+                value={wizardCompletionMailDraft.body}
+                onChange={e => updateWizardCompletionMail({ body: e.target.value })}
+                placeholder={'Operator {player_handle},\n\nAtlas logged your wipe. {reward_credits} credits transferred.'}
+              />
+            </label>
+            <div className="completion-mail-preview">
+              <div className="completion-mail-preview-header">
+                <strong>Live Preview</strong>
+                {followUpQuest && (
+                  <span>Next: {followUpQuest.title || followUpQuest.id}</span>
+                )}
+              </div>
+              <pre>
+                {completionPreview || 'Start typing the body copy to preview placeholder replacements.'}
+              </pre>
+            </div>
+          </div>
+          <div className="completion-mail-hints">
+            <span>Dynamic placeholders</span>
+            <ul>
+              {COMPLETION_PLACEHOLDER_HINTS.map(({ token, helper }) => (
+                <li key={token}>
+                  <code>{token}</code>
+                  <span>{helper}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="wizard-field-grid completion-mail-meta-grid">
+            <label data-tooltip={FIELD_HINTS.creditsReward}>
+              Credits Reward
+              <input
+                type="number"
+                value={draft.rewards?.credits ?? 0}
+                onChange={e => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, credits: Number(e.target.value) } }))}
+              />
+            </label>
+            <label>
+              Follow-up Quest (optional)
+              <select
+                value={draft.followUpQuestId || ''}
+                onChange={e => updateCurrentQuest(prev => ({ ...prev, followUpQuestId: e.target.value || undefined }))}
+              >
+                <option value="">No automatic next quest</option>
+                {quests.filter(q => q.id !== draft.id).map(q => (
+                  <option key={q.id} value={q.id}>{q.title || q.id}</option>
+                ))}
+              </select>
+              <span className="muted helper">
+                {followUpQuest
+                  ? `Players are nudged toward ${followUpQuest.title || followUpQuest.id}.`
+                  : 'Optional: chain directly into a follow-up quest.'}
+              </span>
+            </label>
+          </div>
+          <div className="wizard-field-grid completion-mail-rewards">
+            <div className="full reward-flags-field" data-tooltip={FIELD_HINTS.rewardFlags}>
+              <div className="reward-flags-header">
+                <span>Flags Granted</span>
+                <button type="button" onClick={addRewardFlag}>+ Add Flag</button>
+              </div>
+              {rewardFlags.length === 0 && <p className="muted empty">No completion flags defined yet.</p>}
+              {rewardFlags.map((flag, idx) => (
+                <div key={`${flag.key || 'flag'}-${idx}`} className="reward-flag-row">
+                  <label data-tooltip={FIELD_HINTS.rewardFlagKey}>
+                    Key
+                    <input
+                      list={wizardRewardFlagListId}
+                      value={flag.key || ''}
+                      onChange={e => updateRewardFlag(idx, { key: e.target.value })}
+                      placeholder="quest_completed"
+                    />
+                  </label>
+                  <label data-tooltip={FIELD_HINTS.rewardFlagValue}>
+                    Value
+                    <input
+                      value={flag.value || ''}
+                      onChange={e => updateRewardFlag(idx, { value: e.target.value })}
+                      placeholder="true"
+                    />
+                  </label>
+                  <button type="button" className="ghost" onClick={() => removeRewardFlag(idx)}>Remove</button>
+                </div>
+              ))}
+              {questFlagSuggestions.length > 0 && (
+                <datalist id={wizardRewardFlagListId}>
+                  {questFlagSuggestions.map(flag => (
+                    <option key={`reward-flag-${flag}`} value={flag} />
+                  ))}
+                </datalist>
+              )}
+            </div>
+            <label className="full" data-tooltip={FIELD_HINTS.unlockCommands}>
+              Unlock Commands
+              {unlockCommandInput.Input}
+            </label>
+          </div>
+          <div className="wizard-field-group completion-mail-link">
+            <span className="field-label">Completion mail id</span>
+            <p>
+              <code>{draft.completionEmailId || wizardCompletionMailDraft.id}</code>
+            </p>
+            <p className="muted">When you hit Next we stage this mail as a draft entry linked to the quest.</p>
+          </div>
+        </div>
+      )
+    }
+    if (wizardStep === 'summary') {
+      if (!draft) {
+        return (
+          <div className="quest-wizard-placeholder">
+            <p>Create or select a quest before reviewing the summary.</p>
+          </div>
+        )
+      }
+      const introMail = draft.introEmailId ? mailDefinitions.find(entry => entry.id === draft.introEmailId) : null
+      const completionMail = draft.completionEmailId ? mailDefinitions.find(entry => entry.id === draft.completionEmailId) : null
+      const followUpQuest = draft.followUpQuestId ? quests.find(q => q.id === draft.followUpQuestId) : null
+      const rewardCredits = draft.rewards?.credits ?? 0
+      const rewardFlagsList = (draft.rewards?.flags || []).filter(flag => flag?.key?.trim())
+      const unlocks = draft.rewards?.unlocks_commands || []
+      const stepSummaries = draft.steps || []
+      return (
+        <div className="quest-wizard-form summary-form">
+          {wizardSummaryErrors.length > 0 && (
+            <div
+              className="inline-alert error"
+              role="alert"
+              tabIndex={-1}
+              ref={wizardStep === 'summary' ? wizardAlertRef : undefined}
+            >
+              <strong>Resolve before saving</strong>
+              <ul>
+                {wizardSummaryErrors.map(message => <li key={message}>{message}</li>)}
+              </ul>
+            </div>
+          )}
+          {wizardFinishing && (
+            <div className="inline-alert info">
+              <strong>Working…</strong> Saving mails and quest definition.
+            </div>
+          )}
+          <div className="summary-grid">
+            <section>
+              <h4>Intro Email</h4>
+              {introMail ? (
+                <ul>
+                  <li><strong>Sender:</strong> {introMail.fromName} &lt;{introMail.fromAddress}&gt;</li>
+                  <li><strong>Subject:</strong> {introMail.subject}</li>
+                  <li><strong>Snippet:</strong> {introMail.previewLine || '—'}</li>
+                </ul>
+              ) : (
+                <p className="muted">Not linked yet.</p>
+              )}
+            </section>
+            <section>
+              <h4>Quest Metadata</h4>
+              <ul>
+                <li><strong>Title:</strong> {draft.title || 'Untitled quest'}</li>
+                <li><strong>Difficulty:</strong> {draft.difficulty || 'Unspecified'}</li>
+                <li><strong>Tags:</strong> {draft.tags?.length ? draft.tags.join(', ') : 'None'}</li>
+              </ul>
+            </section>
+            <section className="summary-steps">
+              <h4>Step List</h4>
+              {stepSummaries.length === 0 ? (
+                <p className="muted">No steps attached.</p>
+              ) : (
+                <ol>
+                  {stepSummaries.map((step, idx) => (
+                    <li key={step.id || `step-${idx}`}>
+                      <div className="summary-step-title">
+                        <strong>{step.id || `Step ${idx + 1}`}</strong>
+                        <span className="muted">{STEP_TYPE_LABELS[step.type] || step.type}</span>
+                      </div>
+                      {step.hints?.prompt && <p className="muted">{step.hints.prompt}</p>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+            <section>
+              <h4>Completion Email</h4>
+              {completionMail ? (
+                <ul>
+                  <li><strong>Sender:</strong> {completionMail.fromName} &lt;{completionMail.fromAddress}&gt;</li>
+                  <li><strong>Subject:</strong> {completionMail.subject}</li>
+                </ul>
+              ) : (
+                <p className="muted">No completion email linked.</p>
+              )}
+            </section>
+            <section>
+              <h4>Rewards</h4>
+              <ul>
+                <li><strong>Credits:</strong> {rewardCredits}</li>
+                <li>
+                  <strong>Flags:</strong>
+                  {rewardFlagsList.length === 0 ? (
+                    <span> None</span>
+                  ) : (
+                    <ul>
+                      {rewardFlagsList.map((flag, idx) => (
+                        <li key={`${flag.key}-${idx}`}><code>{flag.key}{flag.value ? `=${flag.value}` : ''}</code></li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+                <li>
+                  <strong>Unlocks:</strong>
+                  {unlocks.length === 0 ? <span> None</span> : <span> {unlocks.join(', ')}</span>}
+                </li>
+              </ul>
+            </section>
+            <section>
+              <h4>Next Quest Link</h4>
+              {followUpQuest ? (
+                <p>{followUpQuest.title || followUpQuest.id} ({followUpQuest.id})</p>
+              ) : (
+                <p className="muted">No automatic follow-up configured.</p>
+              )}
+            </section>
+          </div>
+          <p className="muted summary-note">
+            Review the details above, then use “Save & Finish” to persist the mails and quest, or Back to revise earlier steps.
+          </p>
+        </div>
+      )
+    }
+    const details = QUEST_WIZARD_STEP_DETAILS[wizardStep as QuestWizardStep]
+    return (
+      <div className="quest-wizard-placeholder">
+        <p>
+          {details.title} content will live here. This placeholder keeps the modal wired up while the detailed step forms
+          are implemented.
+        </p>
+        <p className="muted">
+          Continue using the existing quest editor to make changes until each guided step is fully interactive.
+        </p>
+      </div>
+    )
+  }, [
+    addRewardFlag,
+    draft,
+    handleQuestMetadataChange,
+    handleWizardAddStep,
+    handleWizardApplyTemplate,
+    handleWizardStepAutoAdvanceChange,
+    handleWizardStepCommandExampleChange,
+    handleWizardStepDescriptionChange,
+    handleWizardStepDuplicate,
+    handleWizardStepIdChange,
+    handleWizardStepMove,
+    handleWizardStepParamChange,
+    handleWizardStepTypeChange,
+    handleWizardStepDelete,
+    mailDefinitions,
+    quests,
+    questFlagSuggestions,
+    removeRewardFlag,
+    rewardFlags,
+    unlockCommandInput.Input,
+    updateCurrentQuest,
+    updateRewardFlag,
+    updateWizardCompletionMail,
+    updateWizardIntroMail,
+    wizardFinishing,
+    wizardCompletionMailDraft,
+    wizardCompletionMailErrors,
+    wizardIntroMailDraft,
+    wizardIntroMailErrors,
+    wizardQuestDetailsErrors,
+    wizardQuestStepsErrors,
+    wizardQuestTagInput.Input,
+    wizardSummaryErrors,
+    wizardStep
+  ])
+
+  useEffect(() => {
+    if (wizardStep !== 'summary') {
+      setWizardSummaryErrors([])
+    }
+  }, [wizardStep])
+
+  const discardWizardQuestChanges = useCallback(() => {
+    const questId = wizardEntryQuestIdRef.current
+    const createdByWizard = wizardCreatedQuestRef.current
+    const previousQuestId = wizardPreviousQuestIdRef.current
+    resetWizardEntryTracking()
+    if (!questId) return
+
+    if (createdByWizard) {
+      syncQuestList(prev => prev.filter(q => q.id !== questId))
+      if (previousQuestId) {
+        const previousQuest = quests.find(q => q.id === previousQuestId)
+        if (previousQuest) {
+          selectQuest(previousQuest)
+        } else {
+          selectQuest(null)
+        }
+      } else {
+        selectQuest(null)
+      }
+      return
+    }
+
+    const fallbackQuest = quests.find(q => q.id === questId)
+    if (fallbackQuest) {
+      selectQuest(fallbackQuest)
+    } else {
+      selectQuest(null)
+    }
+  }, [quests, resetWizardEntryTracking, selectQuest, syncQuestList])
+
+  useEffect(() => {
+    if (!wizardOpen) {
+      setWizardCancelConfirmOpen(false)
+      resetWizardEntryTracking()
+    }
+  }, [resetWizardEntryTracking, wizardOpen])
+
+  const focusWizardAlert = useCallback(() => {
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      const target = wizardAlertRef.current
+      if (!target) return
+      target.focus()
+      if (target.scrollIntoView) {
+        target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!wizardOpen) return
+    const bodyNode = wizardBodyRef.current
+    if (!bodyNode) return
+    if (bodyNode.scrollTo) {
+      bodyNode.scrollTo({ top: 0 })
+    } else {
+      bodyNode.scrollTop = 0
+    }
+  }, [wizardOpen, wizardStep])
+
+  useEffect(() => {
+    if (!wizardOpen) return
+    const hasErrors =
+      (wizardStep === 'introEmail' && wizardIntroMailErrors.length > 0) ||
+      (wizardStep === 'questCore' && wizardQuestDetailsErrors.length > 0) ||
+      (wizardStep === 'questSteps' && wizardQuestStepsErrors.length > 0) ||
+      (wizardStep === 'completionEmail' && wizardCompletionMailErrors.length > 0) ||
+      (wizardStep === 'summary' && wizardSummaryErrors.length > 0)
+    if (hasErrors) {
+      focusWizardAlert()
+    }
+  }, [focusWizardAlert, wizardCompletionMailErrors, wizardIntroMailErrors, wizardOpen, wizardQuestDetailsErrors, wizardQuestStepsErrors, wizardStep, wizardSummaryErrors])
+
+  const wizardQuestDirty = useMemo(() => {
+    if (!draft) return false
+    if (draft.__unsaved) return true
+    const baseline = quests.find(q => q.id === draft.id)
+    if (!baseline) return true
+    try {
+      return JSON.stringify(questToPayload(draft)) !== JSON.stringify(questToPayload(baseline))
+    } catch (err) {
+      console.warn('[quest designer] unable to diff quest payload', err)
+      return true
+    }
+  }, [draft, quests])
+
+  const wizardMailDirty = useMemo(() => {
+    if (!draft) return false
+    const ids = [draft.introEmailId, draft.completionEmailId].filter(Boolean) as string[]
+    if (!ids.length) return false
+    return ids.some(id => {
+      const entry = mailDefinitions.find(mail => mail.id === id)
+      if (!entry) return false
+      const snapshot = mailSnapshotRef.current[id]
+      if (!snapshot) return true
+      try {
+        return JSON.stringify(entry) !== snapshot
+      } catch (err) {
+        console.warn('[quest designer] unable to diff mail payload', err)
+        return true
+      }
+    })
+  }, [draft, mailDefinitions])
+
+  const wizardHasUnsavedChanges = wizardQuestDirty || wizardMailDirty
+
+  const currentWizardStepDetails = QUEST_WIZARD_STEP_DETAILS[wizardStep]
+  const currentWizardStepIndex = QUEST_WIZARD_STEPS.indexOf(wizardStep)
+  const totalWizardSteps = QUEST_WIZARD_STEPS.length
+  const wizardProgressLabel = `Step ${currentWizardStepIndex + 1} of ${totalWizardSteps}`
+  const wizardAtFirstStep = currentWizardStepIndex === 0
+  const wizardAtLastStep = currentWizardStepIndex === totalWizardSteps - 1
+
+  const handleWizardNext = () => {
+    if (wizardStep === 'introEmail') {
+      handleIntroEmailNext()
+      return
+    }
+    if (wizardStep === 'questCore') {
+      handleQuestDetailsNext()
+      return
+    }
+    if (wizardStep === 'questSteps') {
+      handleQuestStepsNext()
+      return
+    }
+    if (wizardStep === 'completionEmail') {
+      handleCompletionEmailNext()
+      return
+    }
+    goToNextWizardStep()
+  }
+
+  const dismissWizardCancelPrompt = useCallback(() => {
+    setWizardCancelConfirmOpen(false)
+  }, [])
+
+  const confirmWizardCancel = useCallback(() => {
+    discardWizardQuestChanges()
+    setWizardCancelConfirmOpen(false)
+    closeWizard()
+  }, [closeWizard, discardWizardQuestChanges])
+
+  const handleWizardCancel = useCallback(() => {
+    if (wizardHasUnsavedChanges) {
+      setWizardCancelConfirmOpen(true)
+      return
+    }
+    closeWizard()
+  }, [closeWizard, wizardHasUnsavedChanges])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -983,25 +2932,24 @@ export const QuestDesignerApp: React.FC = () => {
     hideTooltip()
   }, [hideTooltip])
 
-  const persistQuestOrder = useCallback((order: string[]) => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(QUEST_ORDER_STORAGE_KEY, JSON.stringify(order))
-    } catch (err) {
-      console.warn('[quest designer] unable to persist quest order', err)
-    }
-  }, [])
-
   const loadMailLibrary = useCallback(async () => {
     setMailLoading(true)
     setMailError(null)
     try {
       const messages = await listAdminTerminalMail()
       setMailDefinitionsState(messages)
+      serverMailIdsRef.current = new Set(messages.map(mail => mail.id))
+      const snapshot: Record<string, string> = {}
+      messages.forEach(mail => {
+        snapshot[mail.id] = JSON.stringify(mail)
+      })
+      mailSnapshotRef.current = snapshot
       return messages
     } catch (err) {
       console.error('[quest designer] failed to load mail library', err)
       setMailDefinitionsState([])
+      serverMailIdsRef.current = new Set()
+      mailSnapshotRef.current = {}
       setMailError('Unable to load mail library.')
       return []
     } finally {
@@ -1027,18 +2975,6 @@ export const QuestDesignerApp: React.FC = () => {
   const applyStoredQuestOrder = useCallback((entries: DesignerQuest[]) => (
     applyQuestOrderFromStorage(entries, questOrderRef.current)
   ), [])
-
-  const syncQuestList = useCallback((updater: (prev: DesignerQuest[]) => DesignerQuest[]) => {
-    setQuests(prev => {
-      const next = updater(prev)
-      if (next === prev) {
-        return prev
-      }
-      questOrderRef.current = next.map(q => q.id)
-      persistQuestOrder(questOrderRef.current)
-      return next
-    })
-  }, [persistQuestOrder])
 
   const reorderQuestList = useCallback((sourceId: string, targetId: string | null) => {
     syncQuestList(prev => reorderQuestSequence(prev, sourceId, targetId))
@@ -1160,17 +3096,17 @@ export const QuestDesignerApp: React.FC = () => {
   }, [draft])
 
 
-  const selectQuest = (quest: DesignerQuest) => {
-    setSelectedKey(quest.id)
-    setDraft(normalizeQuest(quest))
-    persistedIdRef.current = quest.__unsaved ? null : quest.id
-    setErrors([])
-    setWarnings([])
-    setValidationMessages([])
-  }
 
   const handleQuestSelection = (quest: DesignerQuest) => {
     if (draggingQuestId) return
+    if (draft && draft.id === quest.id) {
+      selectQuest(null)
+      return
+    }
+    if (!draft && selectedKey === quest.id) {
+      selectQuest(null)
+      return
+    }
     selectQuest(quest)
   }
 
@@ -1229,116 +3165,6 @@ export const QuestDesignerApp: React.FC = () => {
     setDragOverQuestId(null)
   }
 
-  const handleCreateQuest = () => {
-    const fresh = createEmptyQuest()
-    syncQuestList(prev => [fresh, ...prev])
-    selectQuest(fresh)
-    signalSessionActivity('quest-create')
-  }
-
-  const updateCurrentQuest = (updater: (prev: DesignerQuest) => DesignerQuest) => {
-    setDraft(prev => (prev ? updater(prev) : prev))
-  }
-
-  const updateQuestMailConfig = (patch: Partial<QuestMailConfig> | null) => {
-    if (patch === null) {
-      updateCurrentQuest(prev => {
-        if (!prev?.mail) return prev
-        const clone = { ...prev }
-        delete clone.mail
-        return clone
-      })
-      return
-    }
-    updateCurrentQuest(prev => {
-      if (!prev) return prev
-      return {
-        ...prev,
-        mail: { ...(prev.mail || {}), ...patch }
-      }
-    })
-  }
-
-  const updateMailPreviewField = (field: keyof SerializedMailState, values: string[]) => {
-    updateCurrentQuest(prev => {
-      if (!prev) return prev
-      const nextMail = { ...(prev.mail || {}) }
-      const nextPreview = { ...(nextMail.previewState || {}) }
-      if (values.length) {
-        nextPreview[field] = values
-      } else {
-        delete nextPreview[field]
-      }
-      if (Object.keys(nextPreview).length) {
-        nextMail.previewState = nextPreview
-      } else {
-        delete nextMail.previewState
-      }
-      return { ...prev, mail: nextMail }
-    })
-  }
-
-  const removeMailIdFromQuest = (mailId: string) => {
-    if (!mailId) return
-    updateCurrentQuest(prev => {
-      if (!prev?.mail) return prev
-      const nextMail: QuestMailConfig = { ...prev.mail }
-      let changed = false
-      if (nextMail.briefingMailId === mailId) {
-        delete nextMail.briefingMailId
-        changed = true
-      }
-      if (nextMail.completionMailId === mailId) {
-        delete nextMail.completionMailId
-        changed = true
-      }
-      if (nextMail.autoDeliverOnAccept?.length) {
-        const filtered = nextMail.autoDeliverOnAccept.filter(id => id !== mailId)
-        if (filtered.length !== nextMail.autoDeliverOnAccept.length) {
-          nextMail.autoDeliverOnAccept = filtered
-          changed = true
-        }
-        if (!nextMail.autoDeliverOnAccept.length) delete nextMail.autoDeliverOnAccept
-      }
-      if (nextMail.autoDeliverOnComplete?.length) {
-        const filtered = nextMail.autoDeliverOnComplete.filter(id => id !== mailId)
-        if (filtered.length !== nextMail.autoDeliverOnComplete.length) {
-          nextMail.autoDeliverOnComplete = filtered
-          changed = true
-        }
-        if (!nextMail.autoDeliverOnComplete.length) delete nextMail.autoDeliverOnComplete
-      }
-      if (nextMail.previewState) {
-        const preview = { ...nextMail.previewState }
-        const scrub = (key: keyof SerializedMailState) => {
-          const list = preview[key]
-          if (!Array.isArray(list) || !list.length) return
-          const filtered = list.filter(id => id !== mailId)
-          if (filtered.length !== list.length) {
-            preview[key] = filtered
-            changed = true
-          }
-          if (!filtered.length) delete preview[key]
-        }
-        scrub('deliveredIds')
-        scrub('readIds')
-        scrub('archivedIds')
-        scrub('deletedIds')
-        if (Object.keys(preview).length) {
-          nextMail.previewState = preview
-        } else {
-          delete nextMail.previewState
-        }
-      }
-      if (!changed) return prev
-      if (!nextMail.briefingMailId && !nextMail.completionMailId && !nextMail.autoDeliverOnAccept?.length && !nextMail.autoDeliverOnComplete?.length && !nextMail.previewState) {
-        const clone = { ...prev }
-        delete clone.mail
-        return clone
-      }
-      return { ...prev, mail: nextMail }
-    })
-  }
 
   const updateTrigger = (patch: Partial<OperationTrigger>) => {
     updateCurrentQuest(prev => {
@@ -1406,23 +3232,6 @@ export const QuestDesignerApp: React.FC = () => {
     updateCurrentQuest(prev => ({ ...prev, steps: prev.steps.filter((_, idx) => idx !== index) }))
   }
 
-  const questFlagSuggestions = useMemo(() => {
-    const flags = new Set<string>()
-    const source = draft ? [...quests.filter(q => q.id !== draft.id), draft] : quests
-    source.forEach(q => q.rewards?.flags?.forEach(entry => {
-      const flag = sanitizeRewardFlagEntry(entry)
-      if (!flag) return
-      flags.add(flag.key)
-      if (flag.value) flags.add(`${flag.key}=${flag.value}`)
-    }))
-    source.forEach(q => {
-      const completionFlag = q.completion_flag?.trim()
-      if (!completionFlag) return
-      flags.add(completionFlag)
-    })
-    return Array.from(flags)
-  }, [draft, quests])
-
   const completionFlagConflicts = useMemo(() => {
     if (!draft) return [] as string[]
     const trimmed = draft.completion_flag?.trim()
@@ -1461,13 +3270,6 @@ export const QuestDesignerApp: React.FC = () => {
     suggestions: questFlagSuggestions,
     placeholder: 'flag_name',
     ariaLabel: 'Required flags'
-  })
-
-  const unlockCommandInput = useTagInput({
-    values: draft?.rewards?.unlocks_commands || [],
-    onChange: values => updateCurrentQuest(prev => ({ ...prev, rewards: { ...prev.rewards, unlocks_commands: values } })),
-    placeholder: 'command name',
-    ariaLabel: 'Unlock command list'
   })
 
   const mailIdSuggestions = useMemo(() => mailDefinitions.map(entry => entry.id), [mailDefinitions])
@@ -1519,39 +3321,6 @@ export const QuestDesignerApp: React.FC = () => {
     placeholder: 'mail_id',
     ariaLabel: 'Preview deleted ids'
   })
-
-  const rewardFlags = draft?.rewards?.flags || []
-
-  const addRewardFlag = () => {
-    updateCurrentQuest(prev => ({
-      ...prev,
-      rewards: {
-        ...prev.rewards,
-        flags: [...(prev.rewards?.flags || []), { key: '', value: '' }]
-      }
-    }))
-  }
-
-  const updateRewardFlag = (index: number, patch: Partial<QuestRewardFlag>) => {
-    updateCurrentQuest(prev => {
-      const flags = [...(prev.rewards?.flags || [])]
-      flags[index] = { ...flags[index], ...patch }
-      return {
-        ...prev,
-        rewards: { ...prev.rewards, flags }
-      }
-    })
-  }
-
-  const removeRewardFlag = (index: number) => {
-    updateCurrentQuest(prev => ({
-      ...prev,
-      rewards: {
-        ...prev.rewards,
-        flags: (prev.rewards?.flags || []).filter((_, idx) => idx !== index)
-      }
-    }))
-  }
 
   const normalizedSearch = search.trim().toLowerCase()
   const filteredQuests = quests.filter(quest => {
@@ -2172,8 +3941,8 @@ export const QuestDesignerApp: React.FC = () => {
     }
   }
 
-  const runSave = async (statusOverride?: 'draft' | 'published') => {
-    if (!draft) return
+  const runSave = async (statusOverride?: 'draft' | 'published'): Promise<boolean> => {
+    if (!draft) return false
     signalSessionActivity('quest-save-attempt')
     const targetDraft = statusOverride ? { ...draft, status: statusOverride } : draft
     if (statusOverride) {
@@ -2199,6 +3968,7 @@ export const QuestDesignerApp: React.FC = () => {
     }
     setErrors([])
     setValidationMessages([])
+    let success = false
     try {
       let response
       if (targetDraft.__unsaved) {
@@ -2235,6 +4005,7 @@ export const QuestDesignerApp: React.FC = () => {
           detail: { action, questId: savedQuest.id }
         }))
       }
+      success = true
     } catch (err: any) {
       console.error('[quest designer] save failed', err)
       const friendly = err?.message || 'Failed to save quest.'
@@ -2253,10 +4024,51 @@ export const QuestDesignerApp: React.FC = () => {
         setSaving(false)
       }
     }
+    return success
   }
 
   const handleSave = () => { void runSave() }
   const handlePublish = () => { void runSave('published') }
+
+  const handleWizardFinish = useCallback(async () => {
+    if (!draft) return
+    const introMail = draft.introEmailId ? (mailDefinitions.find(entry => entry.id === draft.introEmailId) ?? null) : null
+    const completionMail = draft.completionEmailId ? (mailDefinitions.find(entry => entry.id === draft.completionEmailId) ?? null) : null
+    const issues: string[] = []
+    if (!introMail) issues.push('Intro email is missing or not staged yet.')
+    if (!completionMail) issues.push('Completion email is missing or not staged yet.')
+    if (!draft.steps.length) issues.push('Quest requires at least one step before saving.')
+    setWizardSummaryErrors(issues)
+    if (issues.length) {
+      return
+    }
+    setWizardFinishing(true)
+    try {
+      await persistWizardMail(introMail)
+      await persistWizardMail(completionMail)
+      const questSaved = await runSave()
+      if (!questSaved) {
+        setWizardSummaryErrors(['Quest save failed. Check validation messages and try again.'])
+        return
+      }
+      await loadMailLibrary()
+      setWizardSummaryErrors([])
+      pushToast({
+        title: 'Wizard Complete',
+        message: `${draft.title || draft.id} saved and synced.`,
+        kind: 'success',
+        dedupeKey: `wizard-finish-${draft.id}`
+      })
+      closeWizard()
+    } catch (err: any) {
+      console.error('[quest designer] wizard finish failed', err)
+      const friendly = err?.message || 'Failed to save quest and mails.'
+      setWizardSummaryErrors([friendly])
+      pushToast({ title: 'Wizard Finish Failed', message: friendly, kind: 'error', dedupeKey: 'wizard-finish-error' })
+    } finally {
+      setWizardFinishing(false)
+    }
+  }, [closeWizard, draft, loadMailLibrary, mailDefinitions, persistWizardMail, pushToast, runSave])
 
   const handleValidate = async () => {
     if (!draft) return
@@ -2282,18 +4094,7 @@ export const QuestDesignerApp: React.FC = () => {
   const handleDelete = () => {
     if (!draft) return
     if (draft.__unsaved) {
-      syncQuestList(prev => prev.filter(q => q.id !== draft.id))
-      setDraft(null)
-      setSelectedKey(null)
-      persistedIdRef.current = null
-      setDeleteDialogOpen(false)
-      pushToast({
-        title: 'Draft Discarded',
-        message: `${draft.title || draft.id} removed from the queue.`,
-        kind: 'info',
-        dedupeKey: 'quest-delete-success'
-      })
-      signalSessionActivity('quest-delete-draft')
+      setUnsavedDeletePromptOpen(true)
       return
     }
     setDeleteDialogOpen(true)
@@ -2343,6 +4144,29 @@ export const QuestDesignerApp: React.FC = () => {
     setDeleteDialogOpen(false)
   }
 
+  const confirmDiscardUnsavedQuest = () => {
+    if (!draft || !draft.__unsaved) {
+      setUnsavedDeletePromptOpen(false)
+      return
+    }
+    syncQuestList(prev => prev.filter(q => q.id !== draft.id))
+    setDraft(null)
+    setSelectedKey(null)
+    persistedIdRef.current = null
+    setUnsavedDeletePromptOpen(false)
+    pushToast({
+      title: 'Draft Discarded',
+      message: `${draft.title || draft.id} removed from the queue.`,
+      kind: 'info',
+      dedupeKey: 'quest-delete-success'
+    })
+    signalSessionActivity('quest-delete-draft')
+  }
+
+  const cancelDiscardUnsavedQuest = () => {
+    setUnsavedDeletePromptOpen(false)
+  }
+
   if (!isAdmin) {
     return (
       <div className="quest-designer barred">
@@ -2367,7 +4191,10 @@ export const QuestDesignerApp: React.FC = () => {
             <h2>Terminal Quests</h2>
             <p className="muted">{loading ? 'Loading…' : `${quests.length} quest${quests.length === 1 ? '' : 's'}`}</p>
           </div>
-          <button type="button" onClick={handleCreateQuest}>+ New</button>
+        </div>
+        <div className="quest-list-actions">
+          <button type="button" onClick={handleCreateQuest}>+ New Quest</button>
+          <button type="button" className="ghost" onClick={openWizard}>Guided Wizard</button>
         </div>
         <input
           className="quest-search"
@@ -3312,6 +5139,141 @@ export const QuestDesignerApp: React.FC = () => {
         )}
       </section>
     </div>
+      {wizardOpen && (
+        <div
+          className="quest-modal-overlay quest-wizard-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quest-wizard-title"
+          onClick={closeWizard}
+        >
+          <div className="quest-modal quest-wizard" onClick={event => event.stopPropagation()}>
+            <header className="quest-modal-header quest-wizard-header">
+              <div className="quest-wizard-header-top">
+                <div className="quest-wizard-progress" aria-live="polite">
+                  {QUEST_WIZARD_STEPS.map((stepKey, idx) => {
+                    const isActive = wizardStep === stepKey
+                    return (
+                      <button
+                        key={stepKey}
+                        type="button"
+                        className={`ghost wizard-step-chip ${isActive ? 'active' : ''}`}
+                        onClick={() => jumpToWizardStep(stepKey)}
+                        aria-current={isActive ? 'step' : undefined}
+                      >
+                        <span className="wizard-step-index">{idx + 1}</span>
+                        {QUEST_WIZARD_STEP_DETAILS[stepKey].title}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="ghost icon-btn wizard-close"
+                  onClick={handleWizardCancel}
+                  aria-label="Close wizard"
+                  title="Close"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" className="icon-x">
+                    <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.9 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.9a1 1 0 0 0 1.42-1.41L13.41 12l4.9-4.89a1 1 0 0 0 0-1.4z" fill="currentColor" />
+                  </svg>
+                </button>
+              </div>
+              <div className="quest-wizard-header-details">
+                <p className="muted">Guided Build • {wizardProgressLabel}</p>
+                <h2 id="quest-wizard-title">{currentWizardStepDetails.title}</h2>
+                <p className="muted">{currentWizardStepDetails.description}</p>
+              </div>
+            </header>
+            <div className="quest-modal-body quest-wizard-body" ref={wizardBodyRef}>
+              {wizardStepContent}
+            </div>
+            <div className="quest-modal-actions quest-wizard-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={wizardAtFirstStep ? handleWizardCancel : goToPreviousWizardStep}
+              >
+                {wizardAtFirstStep ? 'Cancel' : 'Back'}
+              </button>
+              {wizardStep === 'summary' && (
+                <button type="button" className="ghost danger" onClick={handleWizardCancel}>
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={wizardAtLastStep ? handleWizardFinish : handleWizardNext}
+                disabled={wizardAtLastStep && wizardFinishing}
+              >
+                {wizardAtLastStep ? (wizardFinishing ? 'Saving…' : 'Save & Finish') : 'Next'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {wizardCancelConfirmOpen && (
+        <div
+          className="quest-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wizard-cancel-title"
+          onClick={dismissWizardCancelPrompt}
+        >
+          <div className="quest-modal quest-wizard-cancel" onClick={event => event.stopPropagation()}>
+            <header className="quest-modal-header">
+              <div>
+                <p className="muted">Guided Build • Unsaved Progress</p>
+                <h2 id="wizard-cancel-title">Leave the Wizard?</h2>
+              </div>
+            </header>
+            <div className="quest-modal-body">
+              <p>
+                {draft ? (
+                  <>
+                    Discarding now will abandon changes to <strong>{draft.title || draft.id}</strong> and any staged mails.
+                  </>
+                ) : (
+                  'Discarding now will abandon any staged quest progress.'
+                )}
+              </p>
+              <p className="muted">Choose Resume to keep editing, or Discard to exit the guided flow.</p>
+            </div>
+            <div className="quest-modal-actions">
+              <button type="button" className="ghost" onClick={dismissWizardCancelPrompt}>Resume Wizard</button>
+              <button type="button" className="danger" onClick={confirmWizardCancel}>Discard &amp; Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {unsavedDeletePromptOpen && draft && draft.__unsaved && (
+        <div
+          className="quest-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quest-discard-draft-title"
+          onClick={cancelDiscardUnsavedQuest}
+        >
+          <div className="quest-modal" onClick={event => event.stopPropagation()}>
+            <header className="quest-modal-header">
+              <div>
+                <p className="muted">Quest Management • Draft</p>
+                <h2 id="quest-discard-draft-title">Discard Draft Quest?</h2>
+              </div>
+            </header>
+            <div className="quest-modal-body">
+              <p>
+                Removing <strong>{draft.title || draft.id || 'Untitled Quest'}</strong> will delete this unsaved draft and any wizard progress.
+              </p>
+              <p className="muted">You can always create a fresh quest later from the sidebar.</p>
+            </div>
+            <div className="quest-modal-actions">
+              <button type="button" className="ghost" onClick={cancelDiscardUnsavedQuest}>Keep Draft</button>
+              <button type="button" className="danger" onClick={confirmDiscardUnsavedQuest}>Discard Draft</button>
+            </div>
+          </div>
+        </div>
+      )}
       {pendingDeleteQuest && (
         <div
           className="quest-modal-overlay"
