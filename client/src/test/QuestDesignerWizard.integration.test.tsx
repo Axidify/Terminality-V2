@@ -231,7 +231,8 @@ describe('QuestDesigner wizard summary', () => {
     await screen.findByRole('heading', { level: 2, name: /Intro Email/i })
     await jumpToSummary()
 
-    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+    const wizardSummaryDialog = screen.getByRole('dialog', { name: /Summary & Save/i })
+    fireEvent.click(within(wizardSummaryDialog).getByRole('button', { name: /^Cancel$/ }))
     const confirmDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
     expect(confirmDialog).toBeInTheDocument()
     expect(within(confirmDialog).getByText(/Unsaved Progress/i)).toBeInTheDocument()
@@ -242,7 +243,8 @@ describe('QuestDesigner wizard summary', () => {
     })
     expect(screen.getByRole('heading', { level: 2, name: /Summary & Save/i })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+    const wizardDialog = screen.getByRole('dialog', { name: /Summary & Save/i })
+    fireEvent.click(within(wizardDialog).getByRole('button', { name: /^Cancel$/ }))
     const secondDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
     fireEvent.click(within(secondDialog).getByRole('button', { name: /Discard & Close/i }))
     await waitFor(() => {
@@ -257,9 +259,10 @@ describe('QuestDesigner wizard summary', () => {
     await screen.findByText(/0 quests/i)
     fireEvent.click(screen.getByRole('button', { name: /Guided Wizard/i }))
     await screen.findByRole('heading', { level: 2, name: /Intro Email/i })
+    const wizardIntroDialog = await screen.findByRole('dialog', { name: /Intro Email/i })
     await screen.findByText(/1 quest/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+    fireEvent.click(within(wizardIntroDialog).getByRole('button', { name: /^Cancel$/ }))
     const confirmDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
     fireEvent.click(within(confirmDialog).getByRole('button', { name: /Discard & Close/i }))
 
@@ -268,6 +271,36 @@ describe('QuestDesigner wizard summary', () => {
     })
     await waitFor(() => {
       expect(screen.getByText(/0 quests/i)).toBeInTheDocument()
+    })
+  })
+
+  it('discards staged intro mail drafts when wizard progress is abandoned', async () => {
+    mockListTerminalQuests.mockResolvedValue([])
+    mockListAdminTerminalMail.mockResolvedValue([])
+    await renderDesigner()
+    fireEvent.click(screen.getByRole('button', { name: /Guided Wizard/i }))
+    await screen.findByRole('heading', { level: 2, name: /Intro Email/i })
+
+    fireEvent.change(screen.getByLabelText('Sender Name'), { target: { value: 'Wizard Ops' } })
+    fireEvent.change(screen.getByLabelText('Sender Address'), { target: { value: 'wizard@atlasnet' } })
+    fireEvent.change(screen.getByLabelText('Subject / Hook'), { target: { value: 'Wizard Subject' } })
+    fireEvent.change(screen.getByPlaceholderText(/Operator,/), { target: { value: 'Wizard body copy' } })
+    fireEvent.change(screen.getByLabelText('In-universe Date/Time'), { target: { value: '2089-06-03 08:00' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/ }))
+    await screen.findByRole('heading', { level: 2, name: /Quest Details/i })
+    const wizardDetailsDialog = await screen.findByRole('dialog', { name: /Quest Details/i })
+    await screen.findByText('Wizard Subject')
+
+    fireEvent.click(within(wizardDetailsDialog).getByRole('button', { name: /Close wizard/i }))
+    const confirmDialog = await screen.findByRole('dialog', { name: /Leave the Wizard/i })
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: /Discard & Close/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 2, name: /Quest Details/i })).not.toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Wizard Subject')).not.toBeInTheDocument()
     })
   })
 

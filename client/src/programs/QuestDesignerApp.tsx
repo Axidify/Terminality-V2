@@ -1249,6 +1249,23 @@ export const QuestDesignerApp: React.FC = () => {
     })
   }, [updateCurrentQuest])
 
+  const cleanupWizardMailDrafts = useCallback((questId: string | null) => {
+    if (!questId) return
+    const stagedIds: string[] = []
+    setMailDefinitionsState(prev => {
+      const removable = prev.filter(mail => mail.linkedQuestId === questId && !serverMailIdsRef.current.has(mail.id))
+      if (!removable.length) return prev
+      stagedIds.push(...removable.map(mail => mail.id))
+      return prev.filter(entry => !stagedIds.includes(entry.id))
+    })
+    if (!stagedIds.length) return
+    stagedIds.forEach(id => {
+      delete mailSnapshotRef.current[id]
+      serverMailIdsRef.current.delete(id)
+      removeMailIdFromQuest(id)
+    })
+  }, [removeMailIdFromQuest])
+
   const upsertMailDefinition = useCallback((message: MailMessageDefinition) => {
     setMailDefinitionsState(prev => {
       const next = prev.filter(entry => entry.id !== message.id)
@@ -1599,12 +1616,16 @@ export const QuestDesignerApp: React.FC = () => {
       if (!STEP_TYPES.includes(step.type as StepType)) {
         errors.push(`${label} has an unsupported step type.`)
       }
+      const needsTargetSystem = step.type === 'SCAN_HOST' || step.type === 'CONNECT_HOST' || step.type === 'DISCONNECT_HOST' || step.type === 'DELETE_FILE'
       const targetIp = step.params?.target_ip?.trim()
       if (!targetIp) {
         errors.push(`${label} requires a target host / IP.`)
       }
       if (step.type === 'DELETE_FILE' && !step.params?.file_path?.trim()) {
         errors.push(`${label} must include a file path.`)
+      }
+      if (needsTargetSystem && !(step.target_system_id || quest.default_system_id)) {
+        errors.push(`${label} needs a system profile (pick a default or assign it per-step).`)
       }
     })
     setWizardQuestStepsErrors(errors)
@@ -1633,6 +1654,13 @@ export const QuestDesignerApp: React.FC = () => {
       }
       return { ...step, params: nextParams }
     })
+  }, [handleWizardStepUpdate])
+
+  const handleWizardStepTargetSystemChange = useCallback((index: number, value: string) => {
+    handleWizardStepUpdate(index, step => ({
+      ...step,
+      target_system_id: value?.trim() ? value : undefined
+    }))
   }, [handleWizardStepUpdate])
 
   const handleWizardStepTypeChange = useCallback((index: number, type: StepType) => {
@@ -1817,6 +1845,13 @@ export const QuestDesignerApp: React.FC = () => {
     upsertMailDefinition(result)
     return result
   }, [draft?.id, upsertMailDefinition])
+
+  const systemOptions = useMemo(() => (
+    systemProfilesState.map(profile => ({
+      id: profile.id,
+      label: `${profile.label}${profile.identifiers?.ips?.length ? ` (${profile.identifiers.ips[0]})` : ''}`
+    }))
+  ), [systemProfilesState])
 
   const wizardQuestTagInput = useTagInput({
     values: draft?.tags || [],
@@ -2152,6 +2187,24 @@ export const QuestDesignerApp: React.FC = () => {
               {wizardQuestTagInput.Input}
             </label>
           </div>
+          <div className="wizard-field-grid">
+            <label data-tooltip={FIELD_HINTS.defaultSystem}>
+              Default System
+              <select
+                value={draft.default_system_id || ''}
+                onChange={e => handleQuestMetadataChange('default_system_id', e.target.value || undefined)}
+                disabled={systemsLoading}
+              >
+                <option value="">Unassigned (set per step)</option>
+                {systemOptions.map(option => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
+              <span className="muted helper">
+                {systemsLoading ? 'Loading system profiles…' : 'Applied whenever a step does not pick a specific target system.'}
+              </span>
+            </label>
+          </div>
           <div className="wizard-field-group">
             <label className="full" data-tooltip={FIELD_HINTS.designerNotes}>
               Designer Notes (internal)
@@ -2256,6 +2309,19 @@ export const QuestDesignerApp: React.FC = () => {
                       <select value={step.type} onChange={e => handleWizardStepTypeChange(index, e.target.value as StepType)}>
                         {STEP_TYPES.map(type => (
                           <option key={type} value={type}>{STEP_TYPE_LABELS[type]}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label data-tooltip={FIELD_HINTS.stepTargetSystem}>
+                      Target System
+                      <select
+                        value={step.target_system_id || ''}
+                        onChange={e => handleWizardStepTargetSystemChange(index, e.target.value)}
+                        disabled={systemsLoading}
+                      >
+                        <option value="">Quest Default {draft.default_system_id ? `(${draft.default_system_id})` : ''}</option>
+                        {systemOptions.map(option => (
+                          <option key={option.id} value={option.id}>{option.label}</option>
                         ))}
                       </select>
                     </label>
@@ -2643,6 +2709,7 @@ export const QuestDesignerApp: React.FC = () => {
     handleWizardStepDuplicate,
     handleWizardStepIdChange,
     handleWizardStepMove,
+    handleWizardStepTargetSystemChange,
     handleWizardStepParamChange,
     handleWizardStepTypeChange,
     handleWizardStepDelete,
@@ -2665,7 +2732,9 @@ export const QuestDesignerApp: React.FC = () => {
     wizardQuestStepsErrors,
     wizardQuestTagInput.Input,
     wizardSummaryErrors,
-    wizardStep
+    wizardStep,
+    systemOptions,
+    systemsLoading
   ])
 
   useEffect(() => {
@@ -2678,6 +2747,9 @@ export const QuestDesignerApp: React.FC = () => {
     const questId = wizardEntryQuestIdRef.current
     const createdByWizard = wizardCreatedQuestRef.current
     const previousQuestId = wizardPreviousQuestIdRef.current
+    if (questId) {
+      cleanupWizardMailDrafts(questId)
+    }
     resetWizardEntryTracking()
     if (!questId) return
 
@@ -2702,7 +2774,7 @@ export const QuestDesignerApp: React.FC = () => {
     } else {
       selectQuest(null)
     }
-  }, [quests, resetWizardEntryTracking, selectQuest, syncQuestList])
+  }, [cleanupWizardMailDrafts, quests, resetWizardEntryTracking, selectQuest, syncQuestList])
 
   useEffect(() => {
     if (!wizardOpen) {
@@ -3450,13 +3522,6 @@ export const QuestDesignerApp: React.FC = () => {
   }, [draft, quests])
 
   const pendingDeleteQuest = deleteDialogOpen && draft && !draft.__unsaved ? draft : null
-
-  const systemOptions = useMemo(() => (
-    systemProfilesState.map(profile => ({
-      id: profile.id,
-      label: `${profile.label}${profile.identifiers?.ips?.length ? ` (${profile.identifiers.ips[0]})` : ''}`
-    }))
-  ), [systemProfilesState])
 
   const questStatusTimestampLabel = useMemo(() => {
     if (!questStatusTimestamp) return 'Snapshot not captured yet.'
