@@ -4039,10 +4039,10 @@ export const QuestDesignerApp: React.FC = () => {
             <h2>Terminal Quests</h2>
             <p className="muted">{loading ? 'Loading…' : `${quests.length} quest${quests.length === 1 ? '' : 's'}`}</p>
           </div>
-          <div className="quest-list-actions">
-            <button type="button" className="ghost" onClick={openWizard}>Guided Wizard</button>
-            <button type="button" onClick={handleCreateQuest}>+ New</button>
-          </div>
+        </div>
+        <div className="quest-list-actions">
+          <button type="button" onClick={handleCreateQuest}>+ New Quest</button>
+          <button type="button" className="ghost" onClick={openWizard}>Guided Wizard</button>
         </div>
         <input
           className="quest-search"
@@ -4996,13 +4996,42 @@ export const QuestDesignerApp: React.FC = () => {
           onClick={closeWizard}
         >
           <div className="quest-modal quest-wizard" onClick={event => event.stopPropagation()}>
-            <header className="quest-modal-header">
-              <div>
+            <header className="quest-modal-header quest-wizard-header">
+              <div className="quest-wizard-header-top">
+                <div className="quest-wizard-progress" aria-live="polite">
+                  {QUEST_WIZARD_STEPS.map((stepKey, idx) => {
+                    const isActive = wizardStep === stepKey
+                    return (
+                      <button
+                        key={stepKey}
+                        type="button"
+                        className={`ghost wizard-step-chip ${isActive ? 'active' : ''}`}
+                        onClick={() => jumpToWizardStep(stepKey)}
+                        aria-current={isActive ? 'step' : undefined}
+                      >
+                        <span className="wizard-step-index">{idx + 1}</span>
+                        {QUEST_WIZARD_STEP_DETAILS[stepKey].title}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="ghost icon-btn wizard-close"
+                  onClick={handleWizardCancel}
+                  aria-label="Close wizard"
+                  title="Close"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" className="icon-x">
+                    <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.9 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.9a1 1 0 0 0 1.42-1.41L13.41 12l4.9-4.89a1 1 0 0 0 0-1.4z" fill="currentColor" />
+                  </svg>
+                </button>
+              </div>
+              <div className="quest-wizard-header-details">
                 <p className="muted">Guided Build • {wizardProgressLabel}</p>
                 <h2 id="quest-wizard-title">{currentWizardStepDetails.title}</h2>
                 <p className="muted">{currentWizardStepDetails.description}</p>
               </div>
-              <button type="button" className="ghost" onClick={handleWizardCancel}>Close</button>
             </header>
             <div className="quest-modal-body quest-wizard-body">
               {wizardStepContent}
@@ -5015,23 +5044,6 @@ export const QuestDesignerApp: React.FC = () => {
               >
                 {wizardAtFirstStep ? 'Cancel' : 'Back'}
               </button>
-              <div className="quest-wizard-progress" aria-live="polite">
-                {QUEST_WIZARD_STEPS.map((stepKey, idx) => {
-                  const isActive = wizardStep === stepKey
-                  return (
-                    <button
-                      key={stepKey}
-                      type="button"
-                      className={`ghost wizard-step-chip ${isActive ? 'active' : ''}`}
-                      onClick={() => jumpToWizardStep(stepKey)}
-                      aria-current={isActive ? 'step' : undefined}
-                    >
-                      <span className="wizard-step-index">{idx + 1}</span>
-                      {QUEST_WIZARD_STEP_DETAILS[stepKey].title}
-                    </button>
-                  )
-                })}
-              </div>
               {wizardStep === 'summary' && (
                 <button type="button" className="ghost danger" onClick={handleWizardCancel}>
                   Cancel

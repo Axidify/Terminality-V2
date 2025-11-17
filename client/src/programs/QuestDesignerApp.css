@@ -193,12 +193,18 @@
 }
 
 .quest-list-actions {
-  display: flex;
-  gap: 0.35rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.4rem;
+  margin-top: 0.25rem;
 }
 
 .quest-list-actions button {
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  justify-content: center;
 }
 
 .quest-search {
@@ -694,11 +700,66 @@
 }
 
 .quest-wizard-overlay .quest-modal {
-  width: min(720px, 95%);
-  max-height: 90vh;
+  width: min(880px, 95%);
+  max-height: 92vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.quest-wizard-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.quest-wizard-header-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.quest-wizard-header-top > .quest-wizard-progress {
+  flex: 1;
+}
+
+.quest-wizard-header-top button {
+  flex-shrink: 0;
+}
+
+.wizard-close {
+  background: transparent;
+  color: var(--color-textDim);
+  border: 1px solid transparent;
+  padding: 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wizard-close .icon-x {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.wizard-close:hover,
+.wizard-close:focus {
+  color: var(--color-text);
+  border-color: rgba(var(--color-primary-rgb), 0.15);
+  background: rgba(255,255,255,0.02);
+  outline: none;
+}
+
+.wizard-close:focus {
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.12);
+}
+
+.quest-wizard-header-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .quest-modal-header h2 {
@@ -716,6 +777,27 @@
 
 .quest-wizard-body {
   min-height: 220px;
+  flex: 1;
+  overflow-y: auto;
+  margin: 1rem 0;
+  padding-right: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--color-primary-rgb), 0.75) rgba(0, 0, 0, 0.4);
+}
+
+.quest-wizard-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.quest-wizard-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+}
+
+.quest-wizard-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(var(--color-primary-rgb), 0.8), rgba(var(--color-secondary-rgb), 0.7));
+  border-radius: 8px;
+  box-shadow: 0 0 8px rgba(var(--color-primary-rgb), 0.5);
 }
 
 .quest-modal-card {
@@ -767,7 +849,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
-  justify-content: space-between;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(var(--color-primary-rgb), 0.25);
+  padding-top: 0.75rem;
 }
 
 .quest-wizard-progress {
@@ -775,7 +859,7 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.4rem;
-  flex: 1;
+  min-height: 32px;
 }
 
 .wizard-step-chip {
