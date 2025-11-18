@@ -154,6 +154,71 @@
           "content": ""
         }
       }
+    },
+    {
+      "id": "quest_1763476335166_default_system",
+      "label": "Untitled Quest System",
+      "description": "asdasd",
+      "identifiers": {
+        "ips": [
+          "10.10.10.40"
+        ],
+        "hostnames": []
+      },
+      "metadata": {
+        "username": "guest",
+        "startingPath": "/",
+        "footprint": "",
+        "scopeBindings": {
+          "questTemplateId": "quest_1763476335166"
+        }
+      },
+      "filesystem": {
+        "/": {
+          "type": "dir",
+          "name": "",
+          "path": "/",
+          "children": [
+            "/config",
+            "/logs",
+            "/README.txt"
+          ]
+        },
+        "/config": {
+          "type": "dir",
+          "name": "config",
+          "path": "/config",
+          "children": [
+            "/config/system.json"
+          ]
+        },
+        "/logs": {
+          "type": "dir",
+          "name": "logs",
+          "path": "/logs",
+          "children": [
+            "/logs/.gitkeep"
+          ]
+        },
+        "/README.txt": {
+          "type": "file",
+          "name": "README.txt",
+          "path": "/README.txt",
+          "content": "System: quest_1763476335166_default_system\nScope: quest_template\n\nCustomize this host to guide the quest narrative."
+        },
+        "/config/system.json": {
+          "type": "file",
+          "name": "system.json",
+          "path": "/config/system.json",
+          "content": "{\n  \"systemId\": \"quest_1763476335166_default_system\",\n  \"version\": 1\n}"
+        },
+        "/logs/.gitkeep": {
+          "type": "file",
+          "name": ".gitkeep",
+          "path": "/logs/.gitkeep",
+          "content": ""
+        }
+      }
     }
   ],
   "templates": [
@@ -317,5 +382,5 @@
       }
     }
   ],
-  "lastUpdated": "2025-11-18T12:20:29.117Z"
+  "lastUpdated": "2025-11-18T14:33:19.064Z"
 }

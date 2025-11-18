@@ -203,16 +203,6 @@ interface WizardCompletionMailDraft {
   inUniverseDate: string
 }
 
-interface WizardSystemTemplateDraft {
-  stepIndex: number
-  label: string
-  systemId: string
-  ip: string
-  username: string
-  startingPath: string
-  footprint: string
-}
-
 const INTRO_MAIL_DELIVERY_OPTIONS: Array<{ value: QuestIntroDeliveryCondition; label: string; description: string }> = [
   { value: 'game_start', label: 'On game start / new save', description: 'Delivered to every operator mailbox when a new save or profile starts.' },
   { value: 'after_quest', label: 'After another quest completes', description: 'Delivered immediately after the selected quest resolves.' },
@@ -229,9 +219,9 @@ const QUEST_DIFFICULTY_OPTIONS = ['Easy', 'Normal', 'Hard']
 const QUEST_CATEGORY_SUGGESTIONS = ['Atlas', 'Underground', 'Corporate', 'Civic', 'Freelance']
 const QUEST_TAG_SUGGESTIONS = ['stealth', 'data theft', 'cleanup', 'ops', 'heist']
 
-type QuestWizardStep = 'introEmail' | 'questCore' | 'questSteps' | 'filesystem' | 'completionEmail' | 'summary'
+type QuestWizardStep = 'introEmail' | 'questCore' | 'questSteps' | 'completionEmail' | 'summary'
 
-const QUEST_WIZARD_STEPS: QuestWizardStep[] = ['introEmail', 'questCore', 'questSteps', 'filesystem', 'completionEmail', 'summary']
+const QUEST_WIZARD_STEPS: QuestWizardStep[] = ['introEmail', 'questCore', 'questSteps', 'completionEmail', 'summary']
 
 const QUEST_WIZARD_STEP_DETAILS: Record<QuestWizardStep, { title: string; description: string }> = {
   introEmail: {
@@ -245,10 +235,6 @@ const QUEST_WIZARD_STEP_DETAILS: Record<QuestWizardStep, { title: string; descri
   questSteps: {
     title: 'Quest Steps',
     description: 'Outline the interactive steps players must complete.'
-  },
-  filesystem: {
-    title: 'Filesystems',
-    description: 'Design filesystem layouts for every system targeted in this quest.'
   },
   completionEmail: {
     title: 'Completion Email',
@@ -646,6 +632,7 @@ const createBlankStep = (index: number): OperationStep => ({
 const COMPLETION_STEP_TYPES = new Set<StepType>(STEP_TYPES)
 type SystemWizardStep = 'type' | 'source' | 'configure'
 type SystemWizardMode = 'create' | 'override'
+type SystemWizardAssignment = { kind: 'step'; stepIndex: number } | { kind: 'default' }
 
 type ToolBindingDraft = {
   id: string
@@ -1250,13 +1237,9 @@ export const QuestDesignerApp: React.FC = () => {
   const [wizardQuestStepsErrors, setWizardQuestStepsErrors] = useState<string[]>([])
   const [wizardCompletionMailDraft, setWizardCompletionMailDraft] = useState<WizardCompletionMailDraft>(() => createWizardCompletionMailDraft())
   const [wizardCompletionMailErrors, setWizardCompletionMailErrors] = useState<string[]>([])
-  const [wizardFilesystemErrors, setWizardFilesystemErrors] = useState<string[]>([])
   const [wizardSummaryErrors, setWizardSummaryErrors] = useState<string[]>([])
   const [wizardFinishing, setWizardFinishing] = useState(false)
   const [wizardCancelConfirmOpen, setWizardCancelConfirmOpen] = useState(false)
-  const [wizardSystemTemplateDraft, setWizardSystemTemplateDraft] = useState<WizardSystemTemplateDraft | null>(null)
-  const [wizardSystemTemplateError, setWizardSystemTemplateError] = useState<string | null>(null)
-  const [wizardSystemTemplateSaving, setWizardSystemTemplateSaving] = useState(false)
   const [questTagSuggestions, setQuestTagSuggestions] = useState<string[]>(QUEST_TAG_SUGGESTIONS)
   const flagKeyListId = useId()
   const rewardFlagKeyListId = useId()
@@ -1274,6 +1257,7 @@ export const QuestDesignerApp: React.FC = () => {
   const wizardBodyRef = useRef<HTMLDivElement | null>(null)
   const wizardAlertRef = useRef<HTMLDivElement | null>(null)
   const systemWizardBodyRef = useRef<HTMLDivElement | null>(null)
+  const [systemWizardAssignment, setSystemWizardAssignment] = useState<SystemWizardAssignment | null>(null)
   const resetWizardEntryTracking = useCallback(() => {
     wizardEntryQuestIdRef.current = null
     wizardPreviousQuestIdRef.current = null
@@ -1660,8 +1644,6 @@ export const QuestDesignerApp: React.FC = () => {
     setWizardQuestStepsErrors([])
     setWizardCompletionMailErrors([])
     setWizardSummaryErrors([])
-    setWizardSystemTemplateDraft(null)
-    setWizardSystemTemplateError(null)
     setWizardFinishing(false)
     resetWizardEntryTracking()
   }, [resetWizardEntryTracking])
@@ -1682,8 +1664,6 @@ export const QuestDesignerApp: React.FC = () => {
     setWizardQuestStepsErrors([])
     setWizardCompletionMailErrors([])
     setWizardSummaryErrors([])
-    setWizardSystemTemplateDraft(null)
-    setWizardSystemTemplateError(null)
     setWizardFinishing(false)
     setWizardCancelConfirmOpen(false)
     setWizardStep(QUEST_WIZARD_STEPS[0])
@@ -1703,120 +1683,6 @@ export const QuestDesignerApp: React.FC = () => {
     setWizardCompletionMailErrors([])
     setWizardCompletionMailDraft(prev => ({ ...prev, ...patch }))
   }, [])
-
-  const saveWizardSystemTemplate = useCallback(async () => {
-    if (!wizardSystemTemplateDraft) return
-    const trimmedLabel = wizardSystemTemplateDraft.label.trim()
-    if (!trimmedLabel) {
-      setWizardSystemTemplateError('Template name is required.')
-      return
-    }
-    const normalizedId = sanitizeSystemId(wizardSystemTemplateDraft.systemId || trimmedLabel)
-    if (!normalizedId) {
-      setWizardSystemTemplateError('System ID can only contain letters, numbers, underscores, and dashes.')
-      return
-    }
-    if (
-      systemProfilesState.some(profile => profile.id === normalizedId) ||
-      systemDefinitionsState.some(definition => definition.id === normalizedId)
-    ) {
-      setWizardSystemTemplateError('System ID already exists. Choose another value.')
-      return
-    }
-    const ipValue = wizardSystemTemplateDraft.ip.trim()
-    const resolvedRootPath = wizardSystemTemplateDraft.startingPath.trim() || '/'
-    const filesystemSnapshot = createSystemFilesystemLayout({
-      systemId: normalizedId,
-      scope: 'global',
-      rootPath: resolvedRootPath
-    })
-    const definition: SystemDefinition = {
-      id: normalizedId,
-      key: normalizedId,
-      name: trimmedLabel,
-      label: trimmedLabel,
-      kind: 'profile',
-      type: 'filesystem',
-      scope: 'global',
-      network: {
-        primaryIp: ipValue || undefined,
-        ips: ipValue ? [ipValue] : [],
-        hostnames: []
-      },
-      credentials: {
-        username: wizardSystemTemplateDraft.username.trim() || 'operator',
-        startingPath: resolvedRootPath
-      },
-      metadata: {
-        description: trimmedLabel,
-        footprint: wizardSystemTemplateDraft.footprint.trim(),
-        tags: []
-      },
-      filesystem: {
-        rootPath: resolvedRootPath,
-        readOnly: false,
-        snapshot: filesystemSnapshot
-      }
-    }
-    setWizardSystemTemplateSaving(true)
-    try {
-      const response = await saveSystemDefinition(definition)
-      const savedDefinition = response.definition
-      if (savedDefinition) {
-        setSystemDefinitionsState(prev => upsertByLabel(prev, savedDefinition))
-      }
-      if (response.profile) {
-        setSystemProfilesState(prev => upsertByLabel(prev, response.profile))
-      }
-      const savedSystemId = savedDefinition?.id || response.profile?.id || normalizedId
-      const resolvedTargetIp = ipValue || savedDefinition?.network.primaryIp || savedDefinition?.network.ips[0] || ''
-      updateCurrentQuest(prev => {
-        if (!prev) return prev
-        const stepIndex = wizardSystemTemplateDraft.stepIndex
-        const nextSteps = prev.steps.map((step, idx) => {
-          if (idx !== stepIndex) return step
-          const nextStep: OperationStep = {
-            ...step,
-            target_system_id: savedSystemId,
-            params: { ...(step.params || {}) }
-          }
-          if (resolvedTargetIp && (!nextStep.params?.target_ip || !nextStep.params.target_ip.trim())) {
-            nextStep.params = { ...nextStep.params, target_ip: resolvedTargetIp }
-          }
-          return nextStep
-        })
-        const nextDraft = { ...prev, steps: nextSteps }
-        if (!nextDraft.default_system_id) {
-          nextDraft.default_system_id = savedSystemId
-        }
-        return nextDraft
-      })
-      const toastLabel = savedDefinition?.label || response.profile?.label || trimmedLabel
-      pushToast({
-        title: 'Target System Added',
-        message: `${toastLabel} is ready and assigned to this step.`,
-        kind: 'success',
-        dedupeKey: `wizard-system-template-${savedSystemId}`
-      })
-      setWizardSystemTemplateDraft(null)
-      setWizardSystemTemplateError(null)
-    } catch (err: any) {
-      console.error('[quest designer] failed to create wizard system template', err)
-      const friendly = err?.message || 'Failed to create template.'
-      setWizardSystemTemplateError(friendly)
-      pushToast({ title: 'Template Save Failed', message: friendly, kind: 'error', dedupeKey: 'wizard-system-template-error' })
-    } finally {
-      setWizardSystemTemplateSaving(false)
-    }
-  }, [
-    pushToast,
-    setSystemDefinitionsState,
-    setSystemProfilesState,
-    systemDefinitionsState,
-    systemProfilesState,
-    updateCurrentQuest,
-    wizardSystemTemplateDraft
-  ])
 
   const handleIntroEmailNext = useCallback(() => {
     const activeQuest = ensureQuestDraft()
@@ -1963,23 +1829,6 @@ export const QuestDesignerApp: React.FC = () => {
 
   const hasFilesystemLayout = useCallback((map?: FilesystemMap | null) => !!(map && Object.keys(map).length), [])
 
-  const handleFilesystemStepNext = useCallback(() => {
-    const quest = ensureQuestDraft()
-    const overrideIds = Object.keys(quest.embedded_filesystems || {})
-    if (!overrideIds.length) {
-      setWizardFilesystemErrors([])
-      goToNextWizardStep()
-      return
-    }
-    const incomplete = overrideIds.filter(systemId => !hasFilesystemLayout(quest.embedded_filesystems?.[systemId]))
-    if (incomplete.length) {
-      setWizardFilesystemErrors(incomplete.map(id => `Finish configuring the filesystem layout for ${id}.`))
-      return
-    }
-    setWizardFilesystemErrors([])
-    goToNextWizardStep()
-  }, [ensureQuestDraft, goToNextWizardStep, hasFilesystemLayout])
-
   const handleWizardStepUpdate = useCallback((index: number, updater: (step: OperationStep) => OperationStep) => {
     setWizardQuestStepsErrors([])
     updateCurrentQuest(prev => {
@@ -2088,35 +1937,49 @@ export const QuestDesignerApp: React.FC = () => {
     })
   }, [updateCurrentQuest])
 
-  const openWizardSystemTemplateCreator = useCallback((stepIndex: number) => {
+  const openSystemWizardForCreate = useCallback((options?: { seed?: Partial<SystemWizardDraft>; assignment?: SystemWizardAssignment | null }) => {
+    setSystemWizardMode('create')
+    setSystemWizardDraft(createSystemWizardDraft(options?.seed))
+    setSystemWizardStep('type')
+    setSystemWizardError(null)
+    setSystemWizardAssignment(options?.assignment ?? null)
+    setSystemWizardOpen(true)
+  }, [])
+
+  const handleQuestStepSystemCreate = useCallback((stepIndex: number) => {
     if (!draft) return
     const targetStep = draft.steps[stepIndex]
     const baseId = targetStep?.target_system_id || `${draft.id || 'quest'}_${targetStep?.id || `system_${stepIndex + 1}`}`
     const sanitizedBaseId = sanitizeSystemId(baseId) || `system_${Date.now()}`
-    const defaultLabel = targetStep?.target_system_id || targetStep?.id
-      ? `${(targetStep?.id || baseId).replace(/_/g, ' ')}`.trim()
-      : `System ${stepIndex + 1}`
-    setWizardSystemTemplateDraft({
-      stepIndex,
-      label: defaultLabel || `System ${stepIndex + 1}`,
-      systemId: sanitizedBaseId,
-      ip: '',
-      username: 'operator',
-      startingPath: '/',
-      footprint: ''
+    const defaultLabel = targetStep?.id ? targetStep.id.replace(/_/g, ' ') : `System ${stepIndex + 1}`
+    const questSeed: Partial<SystemWizardDraft> = {
+      id: sanitizedBaseId,
+      label: defaultLabel.trim() || `System ${stepIndex + 1}`,
+      scope: 'quest_template',
+      appliesTo: draft.id ? { questTemplateId: draft.id } : undefined
+    }
+    openSystemWizardForCreate({
+      seed: questSeed,
+      assignment: { kind: 'step', stepIndex }
     })
-    setWizardSystemTemplateError(null)
-  }, [draft])
+  }, [draft, openSystemWizardForCreate])
 
-  const closeWizardSystemTemplateCreator = useCallback(() => {
-    setWizardSystemTemplateDraft(null)
-    setWizardSystemTemplateError(null)
-  }, [])
-
-  const updateWizardSystemTemplateDraft = useCallback(<K extends keyof Omit<WizardSystemTemplateDraft, 'stepIndex'>>(field: K, value: WizardSystemTemplateDraft[K]) => {
-    setWizardSystemTemplateError(null)
-    setWizardSystemTemplateDraft(prev => (prev ? { ...prev, [field]: value } : prev))
-  }, [])
+  const handleQuestDefaultSystemCreate = useCallback(() => {
+    if (!draft) return
+    const baseId = draft.default_system_id || `${draft.id || 'quest'}_default_system`
+    const sanitizedBaseId = sanitizeSystemId(baseId) || `system_${Date.now()}`
+    const label = draft.title ? `${draft.title} System` : `${draft.id || 'quest'} Default System`
+    const questSeed: Partial<SystemWizardDraft> = {
+      id: sanitizedBaseId,
+      label,
+      scope: 'quest_template',
+      appliesTo: draft.id ? { questTemplateId: draft.id } : undefined
+    }
+    openSystemWizardForCreate({
+      seed: questSeed,
+      assignment: { kind: 'default' }
+    })
+  }, [draft, openSystemWizardForCreate])
 
   const handleWizardAddStep = useCallback(() => {
     const quest = ensureQuestDraft()
@@ -2597,22 +2460,27 @@ export const QuestDesignerApp: React.FC = () => {
             </label>
           </div>
           <div className="wizard-field-grid">
-            <label data-tooltip={FIELD_HINTS.defaultSystem}>
-              Default System
-              <select
-                value={draft.default_system_id || ''}
-                onChange={e => handleQuestMetadataChange('default_system_id', e.target.value || undefined)}
-                disabled={systemsLoading}
-              >
-                <option value="">Unassigned (set per step)</option>
-                {systemOptions.map(option => (
-                  <option key={option.id} value={option.id}>{option.label}</option>
-                ))}
-              </select>
-              <span className="muted helper">
-                {systemsLoading ? 'Loading system profiles…' : 'Applied whenever a step does not pick a specific target system.'}
-              </span>
-            </label>
+            <div className="wizard-target-system-field" data-tooltip={FIELD_HINTS.defaultSystem}>
+              <label>
+                Default System
+                <select
+                  value={draft.default_system_id || ''}
+                  onChange={e => handleQuestMetadataChange('default_system_id', e.target.value || undefined)}
+                  disabled={systemsLoading}
+                >
+                  <option value="">Unassigned (set per step)</option>
+                  {systemOptions.map(option => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                </select>
+                <span className="muted helper">
+                  {systemsLoading ? 'Loading system profiles…' : 'Applied whenever a step does not pick a specific target system.'}
+                </span>
+              </label>
+              <button type="button" className="ghost" onClick={handleQuestDefaultSystemCreate}>
+                Launch System Wizard
+              </button>
+            </div>
           </div>
           <div className="wizard-field-group">
             <label className="full" data-tooltip={FIELD_HINTS.designerNotes}>
@@ -2736,80 +2604,10 @@ export const QuestDesignerApp: React.FC = () => {
                           ))}
                         </select>
                       </label>
-                      <button type="button" className="ghost" onClick={() => openWizardSystemTemplateCreator(index)}>
-                        Create New Template
+                      <button type="button" className="ghost" onClick={() => handleQuestStepSystemCreate(index)}>
+                        Launch System Wizard
                       </button>
                     </div>
-                    {wizardSystemTemplateDraft?.stepIndex === index && (
-                      <div className="wizard-system-template-panel">
-                        <p className="muted">Give the target a label and ID; we will assign it to this step immediately.</p>
-                        <div className="wizard-field-grid wizard-system-template-grid">
-                          <label>
-                            Template Name
-                            <input
-                              value={wizardSystemTemplateDraft.label}
-                              onChange={e => updateWizardSystemTemplateDraft('label', e.target.value)}
-                              placeholder="Atlas Relay"
-                            />
-                          </label>
-                          <label>
-                            System ID
-                            <input
-                              value={wizardSystemTemplateDraft.systemId}
-                              onChange={e => updateWizardSystemTemplateDraft('systemId', e.target.value)}
-                              placeholder="relay_alpha"
-                            />
-                          </label>
-                          <label>
-                            Primary IP (optional)
-                            <input
-                              value={wizardSystemTemplateDraft.ip}
-                              onChange={e => updateWizardSystemTemplateDraft('ip', e.target.value)}
-                              placeholder="10.0.0.24"
-                            />
-                          </label>
-                          <label>
-                            Username (optional)
-                            <input
-                              value={wizardSystemTemplateDraft.username}
-                              onChange={e => updateWizardSystemTemplateDraft('username', e.target.value)}
-                              placeholder="operator"
-                            />
-                          </label>
-                          <label>
-                            Starting Path
-                            <input
-                              value={wizardSystemTemplateDraft.startingPath}
-                              onChange={e => updateWizardSystemTemplateDraft('startingPath', e.target.value)}
-                              placeholder="/home/operator"
-                            />
-                          </label>
-                          <label className="full">
-                            Footprint Notes
-                            <textarea
-                              rows={2}
-                              value={wizardSystemTemplateDraft.footprint}
-                              onChange={e => updateWizardSystemTemplateDraft('footprint', e.target.value)}
-                              placeholder="Optional context for filesystem overrides."
-                            />
-                          </label>
-                        </div>
-                        {wizardSystemTemplateError && (
-                          <div className="inline-alert error" role="alert">
-                            <strong>Template Error</strong>
-                            <p>{wizardSystemTemplateError}</p>
-                          </div>
-                        )}
-                        <div className="wizard-system-template-actions">
-                          <button type="button" onClick={saveWizardSystemTemplate} disabled={wizardSystemTemplateSaving}>
-                            {wizardSystemTemplateSaving ? 'Saving Template…' : 'Save Template & Assign'}
-                          </button>
-                          <button type="button" className="ghost" onClick={closeWizardSystemTemplateCreator}>
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     <label data-tooltip={FIELD_HINTS.stepAutoAdvance}>
                       Auto Advance
                       <input
@@ -2866,92 +2664,6 @@ export const QuestDesignerApp: React.FC = () => {
           <button type="button" className="wizard-add-step" onClick={handleWizardAddStep}>
             + Add custom step
           </button>
-        </div>
-      )
-    }
-    if (wizardStep === 'filesystem') {
-      if (!draft) {
-        return (
-          <div className="quest-wizard-placeholder">
-            <p>Stage or select a quest before designing its filesystems.</p>
-          </div>
-        )
-      }
-      if (!systemIdsInUse.length) {
-        return (
-          <div className="quest-wizard-placeholder">
-            <p>Assign a default system or per-step targets to unlock filesystem editing.</p>
-          </div>
-        )
-      }
-      return (
-        <div className="quest-wizard-form filesystem-wizard-form">
-          {wizardFilesystemErrors.length > 0 && (
-            <div
-              className="inline-alert error"
-              role="alert"
-              tabIndex={-1}
-              ref={wizardStep === 'filesystem' ? wizardAlertRef : undefined}
-            >
-              <strong>Add filesystem layouts before continuing</strong>
-              <ul>
-                {wizardFilesystemErrors.map(message => <li key={message}>{message}</li>)}
-              </ul>
-            </div>
-          )}
-          <p className="muted">Each targeted system needs a quest-scoped filesystem so runtime hacks spawn with the correct directories and files.</p>
-          <div className="filesystem-wizard-grid">
-            {questSystemSummaries.map(summary => {
-              const override = summary.override
-              const resolvedDefinition = summary.resolvedDefinition || summary.baseDefinition
-              const label = override?.label || resolvedDefinition?.label || summary.fallbackProfile?.label || summary.systemId
-              const isDefault = draft?.default_system_id === summary.systemId
-              const questFilesystem = summary.questFilesystem
-              const filesystemReady = !!questFilesystem
-              const editorOpen = openFilesystemEditors.includes(summary.systemId)
-              return (
-                <div key={`filesystem-wizard-${summary.systemId}`} className="filesystem-wizard-card">
-                  <div className="filesystem-wizard-header">
-                    <div>
-                      <strong>{label}</strong>
-                      <span className="muted">{summary.systemId}</span>
-                    </div>
-                    {isDefault && <span className="pill">Quest Default</span>}
-                  </div>
-                  <p className="muted">
-                    {filesystemReady ? 'Filesystem override ready.' : 'No filesystem override yet.'}
-                  </p>
-                  <div className="filesystem-wizard-actions">
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => toggleFilesystemEditor(summary.systemId)}
-                      disabled={!draft}
-                    >
-                      {editorOpen ? 'Close Editor' : filesystemReady ? 'Edit Filesystem' : 'Design Filesystem'}
-                    </button>
-                    {filesystemReady && (
-                      <button
-                        type="button"
-                        className="ghost danger"
-                        onClick={() => clearEmbeddedFilesystem(summary.systemId)}
-                        disabled={!draft}
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                  {editorOpen && (
-                    <FilesystemOverrideEditor
-                      systemId={summary.systemId}
-                      value={questFilesystem}
-                      onChange={next => updateEmbeddedFilesystem(summary.systemId, next)}
-                    />
-                  )}
-                </div>
-              )
-            })}
-          </div>
         </div>
       )
     }
@@ -3306,6 +3018,8 @@ export const QuestDesignerApp: React.FC = () => {
     handleWizardStepParamChange,
     handleWizardStepTypeChange,
     handleWizardStepDelete,
+    handleQuestStepSystemCreate,
+    handleQuestDefaultSystemCreate,
     mailDefinitions,
     quests,
     questFlagSuggestions,
@@ -3316,10 +3030,6 @@ export const QuestDesignerApp: React.FC = () => {
     updateRewardFlag,
     updateWizardCompletionMail,
     updateWizardIntroMail,
-    updateWizardSystemTemplateDraft,
-    closeWizardSystemTemplateCreator,
-    openWizardSystemTemplateCreator,
-    saveWizardSystemTemplate,
     wizardFinishing,
     wizardCompletionMailDraft,
     wizardCompletionMailErrors,
@@ -3330,14 +3040,10 @@ export const QuestDesignerApp: React.FC = () => {
     wizardQuestTagInput.Input,
     wizardSummaryErrors,
     wizardStep,
-    wizardSystemTemplateDraft,
-    wizardSystemTemplateError,
-    wizardSystemTemplateSaving,
     systemOptions,
     systemsLoading,
     questSystemSummaries,
     systemIdsInUse,
-    wizardFilesystemErrors,
     openFilesystemEditors,
     toggleFilesystemEditor,
     clearEmbeddedFilesystem,
@@ -3352,36 +3058,8 @@ export const QuestDesignerApp: React.FC = () => {
     }
   }, [wizardStep])
 
-  useEffect(() => {
-    if (wizardStep !== 'filesystem') {
-      setWizardFilesystemErrors([])
-    }
-  }, [wizardStep])
-
-  useEffect(() => {
-    if (wizardStep !== 'questSteps') {
-      setWizardSystemTemplateDraft(null)
-      setWizardSystemTemplateError(null)
-    }
-  }, [wizardStep])
-
   const hasWizardDraft = !!draft
   const wizardDraftStepCount = draft?.steps.length ?? 0
-
-  useEffect(() => {
-    if (!hasWizardDraft || !wizardSystemTemplateDraft) return
-    if (wizardSystemTemplateDraft.stepIndex >= wizardDraftStepCount) {
-      setWizardSystemTemplateDraft(null)
-      setWizardSystemTemplateError(null)
-    }
-  }, [hasWizardDraft, wizardDraftStepCount, wizardSystemTemplateDraft])
-
-  useEffect(() => {
-    if (!wizardOpen) {
-      setWizardSystemTemplateDraft(null)
-      setWizardSystemTemplateError(null)
-    }
-  }, [wizardOpen])
 
   const discardWizardQuestChanges = useCallback(() => {
     const questId = wizardEntryQuestIdRef.current
@@ -3463,13 +3141,12 @@ export const QuestDesignerApp: React.FC = () => {
       (wizardStep === 'introEmail' && wizardIntroMailErrors.length > 0) ||
       (wizardStep === 'questCore' && wizardQuestDetailsErrors.length > 0) ||
       (wizardStep === 'questSteps' && wizardQuestStepsErrors.length > 0) ||
-      (wizardStep === 'filesystem' && wizardFilesystemErrors.length > 0) ||
       (wizardStep === 'completionEmail' && wizardCompletionMailErrors.length > 0) ||
       (wizardStep === 'summary' && wizardSummaryErrors.length > 0)
     if (hasErrors) {
       focusWizardAlert()
     }
-  }, [focusWizardAlert, wizardCompletionMailErrors, wizardFilesystemErrors, wizardIntroMailErrors, wizardOpen, wizardQuestDetailsErrors, wizardQuestStepsErrors, wizardStep, wizardSummaryErrors])
+  }, [focusWizardAlert, wizardCompletionMailErrors, wizardIntroMailErrors, wizardOpen, wizardQuestDetailsErrors, wizardQuestStepsErrors, wizardStep, wizardSummaryErrors])
 
   const wizardQuestDirty = useMemo(() => {
     if (!draft) return false
@@ -3522,10 +3199,6 @@ export const QuestDesignerApp: React.FC = () => {
     }
     if (wizardStep === 'questSteps') {
       handleQuestStepsNext()
-      return
-    }
-    if (wizardStep === 'filesystem') {
-      handleFilesystemStepNext()
       return
     }
     if (wizardStep === 'completionEmail') {
@@ -4273,17 +3946,10 @@ export const QuestDesignerApp: React.FC = () => {
     })
   }, [setDraft])
 
-  const openSystemWizardForCreate = useCallback(() => {
-    setSystemWizardMode('create')
-    setSystemWizardDraft(createSystemWizardDraft())
-    setSystemWizardStep('type')
-    setSystemWizardError(null)
-    setSystemWizardOpen(true)
-  }, [])
-
   const closeSystemWizard = useCallback(() => {
     setSystemWizardOpen(false)
     setSystemWizardError(null)
+    setSystemWizardAssignment(null)
   }, [])
 
   const handleCreateQuestOverride = useCallback((systemId: string) => {
@@ -4514,7 +4180,16 @@ export const QuestDesignerApp: React.FC = () => {
         setSystemProfilesState(prev => upsertByLabel(prev, response.profile))
       }
       const savedSystemId = response.definition?.id || response.profile?.id || normalizedId
-      if (!draft?.default_system_id && systemWizardMode === 'create') {
+      if (systemWizardAssignment?.kind === 'step') {
+        updateCurrentQuest(prev => {
+          if (!prev) return prev
+          if (!prev.steps[systemWizardAssignment.stepIndex]) return prev
+          const steps = prev.steps.map((step, idx) => (idx === systemWizardAssignment.stepIndex ? { ...step, target_system_id: savedSystemId } : step))
+          return { ...prev, steps }
+        })
+      } else if (systemWizardAssignment?.kind === 'default') {
+        updateCurrentQuest(prev => (prev ? { ...prev, default_system_id: savedSystemId } : prev))
+      } else if (!draft?.default_system_id && systemWizardMode === 'create') {
         updateCurrentQuest(prev => (prev ? { ...prev, default_system_id: savedSystemId } : prev))
       }
       closeSystemWizard()
@@ -4543,6 +4218,7 @@ export const QuestDesignerApp: React.FC = () => {
     systemTemplates,
     systemWizardDraft,
     systemWizardMode,
+    systemWizardAssignment,
     updateCurrentQuest
   ])
 

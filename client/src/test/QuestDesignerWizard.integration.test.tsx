@@ -384,23 +384,32 @@ describe('QuestDesigner wizard summary', () => {
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Wizard Complete' }))
   })
 
-  it('creates a target system template within quest steps and assigns it', async () => {
+  it('launches the system wizard for a step and assigns the saved system', async () => {
     await openWizardForQuest()
     const stepsChip = screen.getByRole('button', { name: /Quest Steps/i })
     fireEvent.click(stepsChip)
     await screen.findByRole('heading', { level: 2, name: /Quest Steps/i })
 
-    const createTemplateButton = screen.getAllByRole('button', { name: /Create New Template/i })[0]
-    fireEvent.click(createTemplateButton)
+    const stepCard = screen.getByLabelText('Step 1 internal identifier').closest('.wizard-step-card') as HTMLElement
+    fireEvent.click(within(stepCard).getByRole('button', { name: /Launch System Wizard/i }))
 
-    const templatePanel = screen.getByText(/Give the target a label/i).closest('.wizard-system-template-panel') as HTMLElement
+    let systemWizardDialog = await screen.findByRole('dialog', { name: /System Basics/i })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('System Label'), { target: { value: 'Relay Shadow' } })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('System ID'), { target: { value: 'relay_shadow' } })
 
-    fireEvent.change(within(templatePanel).getByLabelText('Template Name'), { target: { value: 'Relay Shadow' } })
-    fireEvent.change(within(templatePanel).getByLabelText('System ID'), { target: { value: 'relay_shadow' } })
-    fireEvent.change(within(templatePanel).getByLabelText('Primary IP (optional)'), { target: { value: '10.5.0.8' } })
-    fireEvent.change(within(templatePanel).getByLabelText('Starting Path'), { target: { value: '/ops/relay' } })
+    fireEvent.click(within(systemWizardDialog).getByRole('button', { name: /^Next$/i }))
 
-    fireEvent.click(within(templatePanel).getByRole('button', { name: /Save Template & Assign/i }))
+    systemWizardDialog = await screen.findByRole('dialog', { name: /Source & Templates/i })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('Root Path'), { target: { value: '/ops/relay' } })
+    fireEvent.click(within(systemWizardDialog).getByRole('button', { name: /^Next$/i }))
+
+    systemWizardDialog = await screen.findByRole('dialog', { name: /Configuration/i })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('Description'), { target: { value: 'Shadow relay for ops' } })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('Primary IP / Host'), { target: { value: '10.5.0.8' } })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('Operator Username'), { target: { value: 'relay' } })
+    fireEvent.change(within(systemWizardDialog).getByLabelText('Starting Path'), { target: { value: '/ops/relay' } })
+
+    fireEvent.click(within(systemWizardDialog).getByRole('button', { name: /Save System/i }))
 
     await waitFor(() => {
       expect(mockSaveSystemDefinition).toHaveBeenCalledTimes(1)
@@ -410,7 +419,7 @@ describe('QuestDesigner wizard summary', () => {
     await waitFor(() => {
       expect(targetSelect.value).toBe('relay_shadow')
     })
-    expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Target System Added' }))
-    expect(screen.queryByText(/Give the target a label/i)).not.toBeInTheDocument()
+    expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'System Created' }))
+    expect(screen.queryByRole('dialog', { name: /Configuration/i })).not.toBeInTheDocument()
   })
 })
