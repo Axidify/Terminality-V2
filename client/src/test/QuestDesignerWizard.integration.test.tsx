@@ -10,10 +10,13 @@ const mockUpdateTerminalQuest = vi.fn()
 const mockDeleteTerminalQuest = vi.fn()
 const mockValidateTerminalQuest = vi.fn()
 
-const mockListSystemProfiles = vi.fn()
-const mockSaveSystemProfile = vi.fn()
-const mockUpdateSystemProfile = vi.fn()
-const mockDeleteSystemProfile = vi.fn()
+const mockListSystemDefinitions = vi.fn()
+const mockSaveSystemDefinition = vi.fn()
+const mockUpdateSystemDefinition = vi.fn()
+const mockDeleteSystemDefinition = vi.fn()
+
+const mockListQuestTags = vi.fn()
+const mockSaveQuestTag = vi.fn()
 
 const mockListAdminTerminalMail = vi.fn()
 const mockCreateTerminalMail = vi.fn()
@@ -27,6 +30,22 @@ const mockSaveDesktopState = vi.fn()
 
 const mockPushToast = vi.fn()
 const mockSignalSessionActivity = vi.fn()
+
+const mockDefinitionToProfile = (definition: any) => ({
+  id: definition.id,
+  label: definition.label,
+  description: definition.metadata?.description,
+  identifiers: {
+    ips: definition.network?.ips || [],
+    hostnames: definition.network?.hostnames || []
+  },
+  metadata: {
+    username: definition.credentials?.username || 'guest',
+    startingPath: definition.credentials?.startingPath || '/',
+    footprint: definition.metadata?.footprint || ''
+  },
+  filesystem: definition.filesystem?.snapshot || {}
+})
 
 vi.mock('../os/UserContext', () => ({
   useUser: () => ({ isAdmin: true })
@@ -48,11 +67,16 @@ vi.mock('../services/terminalQuests', () => ({
   validateTerminalQuest: (...args: unknown[]) => mockValidateTerminalQuest(...args)
 }))
 
-vi.mock('../services/systemProfiles', () => ({
-  listSystemProfiles: (...args: unknown[]) => mockListSystemProfiles(...args),
-  saveSystemProfile: (...args: unknown[]) => mockSaveSystemProfile(...args),
-  updateSystemProfile: (...args: unknown[]) => mockUpdateSystemProfile(...args),
-  deleteSystemProfile: (...args: unknown[]) => mockDeleteSystemProfile(...args)
+vi.mock('../systemDefinitions/service', () => ({
+  listSystemDefinitions: (...args: unknown[]) => mockListSystemDefinitions(...args),
+  saveSystemDefinition: (...args: unknown[]) => mockSaveSystemDefinition(...args),
+  updateSystemDefinition: (...args: unknown[]) => mockUpdateSystemDefinition(...args),
+  deleteSystemDefinition: (...args: unknown[]) => mockDeleteSystemDefinition(...args)
+}))
+
+vi.mock('../services/questTags', () => ({
+  listQuestTags: (...args: unknown[]) => mockListQuestTags(...args),
+  saveQuestTag: (...args: unknown[]) => mockSaveQuestTag(...args)
 }))
 
 vi.mock('../services/terminalMail', () => ({
@@ -177,10 +201,25 @@ describe('QuestDesigner wizard summary', () => {
     mockDeleteTerminalQuest.mockResolvedValue(undefined)
     mockValidateTerminalQuest.mockResolvedValue({ errors: [], warnings: [] })
 
-    mockListSystemProfiles.mockResolvedValue({ profiles: [], templates: [] })
-    mockSaveSystemProfile.mockResolvedValue(undefined)
-    mockUpdateSystemProfile.mockResolvedValue(undefined)
-    mockDeleteSystemProfile.mockResolvedValue(undefined)
+    mockListSystemDefinitions.mockResolvedValue({
+      profiles: [],
+      templates: [],
+      lastUpdated: new Date().toISOString(),
+      systems: [],
+      systemTemplates: []
+    })
+    mockSaveSystemDefinition.mockImplementation(async (definition: any) => ({
+      definition,
+      profile: mockDefinitionToProfile(definition)
+    }))
+    mockUpdateSystemDefinition.mockImplementation(async (_id: string, definition: any) => ({
+      definition,
+      profile: mockDefinitionToProfile(definition)
+    }))
+    mockDeleteSystemDefinition.mockResolvedValue({})
+
+    mockListQuestTags.mockResolvedValue(['ops', 'cleanup', 'stealth'])
+    mockSaveQuestTag.mockResolvedValue('stealth')
 
     mockListAdminTerminalMail.mockResolvedValue(mailLibrary)
     mockCreateTerminalMail.mockImplementation(async (_id, payload) => payload)
@@ -222,6 +261,28 @@ describe('QuestDesigner wizard summary', () => {
 
     const followUpSection = screen.getByRole('heading', { level: 4, name: 'Next Quest Link' }).parentElement as HTMLElement
     expect(within(followUpSection).getByText(/Follow Ops/)).toBeInTheDocument()
+  })
+
+  it('keeps the wizard open when clicking outside the modal', async () => {
+    await openWizardForQuest()
+    const wizardDialog = screen.getByRole('dialog', { name: /Intro Email/i })
+    fireEvent.click(wizardDialog)
+    expect(screen.getByRole('heading', { level: 2, name: /Intro Email/i })).toBeInTheDocument()
+  })
+
+  it('persists newly created quest tags for reuse', async () => {
+    await openWizardForQuest()
+    const questDetailsChip = screen.getByRole('button', { name: /Quest Details/i })
+    fireEvent.click(questDetailsChip)
+    await screen.findByRole('heading', { level: 2, name: /Quest Details/i })
+
+    const tagInput = screen.getByLabelText('Quest tags')
+    fireEvent.change(tagInput, { target: { value: 'black ops' } })
+    fireEvent.keyDown(tagInput, { key: 'Enter', code: 'Enter' })
+
+    await waitFor(() => {
+      expect(mockSaveQuestTag).toHaveBeenCalledWith('black ops')
+    })
   })
 
   it('asks for confirmation when canceling with unsaved wizard edits', async () => {
@@ -321,5 +382,35 @@ describe('QuestDesigner wizard summary', () => {
 
     expect(mockListAdminTerminalMail).toHaveBeenCalledTimes(2)
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Wizard Complete' }))
+  })
+
+  it('creates a target system template within quest steps and assigns it', async () => {
+    await openWizardForQuest()
+    const stepsChip = screen.getByRole('button', { name: /Quest Steps/i })
+    fireEvent.click(stepsChip)
+    await screen.findByRole('heading', { level: 2, name: /Quest Steps/i })
+
+    const createTemplateButton = screen.getAllByRole('button', { name: /Create New Template/i })[0]
+    fireEvent.click(createTemplateButton)
+
+    const templatePanel = screen.getByText(/Give the target a label/i).closest('.wizard-system-template-panel') as HTMLElement
+
+    fireEvent.change(within(templatePanel).getByLabelText('Template Name'), { target: { value: 'Relay Shadow' } })
+    fireEvent.change(within(templatePanel).getByLabelText('System ID'), { target: { value: 'relay_shadow' } })
+    fireEvent.change(within(templatePanel).getByLabelText('Primary IP (optional)'), { target: { value: '10.5.0.8' } })
+    fireEvent.change(within(templatePanel).getByLabelText('Starting Path'), { target: { value: '/ops/relay' } })
+
+    fireEvent.click(within(templatePanel).getByRole('button', { name: /Save Template & Assign/i }))
+
+    await waitFor(() => {
+      expect(mockSaveSystemDefinition).toHaveBeenCalledTimes(1)
+    })
+
+    const targetSelect = screen.getAllByLabelText('Target System')[0] as HTMLSelectElement
+    await waitFor(() => {
+      expect(targetSelect.value).toBe('relay_shadow')
+    })
+    expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Target System Added' }))
+    expect(screen.queryByText(/Give the target a label/i)).not.toBeInTheDocument()
   })
 })

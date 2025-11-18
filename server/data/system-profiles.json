@@ -92,6 +92,68 @@
           "content": "Atlas Relay MOTD: unauthorized access prohibited."
         }
       }
+    },
+    {
+      "id": "asdasdas",
+      "label": "asdasd",
+      "description": "asdasd",
+      "identifiers": {
+        "ips": [
+          "asdasd"
+        ],
+        "hostnames": []
+      },
+      "metadata": {
+        "username": "guest",
+        "startingPath": "/",
+        "footprint": ""
+      },
+      "filesystem": {
+        "/": {
+          "type": "dir",
+          "name": "",
+          "path": "/",
+          "children": [
+            "/config",
+            "/logs",
+            "/README.txt"
+          ]
+        },
+        "/config": {
+          "type": "dir",
+          "name": "config",
+          "path": "/config",
+          "children": [
+            "/config/system.json"
+          ]
+        },
+        "/logs": {
+          "type": "dir",
+          "name": "logs",
+          "path": "/logs",
+          "children": [
+            "/logs/.gitkeep"
+          ]
+        },
+        "/README.txt": {
+          "type": "file",
+          "name": "README.txt",
+          "path": "/README.txt",
+          "content": "System: asdasdas\nScope: global\n\nCustomize this host to guide the quest narrative."
+        },
+        "/config/system.json": {
+          "type": "file",
+          "name": "system.json",
+          "path": "/config/system.json",
+          "content": "{\n  \"systemId\": \"asdasdas\",\n  \"version\": 1\n}"
+        },
+        "/logs/.gitkeep": {
+          "type": "file",
+          "name": ".gitkeep",
+          "path": "/logs/.gitkeep",
+          "content": ""
+        }
+      }
     }
   ],
   "templates": [
@@ -255,5 +317,5 @@
       }
     }
   ],
-  "lastUpdated": "2025-11-16T12:12:41.161Z"
+  "lastUpdated": "2025-11-18T12:20:29.117Z"
 }

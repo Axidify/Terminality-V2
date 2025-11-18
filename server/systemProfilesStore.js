@@ -77,11 +77,12 @@ function createDefaultProfile() {
 }
 
 function createDefaultTemplate() {
+  const base = createDefaultProfile()
   return {
+    ...base,
     id: 'log_server_with_evidence',
     label: 'Log Server (Evidence)',
-    description: 'Contains /var/logs with evidence.log file.',
-    filesystem: createDefaultProfile().filesystem
+    description: 'Contains /var/logs with evidence.log file.'
   }
 }
 
@@ -121,11 +122,68 @@ function normalizeIdentifiers(input = {}) {
 }
 
 function normalizeMetadata(input = {}) {
+  const hostConfig = sanitizeHostConfig(input.hostConfig)
+  const toolBindings = sanitizeToolBindings(input.toolBindings)
+  const scopeBindings = sanitizeScopeBindings(input.scopeBindings)
   return {
     username: typeof input.username === 'string' && input.username.trim() ? input.username.trim() : 'guest',
     startingPath: typeof input.startingPath === 'string' && input.startingPath.trim() ? cleanPath(input.startingPath) : '/',
-    footprint: typeof input.footprint === 'string' ? input.footprint.trim() : ''
+    footprint: typeof input.footprint === 'string' ? input.footprint.trim() : '',
+    ...(hostConfig ? { hostConfig } : {}),
+    ...(toolBindings ? { toolBindings } : {}),
+    ...(scopeBindings ? { scopeBindings } : {})
   }
+}
+
+function sanitizeHostConfig(input) {
+  if (!input || typeof input !== 'object') return undefined
+  const hostId = typeof input.hostId === 'string' ? input.hostId.trim() : ''
+  if (!hostId) return undefined
+  const host = { hostId }
+  if (typeof input.address === 'string' && input.address.trim()) host.address = input.address.trim()
+  if (typeof input.port === 'number' && Number.isFinite(input.port)) host.port = input.port
+  if (typeof input.protocol === 'string' && ['ssh', 'ws', 'local'].includes(input.protocol)) host.protocol = input.protocol
+  if (Array.isArray(input.openPorts)) {
+    const ports = input.openPorts.map(port => (typeof port === 'string' ? port.trim() : '')).filter(Boolean)
+    if (ports.length) host.openPorts = ports
+  }
+  if (input.flags && typeof input.flags === 'object') {
+    const flags = Object.entries(input.flags).reduce((acc, [key, value]) => {
+      if (typeof key === 'string') acc[key] = !!value
+      return acc
+    }, {})
+    if (Object.keys(flags).length) host.flags = flags
+  }
+  return host
+}
+
+function sanitizeToolBindings(input) {
+  if (!input || typeof input !== 'object' || !Array.isArray(input.tools)) return undefined
+  const tools = input.tools.map(tool => {
+    const id = typeof tool?.id === 'string' ? tool.id.trim() : ''
+    const name = typeof tool?.name === 'string' ? tool.name.trim() : ''
+    const command = typeof tool?.command === 'string' ? tool.command.trim() : ''
+    if (!id || !name || !command) return null
+    const entry = { id, name, command }
+    if (typeof tool?.description === 'string' && tool.description.trim()) entry.description = tool.description.trim()
+    if (tool?.inputSchema && typeof tool.inputSchema === 'object') entry.inputSchema = tool.inputSchema
+    if (tool?.options && typeof tool.options === 'object') entry.options = tool.options
+    return entry
+  }).filter(Boolean)
+  if (!tools.length) return undefined
+  return { tools }
+}
+
+function sanitizeScopeBindings(input) {
+  if (!input || typeof input !== 'object') return undefined
+  const normalized = Object.entries(input).reduce((acc, [key, value]) => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (trimmed) acc[key] = trimmed
+    }
+    return acc
+  }, {})
+  return Object.keys(normalized).length ? normalized : undefined
 }
 
 function cleanPath(value) {
@@ -170,11 +228,20 @@ function normalizeProfilePayload(payload, { allowIdReuse = false } = {}) {
   if (!id) errors.push('id is required')
   const label = typeof payload?.label === 'string' ? payload.label.trim() : ''
   if (!label) errors.push('label is required')
+  const description = typeof payload?.description === 'string' ? payload.description.trim() : undefined
   const identifiers = normalizeIdentifiers(payload?.identifiers)
   const metadata = normalizeMetadata(payload?.metadata)
   const { filesystem, errors: fsErrors } = normalizeFilesystem(payload?.filesystem)
   if (fsErrors.length) errors.push(...fsErrors)
-  return { profile: { id, label, identifiers, metadata, filesystem }, errors }
+  const profile = {
+    id,
+    label,
+    ...(description ? { description } : {}),
+    identifiers,
+    metadata,
+    filesystem
+  }
+  return { profile, errors }
 }
 
 function listProfiles() {

@@ -680,12 +680,27 @@
   animation: questModalFade 0.2s ease forwards;
 }
 
+.quest-wizard-overlay {
+  animation: questWizardOverlayFade 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 @keyframes questModalFade {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes questWizardOverlayFade {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(6px);
   }
 }
 
@@ -705,6 +720,34 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  opacity: 0;
+  transform: translateY(16px) scale(0.97);
+  animation: questWizardModalPop 0.32s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes questWizardModalPop {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.95);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quest-wizard-overlay,
+  .quest-wizard-overlay .quest-modal {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .quest-wizard-header {
@@ -988,8 +1031,32 @@
   flex-wrap: wrap;
 }
 
-.wizard-step-card-header input {
+.wizard-step-id-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 200px;
+}
+
+.wizard-step-id-input {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.12em;
+  color: var(--color-primary);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.25), rgba(0, 0, 0, 0.75));
+  border: 1px solid rgba(var(--color-primary-rgb), 0.5);
+  padding: 0.45rem 0.6rem;
+  box-shadow: 0 0 14px rgba(var(--color-primary-rgb), 0.2), inset 0 0 10px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wizard-step-id-input::placeholder {
+  color: rgba(var(--color-primary-rgb), 0.6);
+}
+
+.wizard-step-id-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 18px rgba(var(--color-primary-rgb), 0.4), inset 0 0 12px rgba(0, 0, 0, 0.75);
+  outline: none;
 }
 
 .wizard-step-card-actions {
@@ -1003,6 +1070,46 @@
   color: var(--color-text);
   width: 32px;
   height: 32px;
+}
+
+.wizard-target-system-field {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.wizard-target-system-field label {
+  flex: 1;
+  min-width: 200px;
+}
+
+.wizard-target-system-field select {
+  width: 100%;
+}
+
+.wizard-system-template-panel {
+  border: 1px solid rgba(var(--color-primary-rgb), 0.35);
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.35);
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.wizard-system-template-grid {
+  gap: 0.6rem;
+}
+
+.wizard-system-template-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.wizard-system-template-actions button {
+  min-width: 180px;
 }
 
 .wizard-add-step {
@@ -1206,9 +1313,26 @@
   letter-spacing: 1px;
 }
 
-.completion-mail-body-grid textarea {
-  min-height: 220px;
+.completion-mail-body-field {
+  position: relative;
+}
+
+.completion-mail-body-input {
+  min-height: 240px;
   resize: vertical;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.85), rgba(var(--color-secondary-rgb), 0.08));
+  border: 1px solid rgba(var(--color-primary-rgb), 0.45);
+  color: var(--color-text);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.7), 0 0 20px rgba(var(--color-primary-rgb), 0.15);
+}
+
+.completion-mail-body-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.75), 0 0 24px rgba(var(--color-primary-rgb), 0.25);
+  outline: none;
 }
 
 @media (min-width: 860px) {
@@ -2122,6 +2246,95 @@ input[type="checkbox"]:disabled {
   gap: 12px;
   box-shadow: 0 0 15px rgba(var(--color-primary-rgb), 0.1),
               inset 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.pill-lite.success {
+  border-color: rgba(0, 200, 150, 0.5);
+  color: #29f0c9;
+  background: rgba(0, 200, 150, 0.15);
+}
+
+.pill-lite.warning {
+  border-color: rgba(255, 184, 76, 0.5);
+  color: #ffc977;
+  background: rgba(255, 184, 76, 0.15);
+}
+
+.quest-system-filesystem {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(var(--color-primary-rgb), 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quest-system-filesystem-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quest-system-filesystem-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quest-system-filesystem-editor {
+  border: 1px solid rgba(var(--color-primary-rgb), 0.25);
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.filesystem-wizard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filesystem-wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.filesystem-wizard-card {
+  border: 1px solid rgba(var(--color-primary-rgb), 0.25);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filesystem-wizard-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.filesystem-wizard-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filesystem-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filesystem-summary-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
 }
 
 .system-manager-row {

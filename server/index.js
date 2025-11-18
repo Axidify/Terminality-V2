@@ -15,7 +15,9 @@ const { loadChangelogFromFile, readChangelogMarkdown } = require('./utils/markdo
 const terminalQuestStore = require('./terminalQuestsStore')
 const terminalMailStore = require('./terminalMailStore')
 const systemProfilesStore = require('./systemProfilesStore')
+const systemDefinitions = require('./systemDefinitions')
 const economyStore = require('./economyStore')
+const questTagsStore = require('./questTagsStore')
 
 const DEFAULT_STATE_PATH = path.join(__dirname, 'state.json')
 const CHANGELOG_MD_PATH = path.join(__dirname, '..', 'CHANGELOG.md')
@@ -54,6 +56,14 @@ function getPresenceMap(room) {
 
 let savedState = null
 let markdownChangelogCache = null
+
+try {
+  const questSeedList = terminalQuestStore.listQuests({ includeDrafts: true }) || []
+  const tagSeed = questSeedList.flatMap(entry => (Array.isArray(entry.tags) ? entry.tags : []))
+  questTagsStore.seedTags(tagSeed)
+} catch (err) {
+  console.warn('[quest-tags] Failed to seed from quest store:', err)
+}
 
 const DEFAULT_ABOUT_CONTENT = {
   heroTitle: 'Terminality OS',
@@ -1278,7 +1288,7 @@ app.delete('/api/admin/quests/:identifier', authMiddleware, requireAdmin, async 
 app.get('/api/terminal-systems', (_req, res) => {
   try {
     const payload = systemProfilesStore.listAll()
-    res.json(payload)
+    res.json(systemDefinitions.attachDefinitionEnvelope(payload))
   } catch (err) {
     console.error('[api/terminal-systems][list] error', err)
     res.status(500).json({ message: 'Server error' })
@@ -1292,7 +1302,8 @@ app.get('/api/terminal-systems/:id', (req, res) => {
       ? systemProfilesStore.getTemplateById(req.params.id)
       : systemProfilesStore.getProfileById(req.params.id)
     if (!profile) return res.status(404).json({ message: 'Not found' })
-    res.json({ profile })
+    const definition = systemDefinitions.profileToDefinition(profile, template === 'true' ? 'template' : 'profile')
+    res.json({ profile, definition })
   } catch (err) {
     console.error('[api/terminal-systems/:id][get] error', err)
     res.status(500).json({ message: 'Server error' })
@@ -1307,7 +1318,8 @@ app.post('/api/terminal-systems', authMiddleware, requireAdmin, (req, res) => {
     if (result.errors) {
       return res.status(400).json({ errors: result.errors })
     }
-    res.status(201).json({ profile: result.profile })
+    const definition = systemDefinitions.profileToDefinition(result.profile, template ? 'template' : 'profile')
+    res.status(201).json({ profile: result.profile, definition })
   } catch (err) {
     console.error('[api/terminal-systems][post] error', err)
     res.status(500).json({ message: 'Server error' })
@@ -1324,7 +1336,8 @@ app.put('/api/terminal-systems/:id', authMiddleware, requireAdmin, (req, res) =>
       const code = result.errors.includes('Profile not found.') ? 404 : 400
       return res.status(code).json({ errors: result.errors })
     }
-    res.json({ profile: result.profile })
+    const definition = systemDefinitions.profileToDefinition(result.profile, template ? 'template' : 'profile')
+    res.json({ profile: result.profile, definition })
   } catch (err) {
     console.error('[api/terminal-systems/:id][put] error', err)
     res.status(500).json({ message: 'Server error' })
@@ -1338,7 +1351,8 @@ app.delete('/api/terminal-systems/:id', authMiddleware, requireAdmin, (req, res)
     if (result.errors) {
       return res.status(404).json({ errors: result.errors })
     }
-    res.json({ profile: result.profile })
+    const definition = systemDefinitions.profileToDefinition(result.profile, template ? 'template' : 'profile')
+    res.json({ profile: result.profile, definition })
   } catch (err) {
     console.error('[api/terminal-systems/:id][delete] error', err)
     res.status(500).json({ message: 'Server error' })
@@ -1395,6 +1409,7 @@ app.post('/api/terminal-quests', authMiddleware, requireAdmin, (req, res) => {
     if (result.errors) {
       return res.status(400).json({ errors: result.errors })
     }
+    questTagsStore.seedTags(result.quest?.tags || [])
     res.status(201).json({ quest: result.quest, warnings: result.warnings || [] })
   } catch (err) {
     console.error('[api/terminal-quests][post] error', err)
@@ -1411,6 +1426,7 @@ app.put('/api/terminal-quests/:id', authMiddleware, requireAdmin, (req, res) => 
       const code = result.errors.includes('Quest not found.') ? 404 : 400
       return res.status(code).json({ errors: result.errors })
     }
+    questTagsStore.seedTags(result.quest?.tags || [])
     res.json({ quest: result.quest, warnings: result.warnings || [] })
   } catch (err) {
     console.error('[api/terminal-quests/:id][put] error', err)
@@ -1438,6 +1454,30 @@ app.post('/api/terminal-quests/validate', authMiddleware, requireAdmin, (req, re
     res.json({ errors: result.errors || [], warnings: result.warnings || [], quest: result.quest })
   } catch (err) {
     console.error('[api/terminal-quests/validate][post] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.get('/api/admin/quest-tags', authMiddleware, requireAdmin, (_req, res) => {
+  try {
+    const tags = questTagsStore.listTags()
+    res.json({ tags })
+  } catch (err) {
+    console.error('[api/admin/quest-tags][get] error', err)
+    res.status(500).json({ message: 'Server error' })
+  }
+})
+
+app.post('/api/admin/quest-tags', authMiddleware, requireAdmin, (req, res) => {
+  try {
+    const rawTag = typeof req.body === 'string' ? req.body : (req.body?.tag || req.body?.value)
+    const result = questTagsStore.addTag(rawTag)
+    if (result.errors) {
+      return res.status(400).json({ errors: result.errors })
+    }
+    res.status(result.created ? 201 : 200).json({ tag: result.tag, tags: result.tags })
+  } catch (err) {
+    console.error('[api/admin/quest-tags][post] error', err)
     res.status(500).json({ message: 'Server error' })
   }
 })

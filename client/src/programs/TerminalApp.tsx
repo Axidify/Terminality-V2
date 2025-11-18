@@ -39,13 +39,12 @@ import {
   readFile,
   removeFile,
   RemoteNode,
-  setSystemProfiles,
-  SystemProfile
+  setSystemDefinitions
 } from './terminalHosts'
 import { getCachedDesktop, hydrateFromServer, saveDesktopState } from '../services/saveService'
-import { listSystemProfiles as fetchSystemProfiles, SystemProfilesResponse } from '../services/systemProfiles'
 import { listPublishedTerminalMail } from '../services/terminalMail'
 import { listTerminalQuests } from '../services/terminalQuests'
+import { listSystemDefinitions } from '../systemDefinitions/service'
 
 type Line = { role: 'system' | 'user'; text: string }
 type TerminalContext = 'local' | 'remote'
@@ -195,21 +194,12 @@ export const TerminalApp: React.FC = () => {
     let cancelled = false
     const loadSystems = async () => {
       try {
-        const payload: SystemProfilesResponse = await fetchSystemProfiles()
+        const payload = await listSystemDefinitions()
         if (cancelled) return
-        const normalized: SystemProfile[] = (payload.profiles || []).map(profile => ({
-          ...profile,
-          identifiers: {
-            ips: profile.identifiers?.ips || [],
-            hostnames: profile.identifiers?.hostnames || []
-          },
-          metadata: profile.metadata,
-          filesystem: profile.filesystem
-        }))
-        setSystemProfiles(normalized)
+        setSystemDefinitions(payload.systems || [])
       } catch (err) {
         console.warn('[terminal] failed to load system profiles, using fallback', err)
-        setSystemProfiles(undefined)
+        setSystemDefinitions(undefined)
       } finally {
         if (!cancelled) {
           setSystemsReady(true)

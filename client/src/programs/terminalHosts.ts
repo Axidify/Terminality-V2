@@ -1,3 +1,7 @@
+import { resolveSystemsForContext } from '../systemDefinitions/resolvers'
+
+import type { ResolutionContext, SystemDefinition, TerminalHostConfig } from '../systemDefinitions/types'
+
 export type RemoteNodeType = 'dir' | 'file'
 
 export interface RemoteNode {
@@ -17,6 +21,7 @@ export interface HostDefinition {
   startingPath: string
   footprint: string
   filesystem: Record<string, RemoteNode>
+  hostConfig?: TerminalHostConfig
 }
 
 export interface HostRuntime {
@@ -36,6 +41,7 @@ export interface SystemProfile {
     startingPath?: string
     footprint?: string
     openPorts?: string[]
+    hostConfig?: TerminalHostConfig
   }
   filesystem: Record<string, RemoteNode>
 }
@@ -78,7 +84,7 @@ const DEFAULT_PROFILE: SystemProfile = {
 
 let systemProfiles: SystemProfile[] = [DEFAULT_PROFILE]
 
-export const setSystemProfiles = (profiles: SystemProfile[] | undefined) => {
+const normalizeProfiles = (profiles: SystemProfile[] | undefined) => {
   if (Array.isArray(profiles) && profiles.length) {
     systemProfiles = profiles.map(profile => ({
       ...profile,
@@ -95,17 +101,56 @@ export const setSystemProfiles = (profiles: SystemProfile[] | undefined) => {
   hostCache.clear()
 }
 
+export const setSystemProfiles = (profiles: SystemProfile[] | undefined) => {
+  normalizeProfiles(profiles)
+}
+
+const definitionToProfile = (definition: SystemDefinition): SystemProfile => ({
+  id: definition.id,
+  label: definition.label,
+  identifiers: {
+    ips: definition.network.ips.length
+      ? definition.network.ips
+      : definition.network.primaryIp
+        ? [definition.network.primaryIp]
+        : [definition.id],
+    hostnames: definition.network.hostnames
+  },
+  metadata: {
+    username: definition.credentials.username,
+    startingPath: definition.credentials.startingPath,
+    footprint: definition.metadata.footprint,
+    openPorts: definition.host?.openPorts || [],
+    hostConfig: definition.host
+  },
+  filesystem: cloneFilesystem((definition.filesystem?.snapshot || {}) as Record<string, RemoteNode>)
+})
+
+export const setSystemDefinitions = (definitions: SystemDefinition[] | undefined, ctx?: ResolutionContext) => {
+  if (Array.isArray(definitions) && definitions.length) {
+    const resolved = resolveSystemsForContext(definitions, ctx || {})
+    normalizeProfiles(resolved.map(definition => definitionToProfile(definition)))
+    return
+  }
+  normalizeProfiles(undefined)
+}
+
 const hostCache = new Map<string, HostDefinition>()
 
 const profileToHostDefinition = (profile: SystemProfile, ip: string): HostDefinition => ({
   ip,
   label: profile.label,
   online: true,
-  openPorts: profile.metadata?.openPorts?.length ? profile.metadata.openPorts : ['22/tcp'],
+  openPorts: profile.metadata?.hostConfig?.openPorts?.length
+    ? profile.metadata.hostConfig.openPorts
+    : profile.metadata?.openPorts?.length
+      ? profile.metadata.openPorts
+      : ['22/tcp'],
   username: profile.metadata?.username || 'guest',
   startingPath: profile.metadata?.startingPath || '/',
   footprint: profile.metadata?.footprint || '',
-  filesystem: cloneFilesystem(profile.filesystem)
+  filesystem: cloneFilesystem(profile.filesystem),
+  hostConfig: profile.metadata?.hostConfig
 })
 
 const findProfileByIp = (ip: string) => systemProfiles.find(profile => profile.identifiers?.ips?.includes(ip))

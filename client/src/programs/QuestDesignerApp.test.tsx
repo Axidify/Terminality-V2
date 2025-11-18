@@ -3,11 +3,16 @@ import userEvent from '@testing-library/user-event'
 import React from 'react'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
+import { QuestDesignerApp } from './QuestDesignerApp'
+
 import type { QuestDefinition, QuestLifecycleStatus } from './terminalQuests/types'
 
 const questDesignerMocks = vi.hoisted(() => ({
   listTerminalQuests: vi.fn<() => Promise<QuestDefinition[]>>(),
-  listSystemProfiles: vi.fn(),
+  listSystemDefinitions: vi.fn(),
+  saveSystemDefinition: vi.fn(),
+  updateSystemDefinition: vi.fn(),
+  deleteSystemDefinition: vi.fn(),
   getCachedDesktop: vi.fn(),
   hydrateFromServer: vi.fn(),
   pushToast: vi.fn()
@@ -15,10 +20,45 @@ const questDesignerMocks = vi.hoisted(() => ({
 
 const {
   listTerminalQuests: mockListTerminalQuests,
-  listSystemProfiles: mockListSystemProfiles,
+  listSystemDefinitions: mockListSystemDefinitions,
+  saveSystemDefinition: mockSaveSystemDefinition,
+  updateSystemDefinition: mockUpdateSystemDefinition,
+  deleteSystemDefinition: mockDeleteSystemDefinition,
   getCachedDesktop: mockGetCachedDesktop,
   hydrateFromServer: mockHydrateFromServer
 } = questDesignerMocks
+
+const buildMockDefinition = (overrides: Partial<any> = {}) => ({
+  id: 'mock_system',
+  key: 'mock_system',
+  name: 'Mock System',
+  label: 'Mock System',
+  description: 'Mock System',
+  type: 'filesystem',
+  scope: 'global',
+  kind: 'profile',
+  network: { primaryIp: '10.0.0.1', ips: ['10.0.0.1'], hostnames: [] },
+  credentials: { username: 'guest', startingPath: '/' },
+  metadata: { description: 'Mock System', footprint: '', tags: [] },
+  filesystem: { rootPath: '/', readOnly: false, snapshot: {} },
+  ...overrides
+})
+
+const mockDefinitionToProfile = (definition: any) => ({
+  id: definition.id,
+  label: definition.label,
+  description: definition.metadata?.description,
+  identifiers: {
+    ips: definition.network?.ips || [],
+    hostnames: definition.network?.hostnames || []
+  },
+  metadata: {
+    username: definition.credentials?.username || 'guest',
+    startingPath: definition.credentials?.startingPath || '/',
+    footprint: definition.metadata?.footprint || ''
+  },
+  filesystem: (definition.filesystem?.snapshot) || {}
+})
 
 vi.mock('../os/UserContext', () => ({
   useUser: () => ({
@@ -47,8 +87,11 @@ vi.mock('../services/terminalQuests', () => ({
   validateTerminalQuest: vi.fn()
 }))
 
-vi.mock('../services/systemProfiles', () => ({
-  listSystemProfiles: (...args: unknown[]) => questDesignerMocks.listSystemProfiles(...args)
+vi.mock('../systemDefinitions/service', () => ({
+  listSystemDefinitions: (...args: unknown[]) => questDesignerMocks.listSystemDefinitions(...args),
+  saveSystemDefinition: (...args: unknown[]) => questDesignerMocks.saveSystemDefinition(...args),
+  updateSystemDefinition: (...args: unknown[]) => questDesignerMocks.updateSystemDefinition(...args),
+  deleteSystemDefinition: (...args: unknown[]) => questDesignerMocks.deleteSystemDefinition(...args)
 }))
 
 vi.mock('../services/saveService', () => ({
@@ -59,8 +102,6 @@ vi.mock('../services/saveService', () => ({
 vi.mock('../services/terminalMail', () => ({
   listAdminTerminalMail: vi.fn().mockResolvedValue([])
 }))
-
-import { QuestDesignerApp } from './QuestDesignerApp'
 
 const baseQuest = (overrides: Partial<QuestDefinition> = {}): QuestDefinition => ({
   id: 'quest_alpha',
@@ -102,7 +143,18 @@ const mockQuestSnapshot = (statuses: Record<string, QuestLifecycleStatus>, saved
 }
 
 const setupDefaultMocks = () => {
-  mockListSystemProfiles.mockResolvedValue({ profiles: [], templates: [] })
+  mockListSystemDefinitions.mockResolvedValue({
+    profiles: [],
+    templates: [],
+    lastUpdated: new Date().toISOString(),
+    systems: [],
+    systemTemplates: []
+  })
+  const definition = buildMockDefinition()
+  const profile = mockDefinitionToProfile(definition)
+  mockSaveSystemDefinition.mockResolvedValue({ definition, profile })
+  mockUpdateSystemDefinition.mockResolvedValue({ definition, profile })
+  mockDeleteSystemDefinition.mockResolvedValue({ definition, profile })
   mockQuestSnapshot({})
 }
 

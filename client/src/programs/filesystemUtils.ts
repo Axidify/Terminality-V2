@@ -75,3 +75,45 @@ export const listChildPaths = (map: FilesystemMap, parentPath: string): string[]
     .filter(node => node.path !== normalizedParent && getParentPath(node.path) === normalizedParent)
     .map(node => node.path)
 }
+
+const ensureDirectoryNode = (map: FilesystemMap, rawPath: string): void => {
+  const targetPath = normalizeFilesystemPath(rawPath)
+  if (!map['/']) {
+    map['/'] = { type: 'dir', name: '/', path: '/', children: [] }
+  }
+  if (!targetPath || targetPath === '/') {
+    return
+  }
+  const parentPath = getParentPath(targetPath)
+  ensureDirectoryNode(map, parentPath)
+  const parentNode = map[parentPath]
+  if (!parentNode || parentNode.type !== 'dir') {
+    return
+  }
+  if (!map[targetPath] || map[targetPath].type !== 'dir') {
+    map[targetPath] = {
+      type: 'dir',
+      name: targetPath.split('/').pop() || '/',
+      path: targetPath,
+      children: []
+    }
+  }
+  parentNode.children = parentNode.children || []
+  if (!parentNode.children.includes(targetPath)) {
+    parentNode.children.push(targetPath)
+  }
+}
+
+export const scaffoldFilesystemDirectories = (map: FilesystemMap, directories: string[]): FilesystemMap => {
+  if (!directories?.length) {
+    return cloneFilesystemMap(map)
+  }
+  const next = cloneFilesystemMap(map)
+  directories.forEach(dir => {
+    const normalized = normalizeFilesystemPath(dir)
+    if (normalized && normalized !== '/') {
+      ensureDirectoryNode(next, normalized)
+    }
+  })
+  return next
+}

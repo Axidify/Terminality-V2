@@ -5,7 +5,7 @@ import { describe, it, beforeEach, afterEach, vi, expect } from 'vitest'
 import { TerminalApp } from '../programs/TerminalApp'
 
 const mockListTerminalQuests = vi.fn()
-const mockListSystemProfiles = vi.fn()
+const mockListSystemDefinitions = vi.fn()
 const mockListTerminalMail = vi.fn()
 const mockGetCachedDesktop = vi.fn()
 const mockHydrateFromServer = vi.fn()
@@ -14,8 +14,8 @@ const mockSaveDesktopState = vi.fn()
 vi.mock('../services/terminalQuests', () => ({
   listTerminalQuests: (...args: unknown[]) => mockListTerminalQuests(...args)
 }))
-vi.mock('../services/systemProfiles', () => ({
-  listSystemProfiles: (...args: unknown[]) => mockListSystemProfiles(...args)
+vi.mock('../systemDefinitions/service', () => ({
+  listSystemDefinitions: (...args: unknown[]) => mockListSystemDefinitions(...args)
 }))
 vi.mock('../services/terminalMail', () => ({
   listTerminalMail: (...args: unknown[]) => mockListTerminalMail(...args),
@@ -72,7 +72,13 @@ const seedHydratedQuestState = (completedIds: string[] = []) => {
 }
 
 const setupDefaultMocks = () => {
-  mockListSystemProfiles.mockResolvedValue({ profiles: [], templates: [] })
+  mockListSystemDefinitions.mockResolvedValue({
+    profiles: [],
+    templates: [],
+    lastUpdated: new Date().toISOString(),
+    systems: [],
+    systemTemplates: []
+  })
   mockListTerminalQuests.mockResolvedValue([LinkedQuest])
   mockListTerminalMail.mockResolvedValue(sampleMail)
   mockSaveDesktopState.mockResolvedValue({ version: 1, desktop: {}, story: {} })

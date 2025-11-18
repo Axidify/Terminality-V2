@@ -1,5 +1,12 @@
 import { apiRequest } from './api'
 
+import type {
+  ResolutionContext,
+  SystemDefinition,
+  TerminalHostConfig,
+  ToolBindingConfig
+} from '../systemDefinitions/types'
+
 export interface FileSystemNode {
   type: 'dir' | 'file'
   name: string
@@ -11,7 +18,8 @@ export interface FileSystemNode {
 export interface SystemProfileDTO {
   id: string
   label: string
-  identifiers: {
+  description?: string
+  identifiers?: {
     ips?: string[]
     hostnames?: string[]
   }
@@ -19,14 +27,21 @@ export interface SystemProfileDTO {
     username?: string
     startingPath?: string
     footprint?: string
+    hostConfig?: TerminalHostConfig
+    toolBindings?: ToolBindingConfig
+    scopeBindings?: ResolutionContext
   }
   filesystem: Record<string, FileSystemNode>
 }
 
+export type SystemTemplateDTO = SystemProfileDTO
+
 export interface SystemProfilesResponse {
   profiles: SystemProfileDTO[]
-  templates: Array<{ id: string; label: string; description?: string; filesystem: Record<string, FileSystemNode> }>
+  templates: SystemTemplateDTO[]
   lastUpdated: string
+  systemDefinitions?: SystemDefinition[]
+  systemDefinitionTemplates?: SystemDefinition[]
 }
 
 export async function listSystemProfiles(): Promise<SystemProfilesResponse> {

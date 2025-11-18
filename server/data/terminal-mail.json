@@ -42,7 +42,63 @@
       "isUnreadByDefault": true,
       "linkedQuestId": "quest_1763366957008",
       "status": "published"
+    },
+    {
+      "id": "quest_1763390415684_intro_mail",
+      "fromName": "Unknown Contact",
+      "fromAddress": "handshake@nullroute",
+      "subject": "[INIT] Handshake Protocol",
+      "previewLine": "We’ve been watching your signal. Time to see if you can stay unseen.",
+      "body": "Operator—\n\nIf this reached you, the filters didn’t. That’s a good sign. Means you’re either competent, or lucky. Both are usable.\n\nYou don’t know us yet. You don’t need to. Names get people killed. Call us “the Underground” if you want to label it. We route around Atlas, the city’s megacorp darlings, and the security agencies that orbit them like scavengers.\n\nBefore we trust you with anything that matters, we need to see you walk without tripping the alarms. Simple proof-of-work.\n\nTarget: an Atlas edge relay, low priority. Their own people barely look at it, which makes it perfect for us. One of our scouts brushed it earlier tonight and left a faint line in the logs mentioning a “handshake probe.” That reference to us? It needs to vanish.\n\nYour task:\n\nScan the host to confirm it’s alive and exposed.\n\nEstablish a session on the relay.\n\nNavigate to the log directory.\n\nRemove the probe log: probe_handshake.log.\n\nDrop your connection cleanly.\n\nKeep it quiet. No extra files touched, no sightseeing in other directories, no clever tricks. We’re not impressed by fireworks, only by ghosts.\n\nIf the relay stays quiet for the next cycle, we’ll assume you passed. Then we talk about work that actually pays.\n\n— No names",
+      "inUniverseDate": "2025-11-17 14:40",
+      "folder": "inbox",
+      "emailCategory": "main",
+      "isUnreadByDefault": true,
+      "linkedQuestId": "quest_1763390415684",
+      "status": "published"
+    },
+    {
+      "id": "quest_1763390415684_completion_mail",
+      "fromName": "Atlas Ops",
+      "fromAddress": "ops@atlasnet",
+      "subject": "Untitled Quest — Debrief",
+      "previewLine": "test",
+      "body": "test",
+      "inUniverseDate": "2025-11-17 14:40",
+      "folder": "inbox",
+      "emailCategory": "main",
+      "isUnreadByDefault": true,
+      "linkedQuestId": "handshake_protocol",
+      "status": "draft"
+    },
+    {
+      "id": "quest_1763447851754_intro_mail",
+      "fromName": "Atlas Ops",
+      "fromAddress": "ops@atlasnet",
+      "subject": "Untitled Quest — Briefing",
+      "previewLine": "asdasdad",
+      "body": "asdasdad",
+      "inUniverseDate": "2025-11-18 06:37",
+      "folder": "inbox",
+      "emailCategory": "main",
+      "isUnreadByDefault": true,
+      "linkedQuestId": "quest_1763447851754",
+      "status": "draft"
+    },
+    {
+      "id": "quest_1763447851754_completion_mail",
+      "fromName": "Atlas Ops",
+      "fromAddress": "ops@atlasnet",
+      "subject": "Untitled Quest — Debrief",
+      "previewLine": "sadasdasd",
+      "body": "adasdasd",
+      "inUniverseDate": "2025-11-18 06:37",
+      "folder": "inbox",
+      "emailCategory": "main",
+      "isUnreadByDefault": true,
+      "linkedQuestId": "quest_1763447851754",
+      "status": "draft"
     }
   ],
-  "lastUpdated": "2025-11-17T12:10:08.090Z"
+  "lastUpdated": "2025-11-18T06:38:37.202Z"
 }
