@@ -37,6 +37,15 @@ The editor persists directly to `server/data/terminal-quests.json` via the new R
 
 Saving validates required fields (ids, params, at least one step) and surfaces warnings for missing dependencies (e.g., referencing a flag that no quest emits). The terminal app automatically hydrates these quest definitions at runtime and persists quest progress through `saveService`.
 
+## Terminal Runtime Loop
+
+The ops terminal now keeps a full runtime snapshot (command history, buffer, quest/mail engines, trace meter, and remote session metadata) so players resume exactly where they left off. Snapshot hydration rebuilds the session, including reconnecting to hosts that still exist in the system definitions.
+
+- **Trace Meter** – Every network action applies a trace cost (`scan`, `connect`, `rm`, `disconnect`) while idle commands bleed it off. Crossing thresholds prints contextual warnings; a panic-level spike forcefully severs the active session and fires the appropriate quest event.
+- **Quest Sync** – `processQuestEvent` reports accepted/completed quest IDs, and the terminal uses them to auto-deliver quest briefing/completion mail defined in the quest designer.
+- **Mail Awareness** – Inbox state refreshes whenever new quest mail is delivered so players immediately see updated unread counts.
+- **Persistence** – The snapshot saved via `saveService` now captures trace, session, quest, and mail state to keep multi-step runs consistent across reloads.
+
 ## Cyberpunk Terminal Design Language
 
 Terminality uses a consistent retro-futuristic aesthetic inspired by classic terminal UIs and cyberpunk media. When designing new components or apps, follow these principles:

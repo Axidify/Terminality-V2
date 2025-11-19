@@ -517,6 +517,18 @@ The Terminal app combines:
     - Active (started but not completed).
     - Completed.
 
+#### Batch 5: Designer-driven quest mail
+
+- **Quest Designer wizard** now contains dedicated **Intro** and **Completion** email steps powered by the shared `QuestIntroEmailConfig`/`QuestCompletionEmailConfig` types. Authors can:
+  - Pick handler personas, prefill Atlas templates, and insert structured tokens from the intro step.
+  - Compose default completion mail plus per-outcome variants, each with trace/bonus/trap delivery conditions.
+- **Validation** enforces sender/subject/body requirements across intro + completion mails and ensures every completion variant declares at least one valid condition payload.
+- **Mail sync bridge** (`client/src/services/questMailSync.ts`) converts every saved quest into deterministic preview messages:
+  - Intro mail → `quest_preview_intro_<questId>`.
+  - Completion default + each variant → `quest_preview_completion_*` IDs.
+  - Previews persist existing read/archive state when quests are re-saved and are deleted automatically when drafts are removed.
+- **EmailApp integration** seeds preview mail on launch and listens for the `terminality:quest-mail-sync` event so the inbox refreshes as soon as designers press **Save** in Quest Designer.
+
 The Terminal app:
 
 1. Fetches player state (flags, completed operations).

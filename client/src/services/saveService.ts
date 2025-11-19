@@ -1,8 +1,7 @@
 import { apiRequest } from './api'
 import { isLoggedIn as hasToken } from './auth'
 
-import type { SerializedMailState } from '../programs/mailSystem'
-import type { SerializedQuestState } from '../programs/questSystem'
+import type { TerminalSnapshot } from '../programs/terminalRuntime'
 
 export interface DesktopState {
   windowMemory?: Record<string, { x: number; y: number; width: number; height: number }>
@@ -42,18 +41,7 @@ export interface DesktopState {
   // Lock screen persisted flag
   isLocked?: boolean
   // Terminal session snapshot
-  terminalState?: {
-    lines?: Array<{ role: 'system' | 'user'; text: string }>
-    buffer?: string
-    questState?: SerializedQuestState
-    mailState?: SerializedMailState
-    session?: {
-      hostIp: string
-      username?: string
-      cwd?: string
-    }
-    savedAt?: string
-  }
+  terminalState?: TerminalSnapshot
   sessionLayout?: {
     windows: Array<{
       id: string

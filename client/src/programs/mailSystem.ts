@@ -1,11 +1,8 @@
-import type { QuestDefinition } from './terminalQuests/types'
-
-export type EmailId = string
-export type MailFolder = 'inbox' | 'spam' | 'news' | 'archive'
+export type MailFolder = 'inbox' | 'news' | 'spam' | 'archive'
 export type MailCategory = 'main' | 'side' | 'lore' | 'spam'
 
-export interface GameEmail {
-  id: EmailId
+export interface MailMessageDefinition {
+  id: string
   fromName: string
   fromAddress: string
   subject: string
@@ -13,32 +10,30 @@ export interface GameEmail {
   body: string
   inUniverseDate: string
   folder: MailFolder
-  isUnreadByDefault: boolean
-  linkedQuestId?: QuestDefinition['id'] | null
-  emailCategory?: MailCategory
+  emailCategory: MailCategory
+  isUnreadByDefault?: boolean
+  linkedQuestId?: string | null
   status?: 'draft' | 'published'
 }
 
-export type MailMessageDefinition = GameEmail
-
-export interface MailListEntry extends GameEmail {
-  read: boolean
-  archived: boolean
-  deleted: boolean
+export interface SerializedMailState {
+  deliveredIds?: string[]
+  readIds?: string[]
+  archivedIds?: string[]
+  deletedIds?: string[]
 }
 
 export interface MailEngineState {
-  deliveredIds: EmailId[]
-  readIds: EmailId[]
-  archivedIds: EmailId[]
-  deletedIds: EmailId[]
+  deliveredIds: string[]
+  readIds: string[]
+  archivedIds: string[]
+  deletedIds: string[]
 }
 
-export interface SerializedMailState {
-  deliveredIds?: EmailId[]
-  readIds?: EmailId[]
-  archivedIds?: EmailId[]
-  deletedIds?: EmailId[]
+export interface MailListEntry extends MailMessageDefinition {
+  read: boolean
+  archived: boolean
+  deleted: boolean
 }
 
 export interface MailFilterOptions {
@@ -47,11 +42,18 @@ export interface MailFilterOptions {
   search?: string
   includeArchived?: boolean
   includeDeleted?: boolean
+  folder?: MailFolder
+  category?: MailCategory
 }
 
-const DEFAULT_MAIL_MESSAGES: GameEmail[] = [
+const MAIL_FOLDERS: MailFolder[] = ['inbox', 'news', 'spam', 'archive']
+const MAIL_CATEGORIES: MailCategory[] = ['main', 'side', 'lore', 'spam']
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+const DEFAULT_MAIL_DEFINITIONS: MailMessageDefinition[] = [
   {
     id: 'ops_wipe_evidence',
+    status: 'published',
     emailCategory: 'main',
     fromName: 'Atlas Ops',
     fromAddress: 'ops@atlasnet',
@@ -68,16 +70,16 @@ const DEFAULT_MAIL_MESSAGES: GameEmail[] = [
       '',
       'No chatter with on-site staff. Once complete, reply with DONE in the terminal log.',
       '',
-      '— Atlas Ops'
+      '-- Atlas Ops'
     ].join('\n'),
     inUniverseDate: '2089-06-01 14:22',
     folder: 'inbox',
     isUnreadByDefault: true,
-    linkedQuestId: 'intro_001_wipe_evidence',
-    status: 'published'
+    linkedQuestId: 'intro_001_wipe_evidence'
   },
   {
     id: 'sysadmin_maintenance',
+    status: 'published',
     emailCategory: 'lore',
     fromName: 'Atlas SysAdmin',
     fromAddress: 'sysadmin@atlasnet',
@@ -90,38 +92,40 @@ const DEFAULT_MAIL_MESSAGES: GameEmail[] = [
       '',
       'If you are mid-run, checkpoint and resume after the window. Report any anomalies via the fault form, not over broadcast channels.',
       '',
-      '— Atlas SysAdmin'
+      '-- Atlas SysAdmin'
     ].join('\n'),
     inUniverseDate: '2089-06-01 03:45',
     folder: 'inbox',
     isUnreadByDefault: true,
-    status: 'published'
+    linkedQuestId: null
   },
   {
     id: 'atlas_city_news',
+    status: 'published',
     emailCategory: 'lore',
     fromName: 'Atlas City Newswire',
     fromAddress: 'bulletin@atlascity.news',
     subject: 'Weekly Incident Bulletin',
     previewLine: 'Downtown blackout traced to rogue maintenance drone.',
     body: [
-      'Atlas City Newswire — Incident Highlights:',
+      'Atlas City Newswire -- Incident Highlights:',
       '',
       '* Power grid glitch downtown attributed to a rogue maintenance drone.',
       '* Two municipal nodes were found serving counterfeit firmware packages.',
-      '* The riverfront AR kiosk now loops a recruitment ad for “Atlas Pioneer Society.”',
+      '* The riverfront AR kiosk now loops a recruitment ad for "Atlas Pioneer Society."',
       '',
       'Full brief attached for those with clearance. Rumor says the Pioneer Society is not recruiting civilians.',
       '',
-      '— Automated Dispatch'
+      '-- Automated Dispatch'
     ].join('\n'),
     inUniverseDate: '2089-05-31 18:05',
     folder: 'news',
     isUnreadByDefault: true,
-    status: 'published'
+    linkedQuestId: null
   },
   {
     id: 'spam_warranty',
+    status: 'published',
     emailCategory: 'spam',
     fromName: 'Atlas Warranty',
     fromAddress: 'warranty@atlas-extended.biz',
@@ -136,15 +140,16 @@ const DEFAULT_MAIL_MESSAGES: GameEmail[] = [
       '',
       'This message auto-destructs in 18 hours or whenever legal approves.',
       '',
-      '— Totally Real Warranty Dept'
+      '-- Totally Real Warranty Dept'
     ].join('\n'),
     inUniverseDate: '2089-05-30 09:12',
     folder: 'spam',
     isUnreadByDefault: true,
-    status: 'published'
+    linkedQuestId: null
   },
   {
     id: 'atlas_hr_onboarding',
+    status: 'published',
     emailCategory: 'side',
     fromName: 'Atlas HR',
     fromAddress: 'hr@atlasnet',
@@ -157,93 +162,116 @@ const DEFAULT_MAIL_MESSAGES: GameEmail[] = [
       '',
       'We expect you to acknowledge this reminder by week end. Reply ACK via terminal if you understand.',
       '',
-      '— Atlas HR'
+      '-- Atlas HR'
     ].join('\n'),
     inUniverseDate: '2089-05-29 11:00',
     folder: 'inbox',
     isUnreadByDefault: true,
-    status: 'published'
+    linkedQuestId: null
   }
 ]
 
-let MAIL_DEFINITIONS: GameEmail[] = [...DEFAULT_MAIL_MESSAGES]
-const MAIL_INDEX = new Map<EmailId, GameEmail>()
+let mailDefinitions: MailMessageDefinition[] = []
 
-const dedupe = (list?: EmailId[]) => {
-  if (!list?.length) return []
-  const seen = new Set<EmailId>()
-  const out: EmailId[] = []
-  list.forEach(entry => {
-    const token = entry?.trim()
-    if (!token || seen.has(token)) return
-    seen.add(token)
-    out.push(token)
+const normalizeMailIds = (ids?: string[] | null, limit = 200): string[] => {
+  if (!Array.isArray(ids) || !ids.length) return []
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  ids.forEach(id => {
+    if (typeof id !== 'string') return
+    const trimmed = id.trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    normalized.push(trimmed)
   })
-  return out
+  return limit > 0 ? normalized.slice(0, limit) : normalized
 }
 
-const generateId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-  ? crypto.randomUUID()
-  : `mail_${Math.random().toString(36).slice(2, 9)}`)
+const normalizeMailIdInput = (value?: string | string[] | null): string[] => {
+  if (!value) return []
+  if (Array.isArray(value)) return normalizeMailIds(value)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? [trimmed] : []
+  }
+  return []
+}
 
-const normalizeEmail = (entry: Partial<GameEmail> & { sender?: { name?: string; email?: string } }): GameEmail => {
-  const id = entry.id?.trim() || generateId()
-  const subject = entry.subject?.trim() || 'Untitled'
-  const fromName = entry.fromName?.trim() || entry.sender?.name?.trim() || 'Unknown Sender'
-  const fromAddress = entry.fromAddress?.trim() || entry.sender?.email?.trim() || 'noreply@atlasnet'
-  const body = entry.body || ''
-  const previewLine = entry.previewLine ?? (entry as any).preview ?? body.slice(0, 120)
-  const inUniverseDate = entry.inUniverseDate || (entry as any).receivedAt || new Date().toISOString()
-  const folder: MailFolder = entry.folder || 'inbox'
-  const isUnreadByDefault = entry.isUnreadByDefault ?? true
-  const linkedQuestId = entry.linkedQuestId === undefined ? (entry as any).relatedQuest : entry.linkedQuestId
-  const category = entry.emailCategory || (entry as any).category || 'lore'
+const fallbackPreview = (body: string): string => {
+  const line = body.split(/\r?\n/).find(entry => entry.trim().length > 0)
+  return line ? line.slice(0, 140) : body.slice(0, 140)
+}
+
+const asMailFolder = (value: string | undefined): MailFolder => (
+  MAIL_FOLDERS.includes(value as MailFolder) ? value as MailFolder : 'inbox'
+)
+
+const asMailCategory = (value: string | undefined): MailCategory => (
+  MAIL_CATEGORIES.includes(value as MailCategory) ? value as MailCategory : 'lore'
+)
+
+const normalizeMailDefinition = (input: MailMessageDefinition, seed = Date.now()) => {
+  const id = input.id?.trim() || `mail_${seed}`
+  const body = typeof input.body === 'string' ? input.body : ''
   return {
     id,
-    fromName,
-    fromAddress,
-    subject,
-    previewLine,
+    fromName: input.fromName?.trim() || 'Unknown Sender',
+    fromAddress: input.fromAddress?.trim() || 'noreply@atlasnet',
+    subject: input.subject?.trim() || 'Untitled',
+    previewLine: input.previewLine?.trim() || fallbackPreview(body),
     body,
-    inUniverseDate,
-    folder,
-    isUnreadByDefault,
-    linkedQuestId: linkedQuestId || null,
-    emailCategory: category as MailCategory
+    inUniverseDate: input.inUniverseDate?.trim() || new Date().toISOString().slice(0, 16).replace('T', ' '),
+    folder: asMailFolder(input.folder),
+    emailCategory: asMailCategory(input.emailCategory),
+    isUnreadByDefault: input.isUnreadByDefault !== false,
+    linkedQuestId: input.linkedQuestId ?? null,
+    status: input.status || 'draft'
   }
 }
 
-const hydrateDefinitions = (definitions: GameEmail[]) => {
-  MAIL_INDEX.clear()
-  MAIL_DEFINITIONS = (definitions?.length ? definitions : DEFAULT_MAIL_MESSAGES).map(normalizeEmail)
-  MAIL_DEFINITIONS.forEach(def => MAIL_INDEX.set(def.id, def))
+const applyMailDefinitions = (definitions: MailMessageDefinition[]) => {
+  const seen = new Set<string>()
+  const normalized: MailMessageDefinition[] = []
+  const stamp = Date.now()
+  definitions.forEach((entry, idx) => {
+    const mail = normalizeMailDefinition(entry, stamp + idx)
+    if (seen.has(mail.id)) return
+    seen.add(mail.id)
+    normalized.push(mail)
+  })
+  mailDefinitions = normalized
 }
 
-hydrateDefinitions(DEFAULT_MAIL_MESSAGES)
-
-const defaultDeliveredIds = () => MAIL_DEFINITIONS.map(def => def.id)
-const defaultReadIds = () => MAIL_DEFINITIONS.filter(def => !def.isUnreadByDefault).map(def => def.id)
-
-export const setMailDefinitions = (definitions: GameEmail[]) => {
-  hydrateDefinitions(Array.isArray(definitions) && definitions.length ? definitions : DEFAULT_MAIL_MESSAGES)
+export const setMailDefinitions = (definitions?: MailMessageDefinition[]): void => {
+  if (!Array.isArray(definitions) || !definitions.length) {
+    applyMailDefinitions(DEFAULT_MAIL_DEFINITIONS)
+    return
+  }
+  applyMailDefinitions(definitions)
 }
 
-export const getMailDefinitions = () => MAIL_DEFINITIONS
-export const getMailById = (id: EmailId) => MAIL_INDEX.get(id)
+applyMailDefinitions(DEFAULT_MAIL_DEFINITIONS)
 
 export const createMailEngineState = (): MailEngineState => ({
-  deliveredIds: defaultDeliveredIds(),
-  readIds: defaultReadIds(),
+  deliveredIds: [],
+  readIds: [],
   archivedIds: [],
   deletedIds: []
 })
 
-export const hydrateMailState = (serialized?: SerializedMailState | null): MailEngineState => ({
-  deliveredIds: serialized?.deliveredIds?.length ? dedupe(serialized.deliveredIds) : defaultDeliveredIds(),
-  readIds: serialized?.readIds?.length ? dedupe(serialized.readIds) : defaultReadIds(),
-  archivedIds: dedupe(serialized?.archivedIds),
-  deletedIds: dedupe(serialized?.deletedIds)
-})
+const filterByDelivered = (ids: string[], deliveredSet: Set<string>): string[] => ids.filter(id => deliveredSet.has(id))
+
+export const hydrateMailState = (serialized?: SerializedMailState | null): MailEngineState => {
+  if (!serialized) return createMailEngineState()
+  const deliveredIds = normalizeMailIds(serialized.deliveredIds)
+  const deliveredSet = new Set(deliveredIds)
+  return {
+    deliveredIds,
+    readIds: filterByDelivered(normalizeMailIds(serialized.readIds), deliveredSet),
+    archivedIds: filterByDelivered(normalizeMailIds(serialized.archivedIds), deliveredSet),
+    deletedIds: filterByDelivered(normalizeMailIds(serialized.deletedIds), deliveredSet)
+  }
+}
 
 export const serializeMailState = (state: MailEngineState): SerializedMailState => ({
   deliveredIds: [...state.deliveredIds],
@@ -252,102 +280,151 @@ export const serializeMailState = (state: MailEngineState): SerializedMailState 
   deletedIds: [...state.deletedIds]
 })
 
-export const ensureMailDelivered = (state: MailEngineState, ids?: EmailId[]): MailEngineState => {
-  const targetIds = ids?.length ? ids : MAIL_DEFINITIONS.map(def => def.id)
-  const delivered = new Set(state.deliveredIds)
-  let changed = false
-  targetIds.forEach(id => {
-    if (delivered.has(id)) return
-    delivered.add(id)
-    changed = true
-  })
-  return changed ? { ...state, deliveredIds: Array.from(delivered) } : state
+const parseMailDate = (value: string): Date | null => {
+  if (!value) return null
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
 }
 
-export const countUnreadMail = (state: MailEngineState, includeArchived = false): number => {
-  if (!MAIL_DEFINITIONS.length) return 0
-  const delivered = new Set(state.deliveredIds)
-  const archived = includeArchived ? new Set<EmailId>() : new Set(state.archivedIds)
-  const deleted = new Set(state.deletedIds)
-  const read = new Set(state.readIds)
-  return MAIL_DEFINITIONS.reduce((count, def) => {
-    if (!delivered.has(def.id)) return count
-    if (deleted.has(def.id)) return count
-    if (!includeArchived && archived.has(def.id)) return count
-    const isUnread = def.isUnreadByDefault && !read.has(def.id)
-    return isUnread ? count + 1 : count
-  }, 0)
-}
-
-const matchesSenderFilter = (entry: GameEmail, filter?: string): boolean => {
-  if (!filter) return true
-  const normalized = filter.trim().toLowerCase()
-  if (!normalized) return true
-  return entry.fromName.toLowerCase().includes(normalized) || entry.fromAddress.toLowerCase().includes(normalized)
-}
-
-const matchesSearch = (entry: GameEmail, term?: string): boolean => {
-  if (!term) return true
-  const normalized = term.trim().toLowerCase()
-  if (!normalized) return true
-  return (
-    entry.subject.toLowerCase().includes(normalized) ||
-    entry.body.toLowerCase().includes(normalized) ||
-    (entry.previewLine || '').toLowerCase().includes(normalized)
-  )
-}
-
-const parseDate = (value: string): number => {
-  const dt = new Date(value)
-  const ts = dt.getTime()
-  if (Number.isNaN(ts)) return Number.MIN_SAFE_INTEGER
-  return ts
-}
-
-export const buildMailList = (state: MailEngineState, filters?: MailFilterOptions): MailListEntry[] => {
-  const deliveredSet = new Set(state.deliveredIds)
-  const archivedSet = new Set(state.archivedIds)
-  const deletedSet = new Set(state.deletedIds)
-  const readSet = new Set(state.readIds)
-  return MAIL_DEFINITIONS
-    .filter(entry => deliveredSet.has(entry.id))
-    .map<MailListEntry>(entry => ({
-      ...entry,
-      read: readSet.has(entry.id) || !entry.isUnreadByDefault,
-      archived: archivedSet.has(entry.id),
-      deleted: deletedSet.has(entry.id)
-    }))
-    .filter(entry => {
-      if (!filters?.includeDeleted && entry.deleted) return false
-      if (!filters?.includeArchived && entry.archived) return false
-      if (filters?.unreadOnly && entry.read) return false
-      if (!matchesSenderFilter(entry, filters?.sender)) return false
-      if (!matchesSearch(entry, filters?.search)) return false
-      return true
-    })
-    .sort((a, b) => parseDate(b.inUniverseDate) - parseDate(a.inUniverseDate))
-}
-
-export const markMailRead = (state: MailEngineState, id: EmailId): MailEngineState => {
-  if (!id || state.readIds.includes(id)) return state
-  return {
-    ...state,
-    readIds: [...state.readIds, id]
-  }
+const clampMailDateLabel = (label: string): string => {
+  if (label.length >= 12) return label.slice(0, 12)
+  return label.padEnd(12, ' ')
 }
 
 export const formatMailDateLabel = (value: string): string => {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toISOString().slice(0, 10)
+  const date = parseMailDate(value)
+  if (!date) return clampMailDateLabel(value || 'Unknown')
+  const month = MONTH_LABELS[date.getMonth()] || '???'
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${month} ${day} ${hours}:${minutes}`
 }
 
 export const formatMailTimestamp = (value: string): string => {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 19)}`
+  const date = parseMailDate(value)
+  if (!date) return value || 'Unknown date'
+  const month = MONTH_LABELS[date.getMonth()] || '???'
+  const day = String(date.getDate()).padStart(2, '0')
+  const year = date.getFullYear()
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${month} ${day}, ${year} ${hours}:${minutes}`
 }
+
+const definitionsReady = () => mailDefinitions.length > 0
+
+const toMailListEntry = (
+  definition: MailMessageDefinition,
+  readSet: Set<string>,
+  archivedSet: Set<string>,
+  deletedSet: Set<string>
+): MailListEntry => ({
+  ...definition,
+  previewLine: definition.previewLine || fallbackPreview(definition.body),
+  read: readSet.has(definition.id),
+  archived: archivedSet.has(definition.id),
+  deleted: deletedSet.has(definition.id)
+})
+
+export function ensureMailDelivered(state: MailEngineState, ids?: string | string[] | null): MailEngineState {
+  const deliveredSet = new Set(state.deliveredIds)
+  const readSet = new Set(state.readIds)
+  const archivedSet = new Set(state.archivedIds)
+  const deletedSet = new Set(state.deletedIds)
+
+  const extraIds = normalizeMailIdInput(ids)
+  const autoDeliverPublished = arguments.length < 2
+  if (autoDeliverPublished && definitionsReady()) {
+    mailDefinitions.forEach(def => {
+      if (def.status === 'draft') return
+      deliveredSet.add(def.id)
+    })
+  }
+  extraIds.forEach(id => deliveredSet.add(id))
+
+  const deliveredIds = Array.from(deliveredSet)
+  const readIds = filterByDelivered([...readSet], deliveredSet)
+  const archivedIds = filterByDelivered([...archivedSet], deliveredSet)
+  const deletedIds = filterByDelivered([...deletedSet], deliveredSet)
+
+  if (
+    deliveredIds.length === state.deliveredIds.length &&
+    readIds.length === state.readIds.length &&
+    archivedIds.length === state.archivedIds.length &&
+    deletedIds.length === state.deletedIds.length &&
+    deliveredIds.every((id, idx) => id === state.deliveredIds[idx]) &&
+    readIds.every((id, idx) => id === state.readIds[idx]) &&
+    archivedIds.every((id, idx) => id === state.archivedIds[idx]) &&
+    deletedIds.every((id, idx) => id === state.deletedIds[idx])
+  ) {
+    return state
+  }
+
+  return { deliveredIds, readIds, archivedIds, deletedIds }
+}
+
+export const markMailRead = (state: MailEngineState, id: string): MailEngineState => {
+  if (!id) return state
+  const deliveredSet = new Set(state.deliveredIds)
+  deliveredSet.add(id)
+  const readSet = new Set(state.readIds)
+  if (readSet.has(id) && deliveredSet.size === state.deliveredIds.length) {
+    return state
+  }
+  readSet.add(id)
+  const deliveredIds = Array.from(deliveredSet)
+  return {
+    deliveredIds,
+    readIds: Array.from(readSet),
+    archivedIds: filterByDelivered(state.archivedIds, deliveredSet),
+    deletedIds: filterByDelivered(state.deletedIds, deliveredSet)
+  }
+}
+
+export const buildMailList = (state: MailEngineState, filters: MailFilterOptions = {}): MailListEntry[] => {
+  if (!definitionsReady()) return []
+  const deliveredSet = new Set(state.deliveredIds)
+  if (!deliveredSet.size) return []
+  const readSet = new Set(state.readIds)
+  const archivedSet = new Set(state.archivedIds)
+  const deletedSet = new Set(state.deletedIds)
+  const includeArchived = Boolean(filters.includeArchived)
+  const includeDeleted = Boolean(filters.includeDeleted)
+  const senderTerm = filters.sender?.trim().toLowerCase()
+  const searchTerm = filters.search?.trim().toLowerCase()
+
+  const matchesSender = (entry: MailMessageDefinition) => {
+    if (!senderTerm) return true
+    return entry.fromName.toLowerCase().includes(senderTerm) || entry.fromAddress.toLowerCase().includes(senderTerm)
+  }
+
+  const matchesSearch = (entry: MailMessageDefinition) => {
+    if (!searchTerm) return true
+    const haystack = [entry.subject, entry.previewLine || '', entry.body, entry.fromName, entry.fromAddress]
+    return haystack.some(value => value?.toLowerCase().includes(searchTerm))
+  }
+
+  const entries = mailDefinitions
+    .filter(def => deliveredSet.has(def.id))
+    .map(def => toMailListEntry(def, readSet, archivedSet, deletedSet))
+    .filter(entry => includeDeleted || !entry.deleted)
+    .filter(entry => includeArchived || !entry.archived)
+    .filter(entry => (filters.folder ? entry.folder === filters.folder : true))
+    .filter(entry => (filters.category ? entry.emailCategory === filters.category : true))
+    .filter(entry => matchesSender(entry))
+    .filter(entry => matchesSearch(entry))
+    .filter(entry => (filters.unreadOnly ? !entry.read : true))
+    .sort((a, b) => {
+      const aDate = parseMailDate(a.inUniverseDate)?.getTime() ?? 0
+      const bDate = parseMailDate(b.inUniverseDate)?.getTime() ?? 0
+      return bDate - aDate
+    })
+
+  return entries
+}
+
+export const countUnreadMail = (state: MailEngineState): number => (
+  buildMailList(state).filter(entry => !entry.read).length
+)

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import './TerminalApp.css'
 import {
@@ -8,7 +8,6 @@ import {
   ensureMailDelivered,
   formatMailDateLabel,
   formatMailTimestamp,
-  hydrateMailState,
   MailFilterOptions,
   MailListEntry,
   MailEngineState,
@@ -19,8 +18,8 @@ import {
 } from './mailSystem'
 import {
   createQuestEngineState,
-  hydrateQuestState,
   processQuestEvent,
+  getQuestDefinitionById,
   QuestEngineState,
   QuestEvent,
   QuestEventResult,
@@ -45,30 +44,28 @@ import { getCachedDesktop, hydrateFromServer, saveDesktopState } from '../servic
 import { listPublishedTerminalMail } from '../services/terminalMail'
 import { listTerminalQuests } from '../services/terminalQuests'
 import { listSystemDefinitions } from '../systemDefinitions/service'
-
-type Line = { role: 'system' | 'user'; text: string }
-type TerminalContext = 'local' | 'remote'
-
-interface RemoteSession {
-  hostIp: string
-  username: string
-  cwd: string
-  runtime: HostRuntime
-}
-
-interface TerminalSnapshot {
-  lines?: Line[]
-  buffer?: string
-  questState?: SerializedQuestState | null
-  mailState?: SerializedMailState | null
-}
+import {
+  applyTraceCost,
+  clampTerminalLines,
+  createTerminalSessionState,
+  deliverQuestMailPhase,
+  hydrateTerminalSessionState,
+  snapshotTerminalSessionState,
+  type TerminalContext,
+  type TerminalLine,
+  type TerminalRemoteSession,
+  type TerminalSnapshotSession,
+  type TerminalSnapshot,
+  type TraceAction,
+  type TraceMeterState
+} from './terminalRuntime'
 
 interface CommandDescriptor {
   name: string
   description: string
 }
 
-interface InboxListOptions extends MailFilterOptions {
+type InboxListOptions = MailFilterOptions & {
   page: number
   pageSize: number
 }
@@ -130,11 +127,13 @@ const logQuestDebugInfo = (event: QuestEvent, result: QuestEventResult) => {
 }
 
 export const TerminalApp: React.FC = () => {
-  const [questState, setQuestState] = useState(createQuestEngineState)
-  const [mailState, setMailState] = useState(createMailEngineState)
-  const [lines, setLines] = useState<Line[]>([{ role: 'system', text: 'Terminal ready. Type help.' }])
-  const [buffer, setBuffer] = useState('')
-  const [session, setSession] = useState<RemoteSession | null>(null)
+  const initialSession = useMemo(() => createTerminalSessionState(), [])
+  const [questState, setQuestState] = useState<QuestEngineState>(initialSession.questState)
+  const [mailState, setMailState] = useState<MailEngineState>(initialSession.mailState)
+  const [lines, setLines] = useState<TerminalLine[]>(initialSession.lines)
+  const [buffer, setBuffer] = useState(initialSession.buffer)
+  const [session, setSession] = useState<TerminalRemoteSession | null>(initialSession.remoteSession)
+  const [trace, setTrace] = useState<TraceMeterState>(initialSession.trace)
   const [systemsReady, setSystemsReady] = useState(false)
   const [definitionsReady, setDefinitionsReady] = useState(false)
   const [mailDefinitionsReady, setMailDefinitionsReady] = useState(false)
@@ -147,33 +146,85 @@ export const TerminalApp: React.FC = () => {
   const lastNotificationRef = useRef<string | null>(null)
   const lastMailNoticeRef = useRef<string | null>(null)
   const inboxListingRef = useRef<Record<number, string> | null>(null)
-  const questStateRef = useRef<QuestEngineState>(questState)
-  const mailStateRef = useRef<MailEngineState>(mailState)
+  const lastQuestResultRef = useRef<QuestEventResult | null>(null)
+  const sessionRef = useRef<TerminalRemoteSession | null>(session)
   const persistenceReady = definitionsReady && hydrationComplete && mailDefinitionsReady
 
   const context: TerminalContext = session ? 'remote' : 'local'
   const prompt = session ? `${session.hostIp}:${session.cwd}$` : '>'
 
-  const print = (text: string, role: Line['role'] = 'system') => {
-    setLines(prev => [...prev, { role, text }])
-  }
+  const print = useCallback((text: string, role: TerminalLine['role'] = 'system') => {
+    setLines(prev => clampTerminalLines([...prev, { role, text }]))
+  }, [])
 
-  const emitEvent = (type: QuestEventType, payload: { target_ip?: string; file_path?: string } = {}) => {
+  const syncQuestMailPhase = useCallback((questIds: string[] | undefined, phase: 'accept' | 'complete') => {
+    if (!questIds?.length || !mailDefinitionsReady) return
+    setMailState((prev: MailEngineState) => questIds.reduce((state, questId) => deliverQuestMailPhase(state, questId, phase), prev))
+  }, [mailDefinitionsReady])
+
+  const buildSessionFromSnapshot = useCallback((snapshotSession?: TerminalSnapshotSession | null): TerminalRemoteSession | null => {
+    if (!snapshotSession) return null
+    const host = getHostByIp(snapshotSession.hostIp)
+    if (!host || !host.online) return null
+    const runtime = createHostRuntime(host)
+    return {
+      hostIp: host.ip,
+      username: snapshotSession.username || host.username,
+      cwd: snapshotSession.cwd || host.startingPath || '/',
+      runtime
+    }
+  }, [])
+
+  const handleQuestEvent = useCallback((type: QuestEventType, payload: { target_ip?: string; file_path?: string } = {}) => {
+    lastQuestResultRef.current = null
     setQuestState(prev => {
       const event = { type, payload: { playerId: PLAYER_ID, ...payload } }
       const result = processQuestEvent(prev, event)
+      lastQuestResultRef.current = result
       logQuestDebugInfo(event, result)
-      const { state, notifications } = result
-      notifications.forEach(note => {
+      result.notifications.forEach(note => {
         const key = `${event.type}:${event.payload.target_ip || 'local'}:${note}`
         if (lastNotificationRef.current === key) return
         lastNotificationRef.current = key
         console.debug?.('[quest-notify]', key)
         print(`[quest] ${note}`)
       })
-      return state
+      return result.state
     })
-  }
+    const questResult = lastQuestResultRef.current as QuestEventResult | null
+    if (!questResult) return
+    if (questResult.acceptedQuestIds?.length) {
+      syncQuestMailPhase(questResult.acceptedQuestIds, 'accept')
+    }
+    if (questResult.completedQuestIds?.length) {
+      syncQuestMailPhase(questResult.completedQuestIds, 'complete')
+    }
+  }, [print, syncQuestMailPhase])
+
+  const applyTraceAction = useCallback((action: TraceAction) => {
+    let statusChanged: TraceMeterState['status'] | undefined
+    setTrace(prev => {
+      const { state: next, statusChanged: nextStatus } = applyTraceCost(prev, action)
+      statusChanged = nextStatus
+      return next
+    })
+    if (!statusChanged) return
+    if (statusChanged === 'nervous') {
+      print('[trace] Signal noise rising. Stay subtle.')
+      return
+    }
+    if (statusChanged === 'panic') {
+      print('[trace] Trace maxed out! Connections unstable.')
+      const activeSession = sessionRef.current
+      if (activeSession) {
+        setSession(null)
+        print(`[disconnect] ${activeSession.hostIp} severed the link.`)
+        handleQuestEvent('SESSION_DISCONNECTED', { target_ip: activeSession.hostIp })
+      }
+      return
+    }
+    print('[trace] Signal stabilized.')
+  }, [handleQuestEvent, print])
 
   useEffect(() => { inputRef.current?.focus() }, [])
   useEffect(() => {
@@ -183,12 +234,8 @@ export const TerminalApp: React.FC = () => {
   }, [lines])
 
   useEffect(() => {
-    questStateRef.current = questState
-  }, [questState])
-
-  useEffect(() => {
-    mailStateRef.current = mailState
-  }, [mailState])
+    sessionRef.current = session
+  }, [session])
 
   useEffect(() => {
     let cancelled = false
@@ -246,16 +293,14 @@ export const TerminalApp: React.FC = () => {
     const snapshot = pendingSnapshotRef.current
     if (snapshot) {
       pendingSnapshotRef.current = null
-      if (snapshot.questState) {
-        setQuestState(hydrateQuestState(snapshot.questState))
-      } else {
-        setQuestState(createQuestEngineState())
-      }
-      if (snapshot.mailState) {
-        setMailState(hydrateMailState(snapshot.mailState))
-      } else {
-        setMailState(createMailEngineState())
-      }
+      const hydrated = hydrateTerminalSessionState(snapshot)
+      setQuestState(hydrated.questState)
+      setMailState(hydrated.mailState)
+      setLines(hydrated.lines)
+      setBuffer(hydrated.buffer)
+      setTrace(hydrated.trace)
+      const restoredSession = buildSessionFromSnapshot(snapshot.session)
+      setSession(restoredSession)
       questStateInitializedRef.current = true
       mailStateInitializedRef.current = true
       return
@@ -268,7 +313,7 @@ export const TerminalApp: React.FC = () => {
       setMailState(createMailEngineState())
       mailStateInitializedRef.current = true
     }
-  }, [definitionsReady, hydrationComplete])
+  }, [buildSessionFromSnapshot, definitionsReady, hydrationComplete])
 
   useEffect(() => {
     let cancelled = false
@@ -329,26 +374,28 @@ export const TerminalApp: React.FC = () => {
 
   useEffect(() => {
     if (!mailDefinitionsReady) return
-    setMailState(prev => ensureMailDelivered(prev))
+    setMailState((prev: MailEngineState) => ensureMailDelivered(prev))
   }, [mailDefinitionsReady])
 
-  const persistTerminalState = useCallback((quests: QuestEngineState, mail: MailEngineState) => {
-    if (!quests || !mail) return
+  const persistTerminalState = useCallback(() => {
     saveDesktopState({
-      terminalState: {
-        questState: serializeQuestState(quests),
-        mailState: serializeMailState(mail),
-        savedAt: new Date().toISOString()
-      }
+      terminalState: snapshotTerminalSessionState({
+        lines,
+        buffer,
+        questState,
+        mailState,
+        remoteSession: session,
+        trace
+      })
     }).catch(err => console.warn('[terminal] failed to persist terminal state', err))
-  }, [])
+  }, [lines, buffer, questState, mailState, session, trace])
 
   useEffect(() => {
     if (!persistenceReady) return
     if (typeof window === 'undefined') return
 
     const timer = window.setTimeout(() => {
-      persistTerminalState(questStateRef.current, mailStateRef.current)
+      persistTerminalState()
     }, 400)
 
     return () => {
@@ -358,7 +405,7 @@ export const TerminalApp: React.FC = () => {
 
   useEffect(() => {
     return () => {
-      persistTerminalState(questStateRef.current, mailStateRef.current)
+      persistTerminalState()
     }
   }, [persistTerminalState])
 
@@ -447,7 +494,7 @@ export const TerminalApp: React.FC = () => {
     print(`INBOX (${unreadCount} unread)`)
     print('#  From               Subject                               Date        Unread')
     print('-------------------------------------------------------------------------------')
-    visible.forEach((entry, idx) => {
+    visible.forEach((entry: MailListEntry, idx: number) => {
       const absoluteIndex = startIndex + idx + 1
       indexMap[absoluteIndex] = entry.id
       const row = `${String(absoluteIndex).padEnd(3)}${formatColumn(entry.fromName, 18)}${formatColumn(entry.subject, 37)}${formatColumn(formatMailDateLabel(entry.inUniverseDate), 12)}   ${entry.read ? ' ' : '*'}`
@@ -471,18 +518,24 @@ export const TerminalApp: React.FC = () => {
     print(`Date: ${formatMailTimestamp(entry.inUniverseDate)}`)
     print(`Subject: ${entry.subject}`)
     print('')
-    entry.body.split(/\r?\n/).forEach(line => {
+    entry.body.split(/\r?\n/).forEach((line: string) => {
       print(line || '\u00a0')
     })
-    setMailState(prev => markMailRead(prev, entry.id))
+    setMailState((prev: MailEngineState) => markMailRead(prev, entry.id))
     if (wasUnread && entry.linkedQuestId) {
+      let questOfferResult: QuestEventResult | null = null
       setQuestState(prev => {
         const questResult = offerQuestFromMail(prev, entry.linkedQuestId)
+        questOfferResult = questResult
         if (questResult.notifications.length) {
           questResult.notifications.forEach((note: string) => print(`[quest] ${note}`))
         }
         return questResult.state
       })
+      const pendingOffer = questOfferResult as QuestEventResult | null
+      if (pendingOffer?.acceptedQuestIds?.length) {
+        syncQuestMailPhase(pendingOffer.acceptedQuestIds, 'accept')
+      }
     }
   }
 
@@ -492,7 +545,7 @@ export const TerminalApp: React.FC = () => {
       return
     }
     const entries = buildMailList(mailState, { includeArchived: true })
-    const target = entries.find(entry => entry.id === id)
+    const target = entries.find((entry: MailListEntry) => entry.id === id)
     if (!target) {
       print(`[mail] Message ${id} not found.`)
       return
@@ -603,7 +656,8 @@ export const TerminalApp: React.FC = () => {
     }
   }
 
-  const handleLocalCommand = async (command: string, args: string) => {
+  const handleLocalCommand = async (command: string, args: string): Promise<boolean> => {
+    let traceApplied = false
     switch (command) {
       case 'help':
         print(formatCommandList(LOCAL_COMMANDS))
@@ -620,46 +674,48 @@ export const TerminalApp: React.FC = () => {
       case 'scan': {
         if (!args) {
           print('Usage: scan <ip>')
-          return
+          return false
         }
         if (!systemsReady) {
           print('[scan] Ops database still syncing. Try again in a moment.')
-          return
+          return false
         }
         const host = getHostByIp(args)
         if (!host) {
           print(`[scan] ${args} not found in ops database.`)
-          return
+          return false
         }
         if (!host.online) {
           print(`[scan] ${host.ip} appears offline.`)
-          return
+          return false
         }
         print(`[scan] ${host.ip} is online`)
         print(`       open ports: ${host.openPorts.join(', ')}`)
-        emitEvent('SCAN_COMPLETED', { target_ip: host.ip })
+        handleQuestEvent('SCAN_COMPLETED', { target_ip: host.ip })
+        applyTraceAction('scan')
+        traceApplied = true
         break
       }
       case 'connect': {
         if (!args) {
           print('Usage: connect <ip>')
-          return
+          return false
         }
         if (!systemsReady) {
           print('[connect] Host registry still loading, stand by...')
-          return
+          return false
         }
         if (session) {
           print('Already connected. Disconnect first.')
-          return
+          return false
         }
         const host = getHostByIp(args)
         if (!host || !host.online) {
           print(`[connect] Unable to reach ${args}.`)
-          return
+          return false
         }
         const runtime = createHostRuntime(host)
-        const nextSession: RemoteSession = {
+        const nextSession: TerminalRemoteSession = {
           hostIp: host.ip,
           username: host.username,
           cwd: host.startingPath || '/',
@@ -667,7 +723,9 @@ export const TerminalApp: React.FC = () => {
         }
         setSession(nextSession)
         print(`[connect] connected to ${host.ip} as '${host.username}'`)
-        emitEvent('SESSION_CONNECTED', { target_ip: host.ip })
+        handleQuestEvent('SESSION_CONNECTED', { target_ip: host.ip })
+        applyTraceAction('connect')
+        traceApplied = true
         break
       }
       case 'quest_debug':
@@ -680,6 +738,7 @@ export const TerminalApp: React.FC = () => {
       default:
         print(`Unknown command: ${command}`)
     }
+    return traceApplied
   }
 
   const renderDirEntries = (runtime: HostRuntime, path: string) => {
@@ -702,12 +761,13 @@ export const TerminalApp: React.FC = () => {
     print(rendered.join('  '))
   }
 
-  const handleRemoteCommand = async (command: string, args: string) => {
+  const handleRemoteCommand = async (command: string, args: string): Promise<boolean> => {
     if (!session) {
       print('No active remote session.')
-      return
+      return false
     }
     const { runtime, cwd, hostIp } = session
+    let traceApplied = false
     switch (command) {
       case 'help':
         print(formatCommandList(REMOTE_COMMANDS))
@@ -718,12 +778,12 @@ export const TerminalApp: React.FC = () => {
       case 'cd': {
         if (!args) {
           print('Usage: cd <path>')
-          return
+          return false
         }
         const nextPath = changeDirectory(runtime, cwd, args)
         if (!nextPath) {
           print('cd: path not found')
-          return
+          return false
         }
         setSession({ ...session, cwd: nextPath })
         break
@@ -731,12 +791,12 @@ export const TerminalApp: React.FC = () => {
       case 'cat': {
         if (!args) {
           print('Usage: cat <file>')
-          return
+          return false
         }
         const result = readFile(runtime, cwd, args)
         if (!result) {
           print('cat: file not found')
-          return
+          return false
         }
         print(result.content)
         break
@@ -744,25 +804,30 @@ export const TerminalApp: React.FC = () => {
       case 'rm': {
         if (!args) {
           print('Usage: rm <file>')
-          return
+          return false
         }
         const removal = removeFile(runtime, cwd, args)
         if (!removal.success || !removal.path) {
           print('rm: file not found')
-          return
+          return false
         }
         print(`[rm] deleted ${removal.path}`)
-        emitEvent('FILE_DELETED', { target_ip: hostIp, file_path: removal.path })
+        handleQuestEvent('FILE_DELETED', { target_ip: hostIp, file_path: removal.path })
+        applyTraceAction('delete')
+        traceApplied = true
         break
       }
       case 'disconnect':
         setSession(null)
         print('[disconnect] Session closed.')
-        emitEvent('SESSION_DISCONNECTED', { target_ip: hostIp })
+        handleQuestEvent('SESSION_DISCONNECTED', { target_ip: hostIp })
+        applyTraceAction('disconnect')
+        traceApplied = true
         break
       default:
         print(`Unknown command: ${command}`)
     }
+    return traceApplied
   }
 
   const handleCommand = async () => {
@@ -772,10 +837,11 @@ export const TerminalApp: React.FC = () => {
     print(input, 'user')
     const [command, ...rest] = input.split(/\s+/)
     const args = rest.join(' ').trim()
-    if (context === 'local') {
-      await handleLocalCommand(command, args)
-    } else {
-      await handleRemoteCommand(command, args)
+    const traceApplied = context === 'local'
+      ? await handleLocalCommand(command, args)
+      : await handleRemoteCommand(command, args)
+    if (!traceApplied) {
+      applyTraceAction('idle')
     }
   }
 
@@ -821,7 +887,7 @@ export const TerminalApp: React.FC = () => {
             {context === 'local' ? 'LOCAL :: inbox, scan, connect' : `REMOTE :: ${session?.cwd}`}
           </div>
           <div className="footer-right">
-            {buildMailList(mailState).slice(0, 3).map(entry => entry.subject).join(' | ') || 'Awaiting directives'}
+            {buildMailList(mailState).slice(0, 3).map((entry: MailListEntry) => entry.subject).join(' | ') || 'Awaiting directives'}
           </div>
         </div>
         <input

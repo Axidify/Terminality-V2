@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest'
 import { render, screen, cleanup, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import React from 'react'
@@ -80,7 +81,7 @@ vi.mock('../os/ToastContext', () => ({
 }))
 
 vi.mock('../services/terminalQuests', () => ({
-  listTerminalQuests: (...args: unknown[]) => questDesignerMocks.listTerminalQuests(...args),
+  listTerminalQuests: questDesignerMocks.listTerminalQuests,
   createTerminalQuest: vi.fn(),
   updateTerminalQuest: vi.fn(),
   deleteTerminalQuest: vi.fn(),
@@ -88,15 +89,15 @@ vi.mock('../services/terminalQuests', () => ({
 }))
 
 vi.mock('../systemDefinitions/service', () => ({
-  listSystemDefinitions: (...args: unknown[]) => questDesignerMocks.listSystemDefinitions(...args),
-  saveSystemDefinition: (...args: unknown[]) => questDesignerMocks.saveSystemDefinition(...args),
-  updateSystemDefinition: (...args: unknown[]) => questDesignerMocks.updateSystemDefinition(...args),
-  deleteSystemDefinition: (...args: unknown[]) => questDesignerMocks.deleteSystemDefinition(...args)
+  listSystemDefinitions: questDesignerMocks.listSystemDefinitions,
+  saveSystemDefinition: questDesignerMocks.saveSystemDefinition,
+  updateSystemDefinition: questDesignerMocks.updateSystemDefinition,
+  deleteSystemDefinition: questDesignerMocks.deleteSystemDefinition
 }))
 
 vi.mock('../services/saveService', () => ({
-  getCachedDesktop: (...args: unknown[]) => questDesignerMocks.getCachedDesktop(...args),
-  hydrateFromServer: (...args: unknown[]) => questDesignerMocks.hydrateFromServer(...args)
+  getCachedDesktop: questDesignerMocks.getCachedDesktop,
+  hydrateFromServer: questDesignerMocks.hydrateFromServer
 }))
 
 vi.mock('../services/terminalMail', () => ({

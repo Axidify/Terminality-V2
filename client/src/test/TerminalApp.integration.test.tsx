@@ -27,6 +27,24 @@ vi.mock('../services/saveService', () => ({
   saveDesktopState: (...args: unknown[]) => mockSaveDesktopState(...args)
 }))
 
+const IntroQuest = {
+  id: 'intro_001_wipe_evidence',
+  title: 'Wipe the Evidence',
+  description: 'Erase the flagged log from the relay logs.',
+  trigger: { type: 'ON_FIRST_TERMINAL_OPEN' },
+  default_system_id: 'atlas_relay',
+  steps: [
+    { id: 'scan_host', type: 'SCAN_HOST', params: { target_ip: '10.23.4.8' } },
+    { id: 'connect_host', type: 'CONNECT_HOST', params: { target_ip: '10.23.4.8' } },
+    { id: 'delete_file', type: 'DELETE_FILE', params: { target_ip: '10.23.4.8', file_path: '/var/logs/evidence.log' } },
+    { id: 'disconnect', type: 'DISCONNECT_HOST', params: { target_ip: '10.23.4.8' } }
+  ],
+  rewards: { credits: 50, flags: [{ key: 'quest_intro_001_completed' }] },
+  requirements: { required_flags: [], required_quests: [] },
+  completion_flag: 'quest_intro_001_completed',
+  status: 'published'
+}
+
 const LinkedQuest = {
   id: 'mail_directive_alpha',
   title: 'Directive Alpha',
@@ -50,7 +68,8 @@ const sampleMail = [
     inUniverseDate: '2089-06-01 10:00',
     folder: 'inbox',
     isUnreadByDefault: true,
-    linkedQuestId: 'mail_directive_alpha'
+    linkedQuestId: 'mail_directive_alpha',
+    status: 'published'
   },
   {
     id: 'mail-lore',
@@ -61,7 +80,8 @@ const sampleMail = [
     body: 'Power grid hiccups downtown. Expect rolling outages.',
     inUniverseDate: '2089-05-31 09:00',
     folder: 'news',
-    isUnreadByDefault: true
+    isUnreadByDefault: true,
+    status: 'published'
   }
 ]
 
@@ -79,7 +99,7 @@ const setupDefaultMocks = () => {
     systems: [],
     systemTemplates: []
   })
-  mockListTerminalQuests.mockResolvedValue([LinkedQuest])
+  mockListTerminalQuests.mockResolvedValue([IntroQuest, LinkedQuest])
   mockListTerminalMail.mockResolvedValue(sampleMail)
   mockSaveDesktopState.mockResolvedValue({ version: 1, desktop: {}, story: {} })
 }
@@ -136,5 +156,28 @@ describe('TerminalApp persistent intro', () => {
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
 
     expect(await screen.findByText(/New quest available: Directive Alpha/)).toBeTruthy()
+  })
+
+  it('completes the intro quest when the terminal flow is executed', async () => {
+    seedHydratedQuestState([])
+    render(<TerminalApp />)
+
+    const input = await screen.findByLabelText('Terminal command input')
+    const runCommand = async (command: string) => {
+      fireEvent.change(input, { target: { value: command } })
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })
+    }
+
+    await runCommand('scan 10.23.4.8')
+    expect(await screen.findByText(/\[scan] 10\.23\.4\.8 is online/)).toBeTruthy()
+
+    await runCommand('connect 10.23.4.8')
+    expect(await screen.findByText(/\[connect] connected to 10\.23\.4\.8/)).toBeTruthy()
+
+    await runCommand('rm /var/logs/evidence.log')
+    expect(await screen.findByText(/\[rm] deleted \/var\/logs\/evidence\.log/)).toBeTruthy()
+
+    await runCommand('disconnect')
+    expect(await screen.findByText(/\[quest] Quest complete: Wipe the Evidence/)).toBeTruthy()
   })
 })

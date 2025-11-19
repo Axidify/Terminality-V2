@@ -448,6 +448,8 @@ const stepSatisfiedByEvent = (step: QuestStep, event: QuestEvent): boolean => {
 export interface QuestEventResult {
   state: QuestEngineState
   notifications: string[]
+  completedQuestIds?: string[]
+  acceptedQuestIds?: string[]
 }
 
 export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): QuestEventResult => {
@@ -476,8 +478,9 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
   })
 
   const newlyCompleted = nextActive.filter(inst => inst.completed && !state.completedIds.includes(inst.quest.id))
-  const updatedCompletedIds = newlyCompleted.length
-    ? [...state.completedIds, ...newlyCompleted.map(inst => inst.quest.id)]
+  const newlyCompletedIds = newlyCompleted.map(inst => inst.quest.id)
+  const updatedCompletedIds = newlyCompletedIds.length
+    ? [...state.completedIds, ...newlyCompletedIds]
     : state.completedIds
 
   let updatedFlags = newlyCompleted.reduce<QuestFlagState[]>((acc, inst) => (
@@ -491,6 +494,7 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
 
   const stillActive = nextActive.filter(inst => !inst.completed)
   const spawnResult = spawnTriggeredQuests(stillActive, updatedCompletedIds, updatedFlags, nextStatuses)
+  const acceptedQuestIds = spawnResult.triggered.map(quest => quest.id)
   if (spawnResult.triggered.length) {
     spawnResult.triggered.forEach(quest => {
       nextStatuses[quest.id] = 'in_progress'
@@ -505,7 +509,9 @@ export const processQuestEvent = (state: QuestEngineState, event: QuestEvent): Q
       flags: updatedFlags,
       statuses: nextStatuses
     },
-    notifications
+    notifications,
+    completedQuestIds: newlyCompletedIds,
+    acceptedQuestIds
   }
 }
 
@@ -562,6 +568,7 @@ export const offerQuestFromMail = (state: QuestEngineState, questId?: string | n
       active: nextActive,
       statuses: nextStatuses
     },
-    notifications: [`New quest available: ${quest.title}`]
+    notifications: [`New quest available: ${quest.title}`],
+    acceptedQuestIds: [quest.id]
   }
 }
