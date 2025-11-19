@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import './EmailApp.css'
-import type { GameMail, MailFolder, MailTag } from '../types/mail'
+import type { GameMail, MailFolder, MailService, MailTag } from '../types/mail'
 import type { QuestDefinition } from '../types/quest'
 import { createMailService } from '../services/mailService'
 import { createQuestStorageService } from './quest-designer/storage'
 import { syncQuestMailPreviews } from '../services/questMailSync'
 import { QUEST_MAIL_SYNC_EVENT } from '../constants/mail'
-import { useWindowManager } from '../os/WindowManager'
 
 type MailQuickFilter = 'unread' | 'quest' | 'lore'
 
@@ -55,10 +54,14 @@ const mailMatchesFilters = (mail: GameMail, filters: Set<MailQuickFilter>) => {
   return true
 }
 
-export const EmailApp: React.FC = () => {
-  const mailService = useMemo(() => createMailService(), [])
+type EmailAppProps = {
+  onStartQuest?: (questId: string) => Promise<void> | void
+  mailService?: MailService
+}
+
+export const EmailApp: React.FC<EmailAppProps> = ({ onStartQuest, mailService }) => {
+  const service = useMemo(() => mailService ?? createMailService(), [mailService])
   const questStorage = useMemo(() => createQuestStorageService(), [])
-  const wm = useWindowManager()
   const mountedRef = useRef(true)
   const [folder, setFolder] = useState<MailFolder>('inbox')
   const folderRef = useRef<MailFolder>('inbox')
@@ -68,6 +71,7 @@ export const EmailApp: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [linkedQuest, setLinkedQuest] = useState<QuestDefinition | null>(null)
   const [questLoading, setQuestLoading] = useState(false)
+  const [startingQuest, setStartingQuest] = useState(false)
   const mail = mailByFolder[folder] || []
 
   useEffect(() => () => { mountedRef.current = false }, [])
@@ -75,13 +79,13 @@ export const EmailApp: React.FC = () => {
   const refreshFolder = useCallback(async (target: MailFolder, busy = false) => {
     if (busy) setLoading(true)
     try {
-      const list = await mailService.listMail(target)
+      const list = await service.listMail(target)
       if (!mountedRef.current) return
       setMailByFolder(prev => ({ ...prev, [target]: list }))
     } finally {
       if (busy && mountedRef.current) setLoading(false)
     }
-  }, [mailService])
+  }, [service])
 
   useEffect(() => {
     folderRef.current = folder
@@ -98,7 +102,7 @@ export const EmailApp: React.FC = () => {
       try {
         const quests = await questStorage.listQuests()
         if (cancelled || quests.length === 0) return
-        await syncQuestMailPreviews({ quests, mailService })
+        await syncQuestMailPreviews({ quests, mailService: service })
         if (!cancelled) {
           await refreshFolder(folderRef.current)
         }
@@ -110,7 +114,7 @@ export const EmailApp: React.FC = () => {
     return () => {
       cancelled = true
     }
-  }, [questStorage, mailService, refreshFolder])
+  }, [questStorage, service, refreshFolder])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -154,18 +158,18 @@ export const EmailApp: React.FC = () => {
   const handleSelectMail = async (entry: GameMail) => {
     setSelectedId(entry.id)
     if (!entry.read) {
-      await mailService.markRead(entry.id, true)
+      await service.markRead(entry.id, true)
       refreshFolder(folder).catch(() => {})
     }
   }
 
   const handleToggleRead = async (entry: GameMail) => {
-    await mailService.markRead(entry.id, !entry.read)
+    await service.markRead(entry.id, !entry.read)
     refreshFolder(folder).catch(() => {})
   }
 
   const handleArchive = async (entry: GameMail) => {
-    await mailService.archiveMail(entry.id)
+    await service.archiveMail(entry.id)
     setSelectedId(null)
     refreshFolder(folder).catch(() => {})
     if (folder !== 'archive') refreshFolder('archive').catch(() => {})
@@ -174,7 +178,21 @@ export const EmailApp: React.FC = () => {
   const handleOpenQuest = (entry?: GameMail | null) => {
     const target = entry ?? selectedMail
     if (!target?.questId) return
-    wm.open('quest-designer', { title: 'Quest Designer' })
+    window.location.href = '/designer'
+  }
+
+  const handleStartQuest = async (entry?: GameMail | null) => {
+    if (!onStartQuest) return
+    const target = entry ?? selectedMail
+    if (!target?.questId) return
+    setStartingQuest(true)
+    try {
+      await onStartQuest(target.questId)
+    } catch {
+      // swallow quest start errors for now
+    } finally {
+      setStartingQuest(false)
+    }
   }
 
   const folderStats = useMemo(() => {
@@ -347,7 +365,14 @@ export const EmailApp: React.FC = () => {
                   <p className="quest-status">Status: Not started (dev placeholder)</p>
                   <div className="quest-actions">
                     <button type="button" onClick={() => handleOpenQuest(selectedMail)}>Open quest details</button>
-                    <button type="button" className="ghost" disabled>Accept quest (soon)</button>
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={!onStartQuest || questLoading || startingQuest}
+                      onClick={() => handleStartQuest(selectedMail)}
+                    >
+                      {startingQuest ? 'Starting…' : 'Start quest'}
+                    </button>
                   </div>
                 </div>
               )}

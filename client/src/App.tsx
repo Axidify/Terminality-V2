@@ -13,11 +13,19 @@ import { UserProvider } from './os/UserContext'
 import { WindowManagerProvider } from './os/WindowManager'
 import { HomePage } from './pages/HomePage'
 import ResetPage from './pages/ResetPage'
+import { QuestDesignerPage } from './pages/QuestDesignerPage'
 import { isLoggedIn } from './services/auth'
 import { hydrateFromServer, getCachedDesktop, saveDesktopState } from './services/saveService'
 
 type AppView = 'lock' | 'onboarding' | 'desktop'
-type AppPage = 'home' | 'os' | 'reset'
+type AppPage = 'home' | 'os' | 'reset' | 'designer'
+
+const resolvePageFromPath = (pathname: string): AppPage => {
+  if (pathname.startsWith('/app')) return 'os'
+  if (pathname.startsWith('/reset')) return 'reset'
+  if (pathname.startsWith('/designer')) return 'designer'
+  return 'home'
+}
 
 function OSApp() {
   const [view, setView] = useState<AppView>(() => {
@@ -88,18 +96,22 @@ function OSApp() {
 
 export default function App() {
   const path = window.location.pathname
-  const initial: AppPage = path === '/app' ? 'os' : path === '/reset' ? 'reset' : 'home'
-  // Gate /app behind auth: if not logged in, force home page
+  const initial = resolvePageFromPath(path)
+  // Gate /app and /designer behind auth: if not logged in, force home page
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
-    if (initial === 'os' && !isLoggedIn()) return 'home'
+    if ((initial === 'os' || initial === 'designer') && !isLoggedIn()) return 'home'
     return initial
   })
 
   useEffect(() => {
     const handlePopState = () => {
       const p = window.location.pathname
-      const next: AppPage = p === '/app' ? 'os' : p === '/reset' ? 'reset' : 'home'
-      setCurrentPage(next === 'os' && !isLoggedIn() ? 'home' : next)
+      const next = resolvePageFromPath(p)
+      if ((next === 'os' || next === 'designer') && !isLoggedIn()) {
+        setCurrentPage('home')
+      } else {
+        setCurrentPage(next)
+      }
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
@@ -109,8 +121,12 @@ export default function App() {
     // React to auth token changes (login/logout) to keep gate accurate
     const onAuthChange = () => {
       const p = window.location.pathname
-      const next: AppPage = p === '/app' ? 'os' : p === '/reset' ? 'reset' : 'home'
-      setCurrentPage(next === 'os' && !isLoggedIn() ? 'home' : next)
+      const next = resolvePageFromPath(p)
+      if ((next === 'os' || next === 'designer') && !isLoggedIn()) {
+        setCurrentPage('home')
+      } else {
+        setCurrentPage(next)
+      }
     }
     window.addEventListener('authTokenChanged', onAuthChange as any)
     return () => window.removeEventListener('authTokenChanged', onAuthChange as any)
@@ -137,6 +153,20 @@ export default function App() {
           <NotificationProvider>
             <UserProvider>
             <ResetPage />
+            </UserProvider>
+          </NotificationProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    )
+  }
+
+  if (currentPage === 'designer') {
+    return (
+      <ThemeProvider>
+        <ToastProvider>
+          <NotificationProvider>
+            <UserProvider>
+              <QuestDesignerPage />
             </UserProvider>
           </NotificationProvider>
         </ToastProvider>

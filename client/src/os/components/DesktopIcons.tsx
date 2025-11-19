@@ -11,12 +11,15 @@ import { useWindowManager, WindowType } from '../WindowManager'
 import './DesktopIcons.css'
 
 interface DesktopIconDef {
-  type: WindowType
+  id: string
+  type?: WindowType
   name: string
   icon: React.ReactNode
   x: number
   y: number
   defaultOpts?: { title?: string; width?: number; height?: number; payload?: any }
+  onOpen?: () => void
+  legacyKeyBase?: string
 }
 
 export interface DesktopIconsRef {
@@ -27,6 +30,7 @@ export interface DesktopIconsRef {
 
 const baseIcons: DesktopIconDef[] = [
   { 
+    id: 'terminal',
     type: 'terminal', 
     name: 'Terminal', 
     icon: <TerminalIcon size={50} />, 
@@ -35,6 +39,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Terminal', width: 1400, height: 500 } 
   },
   { 
+    id: 'explorer',
     type: 'explorer', 
     name: 'My Files', 
     icon: <FolderIcon size={50} />, 
@@ -43,6 +48,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'File Explorer', width: 1200, height: 800 } 
   },
   { 
+    id: 'notepad',
     type: 'notepad', 
     name: 'Notes', 
     icon: <NotepadIcon size={50} />, 
@@ -51,6 +57,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Notepad', width: 1200, height: 800, payload: { path: '/home/player/notes.txt' } } 
   },
   { 
+    id: 'browser',
     type: 'browser', 
     name: 'Browser', 
     icon: <BrowserIcon size={50} />, 
@@ -59,6 +66,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Browser', width: 1200, height: 800 } 
   },
   { 
+    id: 'recycle',
     type: 'recycle', 
     name: 'Recycle Bin', 
     icon: <RecycleBinIcon size={50} />, 
@@ -67,6 +75,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Recycle Bin', width: 1000, height: 760 } 
   },
   { 
+    id: 'email',
     type: 'email', 
     name: 'Mail', 
     icon: <MailIcon size={50} />, 
@@ -75,6 +84,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Mail', width: 1200, height: 800 } 
   },
   { 
+    id: 'music',
     type: 'music', 
     name: 'Music', 
     icon: <MusicIcon size={50} />, 
@@ -83,6 +93,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Music Player', width: 427, height: 800 } 
   },
   { 
+    id: 'settings',
     type: 'settings', 
     name: 'Settings', 
     icon: <SettingsIcon size={50} />, 
@@ -91,6 +102,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'System Settings', width: 1200, height: 800 } 
   },
   { 
+    id: 'chat',
     type: 'chat', 
     name: 'Chat', 
     icon: <ChatIcon size={50} />, 
@@ -99,6 +111,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Chat', width: 400, height: 800 } 
   },
   { 
+    id: 'modular-plugin-online-chat',
     type: 'modular-plugin', 
     name: 'Online Chat', 
     icon: <ChatIcon size={50} />, 
@@ -107,6 +120,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Online Chat', width: 500, height: 700, payload: { pluginId: 'online-chat' } } 
   },
   { 
+    id: 'store',
     type: 'store', 
     name: 'Store', 
     icon: <StoreIcon size={50} />, 
@@ -115,6 +129,7 @@ const baseIcons: DesktopIconDef[] = [
     defaultOpts: { title: 'Terminality Store', width: 1200, height: 800 } 
   },
     { 
+      id: 'profile',
       type: 'profile',
       name: 'Profile',
       icon: <Icon name="user" size={50} />,
@@ -124,6 +139,7 @@ const baseIcons: DesktopIconDef[] = [
     }
     ,
     { 
+      id: 'modular',
       type: 'modular',
       name: 'App Store',
       icon: <StoreIcon size={50} />,
@@ -166,6 +182,7 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
     const icons: DesktopIconDef[] = [...baseIcons]
     if (isAdmin) {
       icons.push({
+        id: 'usermgmt',
         type: 'usermgmt',
         name: 'Users',
         icon: <UserManagementIcon size={50} />,
@@ -174,12 +191,13 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
         defaultOpts: { title: 'User Management', width: 900, height: 650 }
       })
       icons.push({
-        type: 'quest-designer',
+        id: 'quest-designer',
         name: 'Quest Designer',
         icon: <QuestIcon size={50} />,
         x: 240,
         y: 120,
-        defaultOpts: { title: 'Quest Designer', width: 1200, height: 800 }
+        onOpen: () => { window.open('/designer', '_blank', 'noopener,noreferrer') },
+        legacyKeyBase: 'quest-designer'
       })
     }
     return icons
@@ -198,7 +216,7 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
     const ICONS_PER_COLUMN = Math.floor(availableHeight / ROW_HEIGHT)
 
     getIcons().forEach((icon, idx) => {
-      const iconKey = `${icon.type}-${idx}`
+      const iconKey = icon.id
       const col = Math.floor(idx / ICONS_PER_COLUMN)
       const row = idx % ICONS_PER_COLUMN
       newPositions[iconKey] = {
@@ -232,7 +250,24 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
 
   const handleDoubleClick = (icon: DesktopIconDef) => {
     setContextMenu(null)
+    if (icon.onOpen) {
+      icon.onOpen()
+      return
+    }
+    if (!icon.type) return
     wm.open(icon.type, icon.defaultOpts)
+  }
+
+  const getIconPosition = (icon: DesktopIconDef, idx: number) => {
+    const saved = iconPositions[icon.id]
+    if (saved) return saved
+    const legacyBase = icon.legacyKeyBase ?? icon.type
+    if (legacyBase) {
+      const legacyKey = `${legacyBase}-${idx}`
+      const legacyPos = iconPositions[legacyKey]
+      if (legacyPos) return legacyPos
+    }
+    return { x: icon.x, y: icon.y }
   }
 
   const handleIconContextMenu = (event: React.MouseEvent, icon: DesktopIconDef) => {
@@ -243,10 +278,12 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
       return
     }
 
+    const recycleType: WindowType = icon.type
+
     const baseItems: MenuItem[] = [
       {
         label: 'Open',
-        onClick: () => wm.open(icon.type, icon.defaultOpts)
+        onClick: () => wm.open(recycleType, icon.defaultOpts)
       }
     ]
 
@@ -333,8 +370,8 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
 
     e.stopPropagation()
     e.preventDefault()
-    const iconKey = `${icon.type}-${idx}`
-    const currentPos = iconPositions[iconKey] || { x: icon.x, y: icon.y }
+    const iconKey = icon.id
+    const currentPos = getIconPosition(icon, idx)
 
     draggingIconRef.current = iconKey
     setDraggingIcon(iconKey)
@@ -386,8 +423,8 @@ export const DesktopIcons = forwardRef<DesktopIconsRef>((props, ref) => {
   return (
     <div className="desktop-icons">
       {getIcons().map((icon, idx) => {
-          const iconKey = `${icon.type}-${idx}`
-          const pos = iconPositions[iconKey] || { x: icon.x, y: icon.y }
+          const iconKey = icon.id
+          const pos = getIconPosition(icon, idx)
           return (
             <div
               key={idx}

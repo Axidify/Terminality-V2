@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { sounds } from './SoundEffects'
 import { saveDesktopState, getCachedDesktop, hydrateFromServer } from '../services/saveService'
 
-export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt' | 'modular' | 'modular-plugin' | 'quest-designer'
+export type WindowType = 'terminal' | 'explorer' | 'notepad' | 'browser' | 'recycle' | 'email' | 'chat' | 'music' | 'settings' | 'store' | 'profile' | 'usermgmt' | 'modular' | 'modular-plugin'
 
 export interface WindowInstance {
   id: string
@@ -121,7 +121,9 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
       const cached = getCachedDesktop()
       const layout = cached?.sessionLayout as SessionLayoutSnapshot | undefined
       if (layout?.windows?.length) {
-        const restored = deserializeWindows(layout.windows, layout.lastFocusedId)
+        const filtered = layout.windows.filter(win => (win as any).type !== 'quest-designer')
+        if (!filtered.length) return []
+        const restored = deserializeWindows(filtered, layout.lastFocusedId)
         bumpZCounter(restored)
         return restored
       }
@@ -138,7 +140,7 @@ export const WindowManagerProvider: React.FC<{ children: React.ReactNode }> = ({
     hydrateFromServer().then(state => {
       if (cancelled) return
       const layout = state.desktop?.sessionLayout as SessionLayoutSnapshot | undefined
-      const snapshots = layout?.windows
+      const snapshots = layout?.windows?.filter(win => (win as any).type !== 'quest-designer')
       if (snapshots?.length) {
         const restored = deserializeWindows(snapshots, layout?.lastFocusedId)
         bumpZCounter(restored)

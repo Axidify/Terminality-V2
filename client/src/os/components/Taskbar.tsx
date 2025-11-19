@@ -9,10 +9,11 @@ import { useWindowManager, WindowType } from '../WindowManager'
 import './Taskbar.css'
 
 interface AppDefinition {
-  type: WindowType
+  type?: WindowType
   name: string
   icon: React.ReactNode
   defaultOpts?: { title?: string; width?: number; height?: number; payload?: any }
+  launch?: () => void
 }
 
 const baseApps: AppDefinition[] = [
@@ -75,12 +76,18 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
     const list = [...baseApps]
     if (isAdmin) {
       list.push({ type: 'usermgmt', name: 'User Management', icon: <UserManagementIcon size={20} />, defaultOpts: { title: 'User Management', width: 900, height: 650 } })
-      list.push({ type: 'quest-designer', name: 'Quest Designer', icon: <QuestIcon size={20} />, defaultOpts: { title: 'Quest Designer', width: 1200, height: 800 } })
+      list.push({ name: 'Quest Designer', icon: <QuestIcon size={20} />, launch: () => { window.open('/designer', '_blank', 'noopener,noreferrer') } })
     }
     return list
   }, [isAdmin])
 
   const launchApp = (app: AppDefinition) => {
+    if (app.launch) {
+      app.launch()
+      setStartOpen(false)
+      return
+    }
+    if (!app.type) return
     wm.open(app.type, app.defaultOpts)
     setStartOpen(false)
   }
@@ -109,7 +116,7 @@ export const Taskbar: React.FC<TaskbarProps> = ({ onLock }) => {
             <div className="start-menu-header">TERMINALITY OS</div>
             <div className="start-menu-apps">
               {availableApps.map(app => (
-                <button key={app.type} className="start-menu-item" onClick={() => launchApp(app)}>
+                <button key={app.type ?? app.name} className="start-menu-item" onClick={() => launchApp(app)}>
                   <span className="app-icon">{app.icon}</span>
                   <span>{app.name}</span>
                 </button>

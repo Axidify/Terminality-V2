@@ -13,16 +13,15 @@ import { AppStoreApp } from '../programs/AppStoreApp'
 import { ChatApp } from '../programs/ChatApp'
 import { EmailApp } from '../programs/EmailApp'
 import { FileExplorerApp } from '../programs/FileExplorerApp'
+import { GameShell } from '../programs/GameShell'
 import { MiniBrowserApp } from '../programs/MiniBrowserApp'
 import { MusicPlayerApp } from '../programs/MusicPlayerApp'
 import { NotepadApp } from '../programs/NotepadApp'
 import { PluginHost } from '../programs/PluginHost'
 import { ProfileApp } from '../programs/ProfileApp'
-import { QuestDesignerApp } from '../programs/QuestDesignerApp'
 import { RecycleBinApp } from '../programs/RecycleBinApp'
 import { StoreApp } from '../programs/StoreApp'
 import { SystemSettingsApp } from '../programs/SystemSettingsApp'
-import { TerminalApp } from '../programs/TerminalApp'
 import { UserManagementApp } from '../programs/UserManagementApp'
 import { saveDesktopState } from '../services/saveService'
 import './Desktop.css'
@@ -94,26 +93,25 @@ export const Desktop: React.FC<DesktopProps> = ({ onLock }) => {
         <SystemInfo />
         
         {/* Desktop Icons */}
-  <DesktopIcons ref={desktopIconsRef} />
+        <DesktopIcons ref={desktopIconsRef} />
 
         {/* Windows */}
         {wm.windows.map(win => (
           <WindowFrame key={win.id} win={win}>
-            {win.type === 'terminal' && <TerminalApp />}
-            {win.type === 'explorer' && <FileExplorerApp openNotepad={(path: string) => wm.open('notepad', { title: `Notepad - ${path}`, payload: { path } })} />}
-            {win.type === 'notepad' && <NotepadApp path={(win.payload as any)?.path || '/home/player/notes.txt'} />}
-            {win.type === 'browser' && <MiniBrowserApp payload={win.payload as any} />}
-            {win.type === 'recycle' && <RecycleBinApp />}
-            {win.type === 'email' && <EmailApp />}
-            {win.type === 'chat' && <ChatApp />}
-            {win.type === 'music' && <MusicPlayerApp />}
-            {win.type === 'modular-plugin' && <PluginHost pluginId={(win.payload as any)?.pluginId} />}
-            {win.type === 'modular' && <AppStoreApp />}
-            {win.type === 'settings' && <SystemSettingsApp payload={win.payload as any} />}
-            {win.type === 'store' && <StoreApp />}
-            {win.type === 'profile' && <ProfileApp />}
-            {win.type === 'usermgmt' && <UserManagementApp />}
-            {win.type === 'quest-designer' && <QuestDesignerApp />}
+            {win.type === 'terminal' && <GameShell />}
+              {win.type === 'explorer' && <FileExplorerApp openNotepad={(path: string) => wm.open('notepad', { title: `Notepad - ${path}`, payload: { path } })} />}
+              {win.type === 'notepad' && <NotepadApp path={(win.payload as any)?.path || '/home/player/notes.txt'} />}
+              {win.type === 'browser' && <MiniBrowserApp payload={win.payload as any} />}
+              {win.type === 'recycle' && <RecycleBinApp />}
+              {win.type === 'email' && <EmailApp />}
+              {win.type === 'chat' && <ChatApp />}
+              {win.type === 'music' && <MusicPlayerApp />}
+              {win.type === 'modular-plugin' && <PluginHost pluginId={(win.payload as any)?.pluginId} />}
+              {win.type === 'modular' && <AppStoreApp />}
+              {win.type === 'settings' && <SystemSettingsApp payload={win.payload as any} />}
+              {win.type === 'store' && <StoreApp />}
+              {win.type === 'profile' && <ProfileApp />}
+              {win.type === 'usermgmt' && <UserManagementApp />}
           </WindowFrame>
         ))}
 

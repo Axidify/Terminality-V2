@@ -6,238 +6,156 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 import { QuestDesignerApp } from './QuestDesignerApp'
 
-import type { QuestDefinition, QuestLifecycleStatus } from './terminalQuests/types'
+import type { QuestDefinition } from '../types/quest'
 
-const questDesignerMocks = vi.hoisted(() => ({
-  listTerminalQuests: vi.fn<() => Promise<QuestDefinition[]>>(),
-  listSystemDefinitions: vi.fn(),
-  saveSystemDefinition: vi.fn(),
-  updateSystemDefinition: vi.fn(),
-  deleteSystemDefinition: vi.fn(),
-  getCachedDesktop: vi.fn(),
-  hydrateFromServer: vi.fn(),
-  pushToast: vi.fn()
+const storageMock = vi.hoisted(() => ({
+  listQuests: vi.fn(),
+  getQuest: vi.fn(),
+  saveQuest: vi.fn(),
+  deleteQuest: vi.fn()
 }))
 
-const {
-  listTerminalQuests: mockListTerminalQuests,
-  listSystemDefinitions: mockListSystemDefinitions,
-  saveSystemDefinition: mockSaveSystemDefinition,
-  updateSystemDefinition: mockUpdateSystemDefinition,
-  deleteSystemDefinition: mockDeleteSystemDefinition,
-  getCachedDesktop: mockGetCachedDesktop,
-  hydrateFromServer: mockHydrateFromServer
-} = questDesignerMocks
-
-const buildMockDefinition = (overrides: Partial<any> = {}) => ({
-  id: 'mock_system',
-  key: 'mock_system',
-  name: 'Mock System',
-  label: 'Mock System',
-  description: 'Mock System',
-  type: 'filesystem',
-  scope: 'global',
-  kind: 'profile',
-  network: { primaryIp: '10.0.0.1', ips: ['10.0.0.1'], hostnames: [] },
-  credentials: { username: 'guest', startingPath: '/' },
-  metadata: { description: 'Mock System', footprint: '', tags: [] },
-  filesystem: { rootPath: '/', readOnly: false, snapshot: {} },
-  ...overrides
-})
-
-const mockDefinitionToProfile = (definition: any) => ({
-  id: definition.id,
-  label: definition.label,
-  description: definition.metadata?.description,
-  identifiers: {
-    ips: definition.network?.ips || [],
-    hostnames: definition.network?.hostnames || []
-  },
-  metadata: {
-    username: definition.credentials?.username || 'guest',
-    startingPath: definition.credentials?.startingPath || '/',
-    footprint: definition.metadata?.footprint || ''
-  },
-  filesystem: (definition.filesystem?.snapshot) || {}
-})
-
-vi.mock('../os/UserContext', () => ({
-  useUser: () => ({
-    user: { id: 1, username: 'admin', isAdmin: true },
-    loading: false,
-    isAdmin: true,
-    login: vi.fn(),
-    logout: vi.fn(),
-    refresh: vi.fn()
-  })
+const templateServiceMock = vi.hoisted(() => ({
+  listTemplates: vi.fn(),
+  saveTemplate: vi.fn(),
+  deleteTemplate: vi.fn()
 }))
 
-vi.mock('../os/ToastContext', () => ({
-  useToasts: () => ({
-    push: (...args: unknown[]) => questDesignerMocks.pushToast(...args),
-    dismiss: vi.fn(),
-    dismissAll: vi.fn()
-  })
+const questMailSyncMocks = vi.hoisted(() => ({
+  syncQuestMailPreviews: vi.fn(),
+  clearQuestMailPreviews: vi.fn()
 }))
 
-vi.mock('../services/terminalQuests', () => ({
-  listTerminalQuests: questDesignerMocks.listTerminalQuests,
-  createTerminalQuest: vi.fn(),
-  updateTerminalQuest: vi.fn(),
-  deleteTerminalQuest: vi.fn(),
-  validateTerminalQuest: vi.fn()
+const mailServiceMock = vi.hoisted(() => ({ service: 'quest-mail' }))
+
+vi.mock('./quest-designer/storage', () => ({
+  createQuestStorageService: () => storageMock
 }))
 
-vi.mock('../systemDefinitions/service', () => ({
-  listSystemDefinitions: questDesignerMocks.listSystemDefinitions,
-  saveSystemDefinition: questDesignerMocks.saveSystemDefinition,
-  updateSystemDefinition: questDesignerMocks.updateSystemDefinition,
-  deleteSystemDefinition: questDesignerMocks.deleteSystemDefinition
+vi.mock('./quest-designer/systemTemplates', () => ({
+  createSystemTemplateService: () => templateServiceMock
 }))
 
-vi.mock('../services/saveService', () => ({
-  getCachedDesktop: questDesignerMocks.getCachedDesktop,
-  hydrateFromServer: questDesignerMocks.hydrateFromServer
+vi.mock('../services/mailService', () => ({
+  createMailService: () => mailServiceMock
 }))
 
-vi.mock('../services/terminalMail', () => ({
-  listAdminTerminalMail: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../services/questMailSync', () => questMailSyncMocks)
 
-const baseQuest = (overrides: Partial<QuestDefinition> = {}): QuestDefinition => ({
+const buildQuest = (overrides: Partial<QuestDefinition> = {}): QuestDefinition => ({
   id: 'quest_alpha',
   title: 'Quest Alpha',
-  description: 'alpha description',
-  trigger: { type: 'ON_FIRST_TERMINAL_OPEN' },
-  steps: [
-    {
-      id: 'step_scan',
-      type: 'SCAN_HOST',
-      params: { target_ip: '10.0.0.1' }
-    }
-  ],
-  rewards: { credits: 0, flags: [] },
-  requirements: { required_flags: [], required_quests: [] },
-  default_system_id: undefined,
-  embedded_filesystems: {},
-  status: 'published',
+  shortDescription: 'Assemble a relay.',
+  difficulty: 'easy',
+  steps: [],
   ...overrides
 })
 
-const mockQuestSnapshot = (statuses: Record<string, QuestLifecycleStatus>, savedAt = '2025-01-01T00:00:00Z') => {
-  mockGetCachedDesktop.mockReturnValue({
-    terminalState: {
-      questState: { statuses },
-      savedAt
-    }
-  })
-  mockHydrateFromServer.mockResolvedValue({
-    version: 1,
-    desktop: {
-      terminalState: {
-        questState: { statuses },
-        savedAt
-      }
-    },
-    story: {}
-  })
-}
+const resetMocks = () => {
+  storageMock.listQuests.mockReset()
+  storageMock.getQuest.mockReset()
+  storageMock.saveQuest.mockReset()
+  storageMock.deleteQuest.mockReset()
+  templateServiceMock.listTemplates.mockReset()
+  templateServiceMock.saveTemplate.mockReset()
+  templateServiceMock.deleteTemplate.mockReset()
+  questMailSyncMocks.syncQuestMailPreviews.mockReset()
+  questMailSyncMocks.clearQuestMailPreviews.mockReset()
 
-const setupDefaultMocks = () => {
-  mockListSystemDefinitions.mockResolvedValue({
-    profiles: [],
-    templates: [],
-    lastUpdated: new Date().toISOString(),
-    systems: [],
-    systemTemplates: []
-  })
-  const definition = buildMockDefinition()
-  const profile = mockDefinitionToProfile(definition)
-  mockSaveSystemDefinition.mockResolvedValue({ definition, profile })
-  mockUpdateSystemDefinition.mockResolvedValue({ definition, profile })
-  mockDeleteSystemDefinition.mockResolvedValue({ definition, profile })
-  mockQuestSnapshot({})
+  storageMock.listQuests.mockResolvedValue([])
+  storageMock.getQuest.mockResolvedValue(null)
+  storageMock.saveQuest.mockResolvedValue(undefined)
+  storageMock.deleteQuest.mockResolvedValue(undefined)
+  templateServiceMock.listTemplates.mockResolvedValue([])
+  templateServiceMock.saveTemplate.mockResolvedValue(undefined)
+  templateServiceMock.deleteTemplate.mockResolvedValue(undefined)
+  questMailSyncMocks.syncQuestMailPreviews.mockResolvedValue(undefined)
+  questMailSyncMocks.clearQuestMailPreviews.mockResolvedValue(undefined)
 }
 
 describe('QuestDesignerApp', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    setupDefaultMocks()
-    mockListTerminalQuests.mockResolvedValue([
-      baseQuest({ id: 'quest_alpha', title: 'Quest Alpha' }),
-      baseQuest({ id: 'quest_beta', title: 'Quest Beta', completion_flag: 'quest_completed_beta' })
-    ])
+    resetMocks()
   })
 
   afterEach(() => {
     cleanup()
   })
 
-  it('renders lifecycle badges based on the latest snapshot', async () => {
-    mockQuestSnapshot({ quest_alpha: 'in_progress', quest_beta: 'completed' })
+  it('renders quests from storage and filters them by search and difficulty', async () => {
+    const quests = [
+      buildQuest({ id: 'quest_alpha', title: 'Quest Alpha', shortDescription: 'Alpha brief', difficulty: 'easy' }),
+      buildQuest({ id: 'quest_beta', title: 'Quest Beta', shortDescription: 'Beta intel', difficulty: 'hard' })
+    ]
+    storageMock.listQuests.mockResolvedValue(quests)
+
     render(<QuestDesignerApp />)
 
-    const questAlpha = await screen.findByText('Quest Alpha')
-    const questAlphaRow = questAlpha.closest('button')
-    expect(questAlphaRow).toBeTruthy()
-    expect(within(questAlphaRow as HTMLElement).getByText('Active')).toBeInTheDocument()
+    expect(await screen.findByText('Quest Alpha')).toBeInTheDocument()
+    expect(screen.getByText('Quest Beta')).toBeInTheDocument()
 
-    const questBeta = screen.getByText('Quest Beta')
-    const questBetaRow = questBeta.closest('button')
-    expect(questBetaRow).toBeTruthy()
-    expect(within(questBetaRow as HTMLElement).getByText('Completed')).toBeInTheDocument()
-  })
-
-  it('filters quests by lifecycle status when a filter chip is selected', async () => {
-    mockQuestSnapshot({ quest_beta: 'completed' })
-    render(<QuestDesignerApp />)
-
-    await screen.findByText('Quest Beta')
     const user = userEvent.setup()
-    const completedFilter = screen
-      .getAllByRole('button', { name: /Completed/i })
-      .find(btn => btn.classList.contains('status-filter-chip'))
-    expect(completedFilter).toBeTruthy()
-    await user.click(completedFilter as HTMLElement)
+    const searchInput = screen.getByPlaceholderText('Search quests')
+    await user.type(searchInput, 'Beta')
+
+    expect(screen.getByText('Quest Beta')).toBeInTheDocument()
+    expect(screen.queryByText('Quest Alpha')).not.toBeInTheDocument()
+
+    await user.clear(searchInput)
+    const hardFilter = screen.getByRole('button', { name: 'Hard' })
+    await user.click(hardFilter)
 
     expect(screen.getByText('Quest Beta')).toBeInTheDocument()
     expect(screen.queryByText('Quest Alpha')).not.toBeInTheDocument()
   })
 
-  it('shows completion flag conflicts when another quest uses the same flag', async () => {
-    mockQuestSnapshot({})
+  it('confirms before discarding unsaved quest edits', async () => {
+    const quest = buildQuest({ id: 'quest_existing', title: 'Relay Ghost', shortDescription: 'Baseline quest', difficulty: 'medium' })
+    storageMock.listQuests.mockResolvedValue([quest])
+    storageMock.getQuest.mockResolvedValue(quest)
+
     render(<QuestDesignerApp />)
 
     const user = userEvent.setup()
-    const questAlpha = await screen.findByText('Quest Alpha')
-    await user.click(questAlpha)
+    const questButton = await screen.findByRole('button', { name: /Relay Ghost/i })
+    await user.click(questButton)
 
-    const completionInput = await screen.findByLabelText('Completion Flag')
-    await user.clear(completionInput)
-    await user.type(completionInput, 'quest_completed_beta')
+    const titleInput = await screen.findByLabelText('Title')
+    expect(titleInput).toHaveValue('Relay Ghost')
+    await user.clear(titleInput)
+    await user.type(titleInput, 'Relay Ghost v2')
 
-    expect(await screen.findByText('Also used by Quest Beta')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^Cancel$/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /Discard unsaved changes\?/i })
+    expect(within(dialog).getByRole('button', { name: /Stay Here/i })).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: /Discard & Continue/i }))
+
+    await waitFor(() => expect(screen.getByLabelText('Title')).toHaveValue('Relay Ghost'))
+    expect(storageMock.getQuest).toHaveBeenCalledTimes(2)
   })
 
-  it('asks for confirmation before discarding an unsaved quest draft', async () => {
-    mockQuestSnapshot({})
-    mockListTerminalQuests.mockResolvedValue([])
+  it('confirms before deleting a quest from the list', async () => {
+    const quests = [
+      buildQuest({ id: 'quest_alpha', title: 'Quest Alpha' }),
+      buildQuest({ id: 'quest_beta', title: 'Quest Beta', difficulty: 'hard' })
+    ]
+    storageMock.listQuests.mockResolvedValue(quests)
+    storageMock.getQuest.mockImplementation(async id => quests.find(q => q.id === id) ?? null)
+
     render(<QuestDesignerApp />)
 
     const user = userEvent.setup()
-    const newQuestButton = await screen.findByRole('button', { name: /\+ New Quest/i })
-    await user.click(newQuestButton)
-
-    const deleteButton = await screen.findByRole('button', { name: /^Delete$/ })
+    const questRow = await screen.findByRole('button', { name: /Quest Beta/i })
+    const rowElement = questRow.closest('li') as HTMLElement
+    const deleteButton = within(rowElement).getByRole('button', { name: /^Delete$/i })
     await user.click(deleteButton)
 
-    const dialog = await screen.findByRole('dialog', { name: /Discard Draft Quest/i })
-    expect(dialog).toBeInTheDocument()
-    await user.click(within(dialog).getByRole('button', { name: /Discard Draft/i }))
+    const dialog = await screen.findByRole('dialog', { name: /Delete quest\?/i })
+    await user.click(within(dialog).getByRole('button', { name: /^Delete$/i }))
 
-    await waitFor(() => {
-      expect(screen.getByText(/Select a quest from the list/i)).toBeInTheDocument()
-    })
-    expect(questDesignerMocks.pushToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Draft Discarded' }))
+    await waitFor(() => expect(storageMock.deleteQuest).toHaveBeenCalledWith('quest_beta'))
+    expect(questMailSyncMocks.clearQuestMailPreviews).toHaveBeenCalledWith('quest_beta', expect.objectContaining({ mailService: mailServiceMock }))
   })
 })
