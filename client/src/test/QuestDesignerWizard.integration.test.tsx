@@ -61,7 +61,12 @@ describe('QuestDesignerApp wizard', () => {
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Relay Shadow Operation' } })
     fireEvent.change(screen.getByLabelText('Short Description'), { target: { value: 'Intercept the relay before Atlas spots it.' } })
-    fireEvent.change(screen.getByLabelText('Required Tools (comma-separated)'), { target: { value: 'scan, clean_logs' } })
+    const toolToggleButton = screen.getByRole('button', { name: /Select required tools/i })
+    fireEvent.click(toolToggleButton)
+    const toolListbox = screen.getByRole('listbox')
+    fireEvent.click(within(toolListbox).getByRole('checkbox', { name: /^Scan/i }))
+    fireEvent.click(within(toolListbox).getByRole('checkbox', { name: /^Clean Logs/i }))
+    fireEvent.click(toolToggleButton)
 
     fireEvent.click(screen.getByRole('button', { name: /^Next$/i }))
 
@@ -71,6 +76,9 @@ describe('QuestDesignerApp wizard', () => {
     const systemNameInput = await screen.findByLabelText('System Name')
     fireEvent.change(systemNameInput, { target: { value: 'Relay Shadow' } })
     fireEvent.change(screen.getByLabelText('IP Address'), { target: { value: '10.5.0.8' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }))
+
+    expect(screen.getByText(/discovering a target via recon/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^Next$/i }))
 
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Atlas needs you on Relay Shadow' } })

@@ -1,10 +1,15 @@
 import { generateId } from './quest-designer/id'
 import type {
+  BonusObjective,
+  HackingToolId,
+  QuestBranchOutcome,
   QuestDefinition,
+  QuestRewardsBlock,
   QuestStepDefinition,
   QuestSystemDefinition,
   QuestSystemFilesystemNode,
   QuestSystemSecurityRules,
+  QuestRiskProfile,
   SystemDifficulty
 } from '../types/quest'
 import type { GameMail, MailFolder, MailService } from '../types/mail'
@@ -189,6 +194,43 @@ export interface TraceUpdateResult {
   statusChanged?: TraceMeterState['status']
 }
 
+type ScanSecurityGrade = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY HIGH'
+
+interface ScanHostService {
+  port: number
+  protocol: string
+  name?: string
+  version?: string
+}
+
+interface ScanHostSummary {
+  ip: string
+  hostname?: string
+  security: ScanSecurityGrade
+  openPorts: number[]
+  services: ScanHostService[]
+  notes?: string[]
+}
+
+type ReconInfoLevel = 'basic' | 'deep'
+
+export interface ScanDiscoveryEntry {
+  infoLevel: ReconInfoLevel
+  firstSeenAt: string
+  lastScannedAt: string
+}
+
+export interface ScanDiscoveryState {
+  knownHosts: Record<string, ScanDiscoveryEntry>
+  lastRange?: string
+}
+
+interface ScanDiscoveryUpdateResult {
+  next: ScanDiscoveryState
+  newlyDiscovered: string[]
+  upgraded: string[]
+}
+
 export interface TerminalSessionState {
   lines: TerminalLine[]
   connectedIp: string | null
@@ -202,8 +244,12 @@ export interface TerminalSessionState {
   maxTraceSeen: number
   trapsTriggered: string[]
   logFilesEdited: string[]
+  readPaths: string[]
+  deletedPaths: string[]
   mailListing?: TerminalMailListing | null
   questDirectory?: TerminalQuestDirectory | null
+  scanDiscovery: ScanDiscoveryState
+  toolTiers: Partial<Record<HackingToolId, number>>
 }
 
 const DEFAULT_TRACE_LIMIT = 100
@@ -224,6 +270,19 @@ const BASE_TRACE_COSTS: Record<TraceAction, number> = {
   bruteforce: 15,
   backdoor_install: 12,
   idle: -2
+}
+
+const DEFAULT_TOOL_TIERS: Record<HackingToolId, number> = {
+  scan: 1,
+  deep_scan: 1,
+  bruteforce: 1,
+  clean_logs: 1,
+  backdoor_install: 1
+}
+
+const DEFAULT_SCAN_DISCOVERY_STATE: ScanDiscoveryState = {
+  knownHosts: {},
+  lastRange: undefined
 }
 
 const normalizePath = (path: string): string => {
@@ -275,6 +334,18 @@ const cloneFilesystem = (filesystem: TerminalFilesystem): TerminalFilesystem => 
     }
   })
   return ensureFilesystem(clone)
+}
+
+const cloneScanDiscovery = (state?: ScanDiscoveryState): ScanDiscoveryState => {
+  if (!state) return { ...DEFAULT_SCAN_DISCOVERY_STATE, knownHosts: {} }
+  const knownHosts = Object.entries(state.knownHosts ?? {}).reduce<Record<string, ScanDiscoveryEntry>>((acc, [ip, entry]) => {
+    acc[ip] = { ...entry }
+    return acc
+  }, {})
+  return {
+    knownHosts,
+    lastRange: state.lastRange
+  }
 }
 
 const walkFilesystem = (
@@ -507,6 +578,168 @@ const advanceQuestProgress = (
   }
 }
 
+export type QuestOutcomeKey = 'success' | 'stealth' | 'failure'
+
+export interface QuestCompletionSummary {
+  outcome: QuestOutcomeKey
+  rewardBlock?: QuestRewardsBlock
+  branchOutcome?: QuestBranchOutcome
+  completedBonusIds: string[]
+  failedBonusIds: string[]
+  totalBonusCount: number
+  maxTrace: number
+}
+
+interface BonusEvaluationResult {
+  completedIds: string[]
+  failedIds: string[]
+  total: number
+}
+
+const toNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const normalizeObjectivePath = (raw?: unknown): string | null => {
+  if (typeof raw !== 'string' || !raw.trim()) return null
+  return normalizePath(raw.trim())
+}
+
+const evaluateBonusObjective = (
+  objective: BonusObjective,
+  quest: QuestDefinition,
+  state: TerminalSessionState
+): boolean => {
+  const normalizedParams = objective.params || {}
+  switch (objective.type) {
+    case 'keep_trace_below': {
+      const threshold = toNumber(normalizedParams.threshold) ?? quest.riskProfile?.maxRecommendedTrace ?? null
+      if (threshold == null) return state.maxTraceSeen <= 50
+      return (state.maxTraceSeen ?? 0) <= threshold
+    }
+    case 'avoid_trace_spike': {
+      const threshold = toNumber(normalizedParams.threshold) ?? quest.riskProfile?.failAboveTrace ?? null
+      if (threshold == null) return (state.maxTraceSeen ?? 0) <= 75
+      return (state.maxTraceSeen ?? 0) < threshold
+    }
+    case 'dont_delete_file': {
+      const targetPath = normalizeObjectivePath(normalizedParams.path || normalizedParams.file_path)
+      if (!targetPath) {
+        return state.deletedPaths.length === 0
+      }
+      return !state.deletedPaths.includes(targetPath)
+    }
+    case 'exfiltrate_file':
+    case 'retrieve_files': {
+      const targetPath = normalizeObjectivePath(normalizedParams.path || normalizedParams.file_path)
+      if (!targetPath) return false
+      return state.readPaths.includes(targetPath)
+    }
+    case 'dont_trigger_trap': {
+      return state.trapsTriggered.length === 0
+    }
+    case 'clean_logs':
+    case 'sanitize_logs': {
+      const targetPath = normalizeObjectivePath(normalizedParams.path)
+      if (!targetPath) {
+        return state.logFilesEdited.length > 0
+      }
+      return state.logFilesEdited.includes(targetPath)
+    }
+    case 'delete_logs': {
+      const targetPath = normalizeObjectivePath(normalizedParams.path)
+      if (!targetPath) return false
+      return state.deletedPaths.includes(targetPath)
+    }
+    default:
+      return false
+  }
+}
+
+const evaluateBonusObjectives = (quest: QuestDefinition, state: TerminalSessionState): BonusEvaluationResult => {
+  const objectives = quest.bonusObjectives ?? []
+  if (!objectives.length) {
+    return { completedIds: [], failedIds: [], total: 0 }
+  }
+  const completedIds: string[] = []
+  const failedIds: string[] = []
+  objectives.forEach(objective => {
+    const completed = evaluateBonusObjective(objective, quest, state)
+    if (completed) completedIds.push(objective.id)
+    else failedIds.push(objective.id)
+  })
+  return { completedIds, failedIds, total: objectives.length }
+}
+
+const meetsCleanupRequirement = (risk: QuestRiskProfile | undefined, state: TerminalSessionState): boolean => {
+  if (!risk?.cleanupBeforeDisconnect) return true
+  return state.logFilesEdited.length > 0
+}
+
+const determineQuestOutcome = (
+  quest: QuestDefinition,
+  state: TerminalSessionState,
+  bonus: BonusEvaluationResult
+): QuestOutcomeKey => {
+  const risk = quest.riskProfile
+  const maxTrace = state.maxTraceSeen ?? 0
+  const forcedFailure = Boolean(
+    (risk?.failAboveTrace != null && maxTrace >= risk.failAboveTrace) ||
+    (risk?.requiredTraceSpike != null && maxTrace < risk.requiredTraceSpike)
+  )
+
+  if (forcedFailure) {
+    return 'failure'
+  }
+
+  const stealthObjectives = (quest.bonusObjectives ?? []).filter(obj => obj.category === 'stealth')
+  const stealthObjectivesCompleted = stealthObjectives.length === 0
+    ? true
+    : stealthObjectives.every(obj => bonus.completedIds.includes(obj.id))
+
+  const withinRecommendedTrace = risk?.maxRecommendedTrace == null || maxTrace <= risk.maxRecommendedTrace
+  const noTraps = state.trapsTriggered.length === 0
+  const cleanupSatisfied = meetsCleanupRequirement(risk, state)
+
+  if (withinRecommendedTrace && stealthObjectivesCompleted && noTraps && cleanupSatisfied) {
+    return 'stealth'
+  }
+
+  return 'success'
+}
+
+const pickRewardsBlock = (quest: QuestDefinition, outcome: QuestOutcomeKey): QuestRewardsBlock | undefined => {
+  const rewards = quest.rewards
+  if (!rewards) return undefined
+  return rewards[outcome] ?? rewards.default
+}
+
+const pickBranchOutcome = (quest: QuestDefinition, outcome: QuestOutcomeKey): QuestBranchOutcome | undefined => (
+  quest.branching?.[outcome]
+)
+
+export const buildQuestCompletionSummary = (
+  quest: QuestDefinition,
+  state: TerminalSessionState
+): QuestCompletionSummary => {
+  const bonus = evaluateBonusObjectives(quest, state)
+  const outcome = determineQuestOutcome(quest, state, bonus)
+  return {
+    outcome,
+    rewardBlock: pickRewardsBlock(quest, outcome),
+    branchOutcome: pickBranchOutcome(quest, outcome),
+    completedBonusIds: bonus.completedIds,
+    failedBonusIds: bonus.failedIds,
+    totalBonusCount: bonus.total,
+    maxTrace: state.maxTraceSeen ?? 0
+  }
+}
+
 export const TERMINAL_HISTORY_LIMIT = 400
 
 export const clampTerminalLines = (lines: TerminalLine[], limit = TERMINAL_HISTORY_LIMIT): TerminalLine[] => (
@@ -583,7 +816,7 @@ export interface TerminalSnapshot {
   state: TerminalSessionState
 }
 
-export const TERMINAL_SNAPSHOT_SCHEMA_VERSION = 3
+export const TERMINAL_SNAPSHOT_SCHEMA_VERSION = 5
 
 export const createTerminalSessionState = (init?: Partial<TerminalSessionState>): TerminalSessionState => {
   const quest = init?.quest ?? null
@@ -591,6 +824,8 @@ export const createTerminalSessionState = (init?: Partial<TerminalSessionState>)
   const filesystem = ensureFilesystem(init?.filesystem ?? (system ? buildFilesystemFromSystem(system.filesystemRoot) : DEFAULT_FILESYSTEM))
   const questProgress = ensureQuestProgress(init?.questProgress ?? createQuestProgress(quest))
   const trace = init?.trace ?? createTraceMeterState()
+  const scanDiscovery = cloneScanDiscovery(init?.scanDiscovery ?? DEFAULT_SCAN_DISCOVERY_STATE)
+  const toolTiers = { ...DEFAULT_TOOL_TIERS, ...(init?.toolTiers ?? {}) }
   return {
     lines: init?.lines && init.lines.length ? clampTerminalLines(init.lines) : [createTerminalLine('Terminal ready. Type help.')],
     connectedIp: init?.connectedIp ?? null,
@@ -604,8 +839,12 @@ export const createTerminalSessionState = (init?: Partial<TerminalSessionState>)
     maxTraceSeen: init?.maxTraceSeen ?? trace.current ?? 0,
     trapsTriggered: init?.trapsTriggered ? [...init.trapsTriggered] : [],
     logFilesEdited: init?.logFilesEdited ? [...init.logFilesEdited] : [],
+    readPaths: init?.readPaths ? [...init.readPaths] : [],
+    deletedPaths: init?.deletedPaths ? [...init.deletedPaths] : [],
     mailListing: cloneMailListing(init?.mailListing ?? null),
-    questDirectory: cloneQuestDirectory(init?.questDirectory ?? null)
+    questDirectory: cloneQuestDirectory(init?.questDirectory ?? null),
+    scanDiscovery,
+    toolTiers
   }
 }
 
@@ -658,7 +897,9 @@ export const startQuestSession = (quest: QuestDefinition): TerminalSessionState 
     lines: introLines,
     maxTraceSeen: trace.current,
     trapsTriggered: [],
-    logFilesEdited: []
+    logFilesEdited: [],
+    readPaths: [],
+    deletedPaths: []
   })
 }
 
@@ -685,6 +926,154 @@ const formatDoorDescriptor = (system: QuestSystemDefinition): string => {
   if (!system.doors?.length) return 'No doors detected. Host appears sealed.'
   const parts = system.doors.map(door => `${door.port}/tcp · ${door.status}`)
   return `Detected doors: ${parts.join(', ')}`
+}
+
+const SECURITY_GRADE_BY_DIFFICULTY: Record<SystemDifficulty, ScanSecurityGrade> = {
+  tutorial: 'LOW',
+  easy: 'LOW',
+  medium: 'MEDIUM',
+  hard: 'HIGH',
+  boss: 'VERY HIGH'
+}
+
+const securityGradeScore = (grade: ScanSecurityGrade): number => {
+  switch (grade) {
+    case 'LOW':
+      return 1
+    case 'MEDIUM':
+      return 2
+    case 'HIGH':
+      return 3
+    case 'VERY HIGH':
+    default:
+      return 4
+  }
+}
+
+const buildScanHosts = (system?: QuestSystemDefinition | null): ScanHostSummary[] => {
+  if (!system) return []
+  const security = SECURITY_GRADE_BY_DIFFICULTY[system.difficulty] ?? 'MEDIUM'
+  const openPorts = system.doors?.map(door => door.port).filter(port => typeof port === 'number') ?? []
+  const services: ScanHostService[] = (system.doors ?? []).map(door => ({
+    port: door.port,
+    protocol: 'tcp',
+    name: door.name || `door-${door.port}`,
+    version: door.status
+  }))
+  const notes = system.personalityBlurb ? [system.personalityBlurb] : undefined
+  return [{
+    ip: system.ip,
+    hostname: system.label,
+    security,
+    openPorts,
+    services,
+    notes
+  }]
+}
+
+const formatBasicScanHostLine = (host: ScanHostSummary, index: number): string => {
+  const portsPreview = host.openPorts.length ? host.openPorts.slice(0, 3).join(', ') : 'none'
+  const label = host.hostname || 'unknown'
+  return `[${index}] ${host.ip.padEnd(12)} ${label.padEnd(16)} security: ${host.security}     open: ${portsPreview}`
+}
+
+const formatDeepScanHostLines = (host: ScanHostSummary, index: number): string[] => {
+  const lines = [`[${index}] ${host.ip}  ${host.hostname || 'unknown'}`, `    security: ${host.security}`]
+  if (host.services.length) {
+    lines.push('    services:')
+    host.services.forEach(service => {
+      const descriptor = `${service.port}/${service.protocol}`.padEnd(8)
+      const name = service.name || 'service'
+      const version = service.version ? `  ${service.version}` : ''
+      lines.push(`      ${descriptor} ${name}${version}`)
+    })
+  }
+  if (host.notes?.length) {
+    lines.push('    notes:')
+    host.notes.forEach(note => lines.push(`      - ${note}`))
+  }
+  return lines
+}
+
+const partitionScanArgs = (rawArgs: string[]) => {
+  const positional: string[] = []
+  const flags = new Set<string>()
+  rawArgs.forEach(arg => {
+    if (arg.startsWith('--')) {
+      flags.add(arg.toLowerCase())
+    } else {
+      positional.push(arg)
+    }
+  })
+  return { positional, flags }
+}
+
+const matchesAssignedRange = (input: string | undefined, ip: string): boolean => {
+  if (!input) return true
+  if (input === ip) return true
+  if (input === `${ip}/32`) return true
+  return false
+}
+
+const getToolTier = (state: TerminalSessionState, toolId: HackingToolId): number => state.toolTiers?.[toolId] ?? 1
+
+const updateScanDiscoveryState = (
+  state: ScanDiscoveryState,
+  hosts: ScanHostSummary[],
+  infoLevel: ReconInfoLevel,
+  range: string
+): ScanDiscoveryUpdateResult => {
+  const next: ScanDiscoveryState = {
+    knownHosts: { ...state.knownHosts },
+    lastRange: range
+  }
+  const newlyDiscovered: string[] = []
+  const upgraded: string[] = []
+  const timestamp = new Date().toISOString()
+  hosts.forEach(host => {
+    const existing = next.knownHosts[host.ip]
+    if (!existing) {
+      newlyDiscovered.push(host.ip)
+      next.knownHosts[host.ip] = {
+        infoLevel,
+        firstSeenAt: timestamp,
+        lastScannedAt: timestamp
+      }
+      return
+    }
+    const nextLevel: ReconInfoLevel = existing.infoLevel === 'deep' ? 'deep' : infoLevel
+    if (existing.infoLevel !== nextLevel && nextLevel === 'deep') {
+      upgraded.push(host.ip)
+    }
+    next.knownHosts[host.ip] = {
+      infoLevel: nextLevel,
+      firstSeenAt: existing.firstSeenAt,
+      lastScannedAt: timestamp
+    }
+  })
+  return { next, newlyDiscovered, upgraded }
+}
+
+const computeScanTraceDelta = (
+  action: TraceAction,
+  state: TerminalSessionState,
+  options: { hostCount: number; averageSecurity: number; deep: boolean; stealth: boolean; repeatedSweep: boolean }
+): { delta: number; summary: string } => {
+  const baseCost = resolveTraceCost(action, state.securityRules)
+  let delta = baseCost
+  delta += options.hostCount
+  if (options.deep) delta += 4
+  delta += Math.max(0, options.averageSecurity - 1) * 2
+  if (options.repeatedSweep) delta = Math.max(1, delta - 3)
+  if (options.stealth) delta = Math.max(1, Math.round(delta * 0.5))
+  const summary = options.stealth
+    ? 'stealth scan'
+    : options.deep
+      ? 'deep recon burst'
+      : options.repeatedSweep
+        ? 'repeat sweep'
+        : 'network activity detected'
+  return { delta, summary }
 }
 
 const formatDirectoryListing = (nodes: TerminalFilesystemNode[]): string => {
@@ -719,6 +1108,37 @@ const traceNoticeForStatus = (status: TraceMeterState['status']): string => {
   return 'Trace stabilized.'
 }
 
+const withCustomTraceDelta = (
+  state: TerminalSessionState,
+  delta: number,
+  lines: TerminalLine[]
+): { nextState: TerminalSessionState; lines: TerminalLine[] } => {
+  if (!delta) {
+    return { nextState: state, lines }
+  }
+  const current = state.trace
+  const nextValue = Math.min(current.max, Math.max(0, current.current + delta))
+  const nextStatus: TraceMeterState['status'] = nextValue >= current.panicThreshold
+    ? 'panic'
+    : nextValue >= current.nervousThreshold
+      ? 'nervous'
+      : 'calm'
+  const statusChanged = nextStatus !== current.status ? nextStatus : undefined
+  const trace = { ...current, current: nextValue, status: nextStatus }
+  const nextState = {
+    ...state,
+    trace,
+    maxTraceSeen: Math.max(state.maxTraceSeen ?? 0, nextValue)
+  }
+  if (!statusChanged) {
+    return { nextState, lines }
+  }
+  return {
+    nextState,
+    lines: [...lines, createLine(traceNoticeForStatus(statusChanged))]
+  }
+}
+
 const withTraceUpdate = (
   state: TerminalSessionState,
   action: TraceAction,
@@ -740,6 +1160,7 @@ export interface CommandResult {
   nextState: TerminalSessionState
   newLines: TerminalLine[]
   questCompleted?: boolean
+  completionSummary?: QuestCompletionSummary
 }
 
 export const handleTerminalCommand = async (
@@ -757,6 +1178,7 @@ export const handleTerminalCommand = async (
   let questCompleted = false
   let nextState: TerminalSessionState = { ...state }
   let outputLines: TerminalLine[] = []
+  let completionSummary: QuestCompletionSummary | undefined
 
   const applyQuest = (event: QuestEventPayload | null) => {
     const beforeStatus = nextState.questProgress?.status
@@ -1003,27 +1425,66 @@ export const handleTerminalCommand = async (
       break
     }
     case 'scan': {
-      if (!args[0]) {
-        outputLines = [createLine('Usage: scan <ip>')]
-        break
-      }
-      const targetIp = args[0]
-      const traceResult = withTraceUpdate(nextState, 'scan', outputLines)
-      nextState = traceResult.nextState
-      outputLines = traceResult.lines
       if (!nextState.system || !systemIp) {
         outputLines = [...outputLines, createLine('No active quest system configured.')]
         break
       }
-      if (targetIp !== systemIp) {
-        outputLines = [...outputLines, createLine(`No signal from ${targetIp}.`)]
+      const { positional, flags } = partitionScanArgs(args)
+      const targetRange = positional[0] ?? `${systemIp}/32`
+      const scanTier = getToolTier(nextState, 'scan')
+      const deepRequested = flags.has('--deep')
+      const stealthRequested = flags.has('--stealth')
+      if (deepRequested && scanTier < 2) {
+        outputLines = [...outputLines, createLine('scan: --deep requires recon tier 2. Complete more contracts to upgrade.')]
+        break
+      }
+      if (stealthRequested && scanTier < 3) {
+        outputLines = [...outputLines, createLine('scan: --stealth requires recon tier 3.')]
+        break
+      }
+      const deepMode = deepRequested || stealthRequested
+      const infoLevel: ReconInfoLevel = deepMode ? 'deep' : 'basic'
+      const assignedRange = matchesAssignedRange(targetRange, systemIp)
+      const hosts = assignedRange ? buildScanHosts(nextState.system) : []
+      const verb = stealthRequested ? 'Performing stealth recon' : deepMode ? 'Deep scanning' : 'Scanning'
+      outputLines = [...outputLines, createLine(`${verb} ${targetRange}...`)]
+      let discoveryResult: ScanDiscoveryUpdateResult | null = null
+      if (hosts.length) {
+        outputLines = [...outputLines, createLine(`Found ${hosts.length} host${hosts.length === 1 ? '' : 's'}:`)]
+        hosts.forEach((host, index) => {
+          const hostLines = deepMode ? formatDeepScanHostLines(host, index) : [formatBasicScanHostLine(host, index)]
+          hostLines.forEach(line => {
+            outputLines = [...outputLines, createLine(line)]
+          })
+        })
+        discoveryResult = updateScanDiscoveryState(nextState.scanDiscovery, hosts, infoLevel, targetRange)
+        nextState = { ...nextState, scanDiscovery: discoveryResult.next }
+        if (!discoveryResult.newlyDiscovered.length && !discoveryResult.upgraded.length) {
+          const knownTotal = Object.keys(discoveryResult.next.knownHosts).length
+          outputLines = [...outputLines, createLine(`No new hosts discovered. (${knownTotal} previously known)`)]
+        }
       } else {
-        outputLines = [
-          ...outputLines,
-          createLine(`Scan complete. ${nextState.system.label} is online.`),
-          createLine(formatDoorDescriptor(nextState.system))
-        ]
-        applyQuest({ type: 'scan', ip: targetIp })
+        const scope = assignedRange ? '' : ` in ${targetRange}`
+        outputLines = [...outputLines, createLine(`No live hosts detected${scope}.`)]
+      }
+      const averageSecurity = hosts.length
+        ? hosts.reduce((acc, host) => acc + securityGradeScore(host.security), 0) / hosts.length
+        : 1
+      const repeatedSweep = Boolean(discoveryResult && !discoveryResult.newlyDiscovered.length && !discoveryResult.upgraded.length)
+      const baseAction: TraceAction = deepMode ? 'deep_scan' : 'scan'
+      const { delta, summary } = computeScanTraceDelta(baseAction, nextState, {
+        hostCount: hosts.length,
+        averageSecurity,
+        deep: deepMode,
+        stealth: stealthRequested,
+        repeatedSweep
+      })
+      outputLines = [...outputLines, createLine(`TRACE +${delta} (${summary})`)]
+      const traceResult = withCustomTraceDelta(nextState, delta, outputLines)
+      nextState = traceResult.nextState
+      outputLines = traceResult.lines
+      if (assignedRange) {
+        applyQuest({ type: deepMode ? 'deep_scan' : 'scan', ip: systemIp })
       }
       break
     }
@@ -1172,6 +1633,15 @@ export const handleTerminalCommand = async (
         outputLines = [...outputLines, createLine('File not found.')]
         break
       }
+      const fileNode = nextState.filesystem[file.path]
+      const alreadyRead = nextState.readPaths.includes(file.path)
+      const updatedReadPaths = alreadyRead ? nextState.readPaths : [...nextState.readPaths, file.path]
+      let updatedTraps = nextState.trapsTriggered
+      if (fileNode?.tags?.includes('trap') && !updatedTraps.includes(file.path)) {
+        updatedTraps = [...updatedTraps, file.path]
+        outputLines = [...outputLines, createLine('Security trap tripped while reading that file.')] 
+      }
+      nextState = { ...nextState, readPaths: updatedReadPaths, trapsTriggered: updatedTraps }
       outputLines = [...outputLines, createLine(file.content || '[empty file]')]
       applyQuest({ type: 'read_file', path: file.path })
       break
@@ -1182,12 +1652,23 @@ export const handleTerminalCommand = async (
         outputLines = [...outputLines, createLine('Usage: rm <file>')]
         break
       }
+      const targetPath = resolvePath(nextState.currentPath, args[0])
+      const targetNode = nextState.filesystem[targetPath]
       const result = removeFileNode(nextState.filesystem, nextState.currentPath, args[0])
       if (!result.removedPath) {
         outputLines = [...outputLines, createLine('Unable to delete file.')]
         break
       }
-      nextState = { ...nextState, filesystem: result.filesystem }
+      const removedPath = result.removedPath
+      const deletedPaths = nextState.deletedPaths.includes(removedPath)
+        ? nextState.deletedPaths
+        : [...nextState.deletedPaths, removedPath]
+      let updatedTraps = nextState.trapsTriggered
+      if (targetNode?.tags?.includes('trap') && !updatedTraps.includes(removedPath)) {
+        updatedTraps = [...updatedTraps, removedPath]
+        outputLines = [...outputLines, createLine('Security trap tripped while deleting that file.')] 
+      }
+      nextState = { ...nextState, filesystem: result.filesystem, deletedPaths, trapsTriggered: updatedTraps }
       const traceResult = withTraceUpdate(nextState, 'delete_file', outputLines)
       nextState = traceResult.nextState
       outputLines = [...traceResult.lines, createLine(`Deleted ${result.removedPath}`)]
@@ -1240,9 +1721,26 @@ export const handleTerminalCommand = async (
     applyQuest({ type: 'command_used', command })
   }
 
+  const completedNow = questCompleted || (
+    nextState.questProgress?.status === 'completed' && state.questProgress?.status !== 'completed'
+  )
+  if (completedNow && nextState.quest) {
+    completionSummary = buildQuestCompletionSummary(nextState.quest, nextState)
+    if (nextState.questProgress) {
+      nextState = {
+        ...nextState,
+        questProgress: {
+          ...nextState.questProgress,
+          completedBonusIds: completionSummary.completedBonusIds
+        }
+      }
+    }
+  }
+
   return {
     nextState,
     newLines: outputLines,
-    questCompleted: questCompleted || (nextState.questProgress?.status === 'completed' && state.questProgress?.status !== 'completed')
+    questCompleted: completedNow,
+    completionSummary
   }
 }

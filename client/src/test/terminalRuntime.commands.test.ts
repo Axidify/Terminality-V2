@@ -151,4 +151,33 @@ describe('terminalRuntime CLI commands', () => {
     expect(result.nextState.quest?.id).toBe('quest_alpha')
     expect(result.newLines.some(line => line.text.includes('Quest accepted: Alpha Breach'))).toBe(true)
   })
+
+  it('runs scan without args to discover the assigned host', async () => {
+    const baseSession = createSession({ quest: demoQuest, system: demoQuest.system ?? undefined })
+    const result = await handleTerminalCommand('scan', baseSession)
+
+    expect(result.newLines.some(line => line.text.includes('Scanning'))).toBe(true)
+    expect(result.newLines.some(line => line.text.includes('Found 1 host'))).toBe(true)
+    expect(result.nextState.scanDiscovery.knownHosts[demoQuest.system!.ip]).toBeDefined()
+  })
+
+  it('requires recon tier 2 before allowing --deep scans', async () => {
+    const baseSession = createSession({ quest: demoQuest, system: demoQuest.system ?? undefined })
+    const result = await handleTerminalCommand('scan --deep', baseSession)
+
+    expect(result.newLines.some(line => /requires recon tier 2/i.test(line.text))).toBe(true)
+  })
+
+  it('performs a deep scan when the tier is unlocked', async () => {
+    const baseSession = createSession({
+      quest: demoQuest,
+      system: demoQuest.system ?? undefined,
+      toolTiers: { scan: 2 }
+    })
+    const result = await handleTerminalCommand('scan --deep', baseSession)
+
+    expect(result.newLines.some(line => line.text.includes('Deep scanning'))).toBe(true)
+    expect(result.newLines.some(line => line.text.trim().startsWith('security:'))).toBe(true)
+    expect(result.nextState.scanDiscovery.knownHosts[demoQuest.system!.ip]?.infoLevel).toBe('deep')
+  })
 })

@@ -11,6 +11,7 @@ import { buildQuestCompletionMail, pickCompletionEmailTemplate, type CompletionC
 import { QUEST_MAIL_SYNC_EVENT } from '../constants/mail'
 import {
   createTerminalSessionState,
+  type QuestCompletionSummary,
   startQuestSession,
   type TerminalCommandContext,
   type TerminalSessionState
@@ -57,11 +58,16 @@ export const DevGameShell: React.FC = () => {
     }
   }, [questStorage])
 
-  const handleQuestComplete = useCallback(async (quest: QuestDefinition, finalState: TerminalSessionState) => {
+  const handleQuestComplete = useCallback(async (
+    quest: QuestDefinition,
+    finalState: TerminalSessionState,
+    summary: QuestCompletionSummary
+  ) => {
     const ctx: CompletionContext = {
-      maxTraceSeen: finalState.maxTraceSeen ?? 0,
+      maxTraceSeen: summary.maxTrace,
       trapsTriggered: finalState.trapsTriggered ?? [],
-      bonusCompletedIds: finalState.questProgress?.completedBonusIds ?? []
+      bonusCompletedIds: summary.completedBonusIds,
+      outcome: summary.outcome
     }
 
     const template = pickCompletionEmailTemplate(quest, quest.completionEmail, ctx)
@@ -73,8 +79,8 @@ export const DevGameShell: React.FC = () => {
       window.dispatchEvent(new Event(QUEST_MAIL_SYNC_EVENT))
     }
 
-    void rewardsService
-    void progressionService
+    await rewardsService.applyQuestRewards(quest, { finalState, summary })
+    await progressionService.markQuestCompleted(quest.id, { finalState, summary })
     setActiveQuest(quest)
   }, [mailService, rewardsService, progressionService])
 

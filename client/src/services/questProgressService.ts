@@ -1,7 +1,8 @@
-import type { TerminalSessionState } from '../programs/terminalRuntime'
+import type { QuestCompletionSummary, TerminalSessionState } from '../programs/terminalRuntime'
 
 export interface QuestProgressUpdate {
   finalState: TerminalSessionState
+  summary: QuestCompletionSummary
 }
 
 export interface QuestProgressService {

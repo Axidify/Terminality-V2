@@ -2,15 +2,17 @@ import type {
   CompletionEmailVariant,
   CompletionEmailVariantCondition,
   QuestDefinition,
+  QuestReconRequirements,
   QuestStepDefinition,
   QuestSystemDoor
 } from '../../types/quest'
 
-export type QuestWizardStep = 'details' | 'system' | 'intro_email' | 'steps' | 'completion_email' | 'summary'
+export type QuestWizardStep = 'details' | 'system' | 'recon' | 'intro_email' | 'steps' | 'completion_email' | 'summary'
 
 export interface QuestValidationErrors {
   details?: string[]
   system?: string[]
+  recon?: string[]
   intro_email?: string[]
   steps?: string[]
   completion_email?: string[]
@@ -103,6 +105,23 @@ const validateIntroEmail = (quest: QuestDefinition) => {
   return issues
 }
 
+const validateRecon = (quest: QuestDefinition) => {
+  const issues: string[] = []
+  const recon = quest.reconRequirements
+  if (!recon || !recon.enabled) return issues
+  const targets = (recon.discoveryTargets || []).filter(target => target.hostId && target.hostId.trim().length > 0)
+  if (!targets.length) {
+    issues.push('Add at least one discovery target when recon is enabled.')
+  }
+  const stealthConstraintsEnabled = Boolean(
+    recon.allowedRanges?.length || recon.forbiddenRanges?.length || typeof recon.maxReconTracePercent === 'number'
+  )
+  if (stealthConstraintsEnabled && !targets.some(target => target.rangeHint && target.rangeHint.trim().length > 0)) {
+    issues.push('Provide at least one range hint when defining stealth constraints.')
+  }
+  return issues
+}
+
 const validateSteps = (quest: QuestDefinition) => {
   const issues: string[] = []
   if (!quest.steps || quest.steps.length === 0) {
@@ -174,12 +193,13 @@ const validateCompletionEmail = (quest: QuestDefinition) => {
 const STEP_VALIDATORS: Record<Exclude<QuestWizardStep, 'summary'>, (quest: QuestDefinition) => string[]> = {
   details: validateDetails,
   system: validateSystem,
+  recon: validateRecon,
   intro_email: validateIntroEmail,
   steps: validateSteps,
   completion_email: validateCompletionEmail
 }
 
-export const QUEST_WIZARD_STEPS: QuestWizardStep[] = ['details', 'system', 'intro_email', 'steps', 'completion_email', 'summary']
+export const QUEST_WIZARD_STEPS: QuestWizardStep[] = ['details', 'system', 'recon', 'intro_email', 'steps', 'completion_email', 'summary']
 
 export const validateQuestForStep = (quest: QuestDefinition, step: QuestWizardStep): string[] => {
   if (step === 'summary') {
@@ -191,6 +211,7 @@ export const validateQuestForStep = (quest: QuestDefinition, step: QuestWizardSt
 export const validateQuest = (quest: QuestDefinition): QuestValidationErrors => ({
   details: validateDetails(quest),
   system: validateSystem(quest),
+  recon: validateRecon(quest),
   intro_email: validateIntroEmail(quest),
   steps: validateSteps(quest),
   completion_email: validateCompletionEmail(quest)

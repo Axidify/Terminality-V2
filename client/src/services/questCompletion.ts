@@ -7,11 +7,13 @@ import type {
   QuestDefinition
 } from '../types/quest'
 import type { GameMail } from '../types/mail'
+import type { QuestOutcomeKey } from '../programs/terminalRuntime'
 
 export interface CompletionContext {
   maxTraceSeen: number
   trapsTriggered: string[]
   bonusCompletedIds: string[]
+  outcome: QuestOutcomeKey
 }
 
 export interface MailTemplate {
@@ -35,6 +37,15 @@ export const completionVariantMatches = (
     case 'trap_triggered': {
       const path = cond.data?.filePath
       return typeof path === 'string' && ctx.trapsTriggered.includes(path)
+    }
+    case 'trace_between': {
+      const min = typeof cond.data?.minTrace === 'number' ? cond.data.minTrace : 0
+      const max = typeof cond.data?.maxTrace === 'number' ? cond.data.maxTrace : 100
+      return ctx.maxTraceSeen >= min && ctx.maxTraceSeen <= max
+    }
+    case 'quest_outcome': {
+      const expected = cond.data?.outcome as QuestOutcomeKey | undefined
+      return Boolean(expected) && ctx.outcome === expected
     }
     default:
       return false

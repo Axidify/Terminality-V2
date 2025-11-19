@@ -1,8 +1,9 @@
 import type { QuestDefinition } from '../types/quest'
-import type { TerminalSessionState } from '../programs/terminalRuntime'
+import type { QuestCompletionSummary, TerminalSessionState } from '../programs/terminalRuntime'
 
 export interface QuestRewardsContext {
   finalState: TerminalSessionState
+  summary: QuestCompletionSummary
 }
 
 export interface QuestRewardsService {

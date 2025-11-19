@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
 
 import './TerminalApp.css'
-import type { QuestDefinition } from '../types/quest'
+import type { QuestDefinition, QuestRewardsBlock } from '../types/quest'
 import {
+  buildQuestCompletionSummary,
   clampTerminalLines,
   createTerminalLine,
   createTerminalSessionState,
@@ -11,6 +12,8 @@ import {
   snapshotTerminalSessionState,
   startQuestSession,
   type CommandResult,
+  type QuestCompletionSummary,
+  type QuestOutcomeKey,
   type TerminalCommandContext,
   type TerminalLine,
   type TerminalSessionState,
@@ -24,7 +27,7 @@ type TerminalAppProps = {
   quest?: QuestDefinition | null
   snapshot?: TerminalSnapshot | null
   onStateChange?: (nextState: TerminalSessionState) => void
-  onQuestCompleted?: (quest: QuestDefinition, finalState: TerminalSessionState) => void
+  onQuestCompleted?: (quest: QuestDefinition, finalState: TerminalSessionState, summary: QuestCompletionSummary) => void
   onSnapshotChange?: (snapshot: TerminalSnapshot) => void
   onCloseRequest?: () => void
   commandContext?: TerminalCommandContext
@@ -49,6 +52,59 @@ const traceToneLabel: Record<TraceBadgeTone, string> = {
 const clampHistory = (history: string[]): string[] => (
   history.length > MAX_HISTORY ? history.slice(history.length - MAX_HISTORY) : history
 )
+
+const OUTCOME_LABEL: Record<QuestOutcomeKey, string> = {
+  success: 'Success',
+  stealth: 'Ghost Run',
+  failure: 'Compromised'
+}
+
+const describeRewardBlock = (block?: QuestRewardsBlock): string => {
+  if (!block) return 'No rewards assigned.'
+  const parts: string[] = []
+  if (typeof block.credits === 'number') {
+    parts.push(`${block.credits} credits`)
+  }
+  if (block.flags?.length) {
+    parts.push(`Flags: ${block.flags.map(flag => flag.key).join(', ')}`)
+  }
+  if (block.tools?.length) {
+    parts.push(`Tools: ${block.tools.join(', ')}`)
+  }
+  if (block.unlocks_commands?.length) {
+    parts.push(`Cmds: ${block.unlocks_commands.join(', ')}`)
+  }
+  if (block.access?.length) {
+    parts.push(`Access: ${block.access.join(', ')}`)
+  }
+  if (block.reputation) {
+    const repParts = Object.entries(block.reputation).map(([faction, amount]) => `${faction} ${amount >= 0 ? '+' : ''}${amount}`)
+    if (repParts.length) {
+      parts.push(`Rep: ${repParts.join(', ')}`)
+    }
+  }
+  return parts.length ? parts.join(' · ') : 'Rewards pending.'
+}
+
+const buildCompletionLines = (questTitle: string, summary: QuestCompletionSummary): TerminalLine[] => {
+  const lines = [
+    createTerminalLine(`Quest complete: ${questTitle}`),
+    createTerminalLine(`Outcome: ${OUTCOME_LABEL[summary.outcome]} · Max trace ${summary.maxTrace}%`)
+  ]
+  if (summary.totalBonusCount > 0) {
+    lines.push(createTerminalLine(`Bonus objectives ${summary.completedBonusIds.length}/${summary.totalBonusCount}`))
+  }
+  if (summary.rewardBlock) {
+    lines.push(createTerminalLine(`Rewards: ${describeRewardBlock(summary.rewardBlock)}`))
+  }
+  if (summary.branchOutcome?.followUpQuestId) {
+    lines.push(createTerminalLine(`Follow-up unlocked: ${summary.branchOutcome.followUpQuestId}`))
+  }
+  if (summary.branchOutcome?.notes) {
+    lines.push(createTerminalLine(summary.branchOutcome.notes))
+  }
+  return lines
+}
 
 export const TerminalApp: React.FC<TerminalAppProps> = ({
   state: controlledState,
@@ -163,6 +219,7 @@ export const TerminalApp: React.FC<TerminalAppProps> = ({
     const promptLabel = formatPrompt(sessionRef.current)
     const userLine = createTerminalLine(`${promptLabel} ${command}`, 'user')
     let completedQuest: QuestDefinition | null = null
+    let completionSummaryPayload: QuestCompletionSummary | undefined
     let result: CommandResult | null = null
     try {
       result = await handleTerminalCommand(command, sessionRef.current, commandContext)
@@ -178,15 +235,17 @@ export const TerminalApp: React.FC<TerminalAppProps> = ({
       const lines = clampTerminalLines([...prev.lines, userLine, ...commandResult!.newLines])
       let updated: TerminalSessionState = { ...commandResult!.nextState, lines }
       if (commandResult!.questCompleted && updated.quest) {
-        const completionLine = createTerminalLine(`Quest complete: ${updated.quest.title}`)
+        completionSummaryPayload = commandResult!.completionSummary ?? buildQuestCompletionSummary(updated.quest, updated)
+        const completionLines = buildCompletionLines(updated.quest.title, completionSummaryPayload)
         const mailNotice = createTerminalLine('Debrief mail received in INBOX.')
         completedQuest = updated.quest
-        updated = { ...updated, lines: clampTerminalLines([...lines, completionLine, mailNotice]) }
+        updated = { ...updated, lines: clampTerminalLines([...lines, ...completionLines, mailNotice]) }
       }
       return updated
     })
     if (completedQuest) {
-      onQuestCompleted?.(completedQuest, nextState)
+      const summary = completionSummaryPayload ?? buildQuestCompletionSummary(completedQuest, nextState)
+      onQuestCompleted?.(completedQuest, nextState, summary)
     }
     setHistory(prev => clampHistory([...prev, command]))
     setHistoryIndex(null)

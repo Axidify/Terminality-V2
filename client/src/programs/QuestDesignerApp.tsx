@@ -5,6 +5,8 @@ import './QuestDesignerApp.css'
 import type {
 	BonusObjective,
 	HackingToolId,
+	QuestBranchingConfig,
+	QuestBranchOutcome,
 	QuestCompletionEmailConfig,
 	CompletionEmailVariant,
 	CompletionEmailVariantCondition,
@@ -12,8 +14,13 @@ import type {
 	QuestDefinition,
 	QuestIntroEmailConfig,
 	QuestRequirements,
+	QuestReconDiscoveryTarget,
+	QuestReconRequirements,
+	QuestRewardsMatrix,
+	QuestRiskProfile,
 	QuestStepDefinition,
 	QuestSystemDefinition,
+	QuestType,
 	SystemDifficulty
 } from '../types/quest'
 import { DEFAULT_MAIL_SENDER } from '../constants/mail'
@@ -39,11 +46,18 @@ const DIFFICULTY_LABELS: Record<SystemDifficulty, string> = {
 	boss: 'Boss'
 }
 
-const TOOL_OPTIONS: HackingToolId[] = ['scan', 'deep_scan', 'bruteforce', 'clean_logs', 'backdoor_install']
+const TOOL_OPTION_DETAILS: Array<{ id: HackingToolId; label: string; description: string }> = [
+	{ id: 'scan', label: 'Scan', description: 'Baseline host probe to confirm the system is online and expose doors.' },
+	{ id: 'deep_scan', label: 'Deep Scan', description: 'Heavy probe that surfaces ports plus trace behavior and NPC chatter.' },
+	{ id: 'bruteforce', label: 'Bruteforce', description: 'Password cannon used to break guarded or locked doors.' },
+	{ id: 'clean_logs', label: 'Clean Logs', description: 'Scrubs log files to satisfy cleanup bonus objectives.' },
+	{ id: 'backdoor_install', label: 'Backdoor Install', description: 'Plants persistent access for follow-up quests or branches.' }
+]
 
 const STEP_LABELS: Record<QuestWizardStep, { title: string; helper: string }> = {
 	details: { title: 'Quest Details', helper: 'Describe the quest meta and difficulty.' },
 	system: { title: 'System Designer', helper: 'Specify the target host players will infiltrate.' },
+	recon: { title: 'Recon & Discovery', helper: 'Define scan requirements, discovery targets, and stealth hints.' },
 	intro_email: { title: 'Intro Email', helper: 'Draft the in-universe quest briefing.' },
 	steps: { title: 'Quest Steps', helper: 'Outline the actions players must complete.' },
 	completion_email: { title: 'Completion Email', helper: 'Write the wrap-up mail after success.' },
@@ -73,6 +87,10 @@ const VARIANT_CONDITION_METADATA: Record<CompletionEmailVariantCondition['type']
 		label: 'Trace below threshold',
 		helper: 'Fire this mail when players finish under a specific trace amount.'
 	},
+	trace_between: {
+		label: 'Trace between range',
+		helper: 'Send when final trace is between min/max values.'
+	},
 	bonus_objective_completed: {
 		label: 'Bonus objective completed',
 		helper: 'Only send if a specific bonus objective succeeds.'
@@ -80,34 +98,66 @@ const VARIANT_CONDITION_METADATA: Record<CompletionEmailVariantCondition['type']
 	trap_triggered: {
 		label: 'Trap triggered',
 		helper: 'Send when a given trap ID was tripped.'
+	},
+	quest_outcome: {
+		label: 'Quest outcome matches',
+		helper: 'Target a specific success/stealth/failure outcome.'
+	},
+	world_flag: {
+		label: 'World flag present',
+		helper: 'Send when a given world flag is set (or not).'
 	}
 }
 
-type QuestWorkspaceView = 'wizard' | 'overview' | 'systems' | 'steps' | 'mail' | 'rewards'
+type QuestWorkspaceView = 'wizard' | 'overview' | 'systems' | 'recon' | 'steps' | 'mail' | 'rewards'
 
 const WORKSPACE_TABS: Array<{ id: QuestWorkspaceView; label: string; helper: string }> = [
 	{ id: 'wizard', label: 'Guided Wizard', helper: 'Step-by-step flow for new quests.' },
 	{ id: 'overview', label: 'Overview', helper: 'Quick edits to title, description, and difficulty.' },
 	{ id: 'systems', label: 'Systems', helper: 'Tweak the target host snapshot.' },
+	{ id: 'recon', label: 'Recon', helper: 'Tune scan requirements, discovery targets, and stealth expectations.' },
 	{ id: 'steps', label: 'Steps', helper: 'Adjust the quest beats and ordering.' },
 	{ id: 'mail', label: 'Mail', helper: 'Craft intro and completion emails.' },
 	{ id: 'rewards', label: 'Rewards', helper: 'Bonus objectives and reward hooks.' }
 ]
 
+const QUEST_TYPE_OPTIONS: Array<{ id: QuestType; label: string; helper: string }> = [
+	{ id: 'recon', label: 'Recon Run', helper: 'Map systems quietly, ideal for onboarding new hackers.' },
+	{ id: 'data_theft', label: 'Data Theft', helper: 'Snatch sensitive files without leaving a trace.' },
+	{ id: 'sabotage', label: 'Sabotage', helper: 'Break core infrastructure, usually louder runs.' },
+	{ id: 'cleanup', label: 'Cleanup', helper: 'Erase footprints or patch damage from other ops.' },
+	{ id: 'misdirection', label: 'Misdirection', helper: 'Trigger decoys or plant fake intel.' }
+]
+
+const DEFAULT_RISK_PROFILE: QuestRiskProfile = {
+	maxRecommendedTrace: 60,
+	failAboveTrace: 95,
+	requiredTraceSpike: undefined,
+	cleanupBeforeDisconnect: false
+}
+
 const BONUS_OBJECTIVE_TYPES: BonusObjective['type'][] = [
 	'keep_trace_below',
+	'avoid_trace_spike',
 	'dont_delete_file',
 	'exfiltrate_file',
 	'dont_trigger_trap',
-	'clean_logs'
+	'clean_logs',
+	'sanitize_logs',
+	'delete_logs',
+	'retrieve_files'
 ]
 
 const BONUS_TYPE_LABELS: Record<BonusObjective['type'], string> = {
 	keep_trace_below: 'Keep Trace Below',
+	avoid_trace_spike: 'Avoid Trace Spike',
 	dont_delete_file: "Don't Delete File",
 	exfiltrate_file: 'Exfiltrate File',
 	dont_trigger_trap: "Don't Trigger Trap",
-	clean_logs: 'Clean All Logs'
+	clean_logs: 'Clean All Logs',
+	sanitize_logs: 'Sanitize All Logs',
+	delete_logs: 'Delete Evidence Logs',
+	retrieve_files: 'Retrieve Tagged Files'
 }
 
 const createEmptyQuestDraft = (): QuestDefinition => ({
@@ -116,11 +166,15 @@ const createEmptyQuestDraft = (): QuestDefinition => ({
 	shortDescription: '',
 	recommendedOrder: undefined,
 	difficulty: 'easy',
+	questType: 'recon',
+	riskProfile: { ...DEFAULT_RISK_PROFILE },
 	system: undefined,
 	requirements: { requiredTools: [] },
 	bonusObjectives: [],
 	introEmail: undefined,
 	completionEmail: undefined,
+	rewards: {},
+	branching: {},
 	steps: []
 })
 
@@ -142,7 +196,7 @@ const summarizeSteps = (steps: QuestStepDefinition[]) => {
 		return acc
 	}, {})
 	return Object.entries(counts)
-		.map(([type, count]) => `${count}× ${type}`)
+		.map(([type, count]) => `${count}x ${type}`)
 		.join(', ')
 }
 
@@ -324,6 +378,10 @@ export const QuestDesignerApp: React.FC = () => {
 
 	const handleSystemChange = useCallback((system: QuestSystemDefinition | undefined) => {
 		applyDraftPatch({ system })
+	}, [applyDraftPatch])
+
+	const handleReconChange = useCallback((recon?: QuestReconRequirements) => {
+		applyDraftPatch({ reconRequirements: recon })
 	}, [applyDraftPatch])
 
 	const handleIntroEmailChange = useCallback((email: QuestIntroEmailConfig | undefined) => {
@@ -509,6 +567,7 @@ export const QuestDesignerApp: React.FC = () => {
 								onValidateStep={handleValidateStep}
 								onChange={applyDraftPatch}
 								onSystemChange={handleSystemChange}
+								onReconChange={handleReconChange}
 								onIntroEmailChange={handleIntroEmailChange}
 								onCompletionEmailChange={handleCompletionEmailChange}
 								onStepsChange={handleStepsChange}
@@ -542,6 +601,13 @@ export const QuestDesignerApp: React.FC = () => {
 										templateService={systemTemplates}
 									/>
 								)}
+								{workspaceView === 'recon' && (
+									<ReconDiscoveryStep
+										quest={draft}
+										errors={validationErrors.recon || []}
+										onChange={handleReconChange}
+									/>
+								)}
 								{workspaceView === 'steps' && (
 									<QuestStepsStep steps={draft.steps} onChange={handleStepsChange} errors={validationErrors.steps || []} />
 								)}
@@ -563,8 +629,10 @@ export const QuestDesignerApp: React.FC = () => {
 								)}
 								{workspaceView === 'rewards' && (
 									<RewardsPanel
+										quest={draft}
 										bonusObjectives={draft.bonusObjectives || []}
-										onChange={(next: BonusObjective[]) => applyDraftPatch({ bonusObjectives: next })}
+										onBonusChange={(next: BonusObjective[]) => applyDraftPatch({ bonusObjectives: next })}
+										onQuestChange={applyDraftPatch}
 									/>
 								)}
 							</QuestStandaloneEditor>
@@ -609,6 +677,7 @@ interface QuestWizardProps {
 	onValidateStep(step: QuestWizardStep): string[]
 	onChange(patch: Partial<QuestDefinition>): void
 	onSystemChange(system: QuestSystemDefinition | undefined): void
+	onReconChange(recon: QuestReconRequirements | undefined): void
 	onIntroEmailChange(email: QuestIntroEmailConfig | undefined): void
 	onCompletionEmailChange(email: QuestCompletionEmailConfig | undefined): void
 	onStepsChange(steps: QuestStepDefinition[]): void
@@ -628,6 +697,7 @@ const QuestWizard: React.FC<QuestWizardProps> = ({
 	onValidateStep,
 	onChange,
 	onSystemChange,
+	onReconChange,
 	onIntroEmailChange,
 	onCompletionEmailChange,
 	onStepsChange,
@@ -674,6 +744,14 @@ const QuestWizard: React.FC<QuestWizardProps> = ({
 						onChange={onSystemChange}
 						errors={validationErrors.system || []}
 						templateService={templateService}
+					/>
+				)
+			case 'recon':
+				return (
+					<ReconDiscoveryStep
+						quest={quest}
+						errors={validationErrors.recon || []}
+						onChange={onReconChange}
 					/>
 				)
 			case 'intro_email':
@@ -798,28 +876,75 @@ const QuestStandaloneEditor: React.FC<QuestStandaloneEditorProps> = ({
 
 const createEmptyBonusObjective = (): BonusObjective => ({
 	id: generateId('bonus'),
+	title: '',
 	description: '',
+	category: 'stealth',
 	type: 'keep_trace_below',
 	params: {},
 	rewardDescription: ''
 })
 
 interface RewardsPanelProps {
+	quest: QuestDefinition
 	bonusObjectives: BonusObjective[]
-	onChange(next: BonusObjective[]): void
+	onBonusChange(next: BonusObjective[]): void
+	onQuestChange(patch: Partial<QuestDefinition>): void
 }
 
-const RewardsPanel: React.FC<RewardsPanelProps> = ({ bonusObjectives, onChange }) => {
+type RewardOutcomeKey = 'success' | 'stealth' | 'failure'
+
+const RewardsPanel: React.FC<RewardsPanelProps> = ({ quest, bonusObjectives, onBonusChange, onQuestChange }) => {
+	const rewards = quest.rewards || {}
+	const branching = quest.branching || {}
+
+	const updateRewardField = (
+		key: RewardOutcomeKey,
+		field: keyof NonNullable<QuestRewardsMatrix[RewardOutcomeKey]>,
+		value: any
+	) => {
+		const base = rewards[key] || {}
+		const nextMatrix: QuestRewardsMatrix = { ...rewards, [key]: { ...base, [field]: value } }
+		onQuestChange({ rewards: nextMatrix })
+	}
+
+	const updateBranching = (key: RewardOutcomeKey, patch: Partial<QuestBranchOutcome>) => {
+		onQuestChange({ branching: { ...branching, [key]: { ...(branching[key] || {}), ...patch } } })
+	}
+
 	const updateObjective = (index: number, patch: Partial<BonusObjective>) => {
-		onChange(bonusObjectives.map((objective, idx) => (idx === index ? { ...objective, ...patch } : objective)))
+		onBonusChange(bonusObjectives.map((objective, idx) => (idx === index ? { ...objective, ...patch } : objective)))
 	}
 
 	const handleRemoveObjective = (index: number) => {
-		onChange(bonusObjectives.filter((_, idx) => idx !== index))
+		onBonusChange(bonusObjectives.filter((_, idx) => idx !== index))
 	}
 
 	const handleAddObjective = () => {
-		onChange([...(bonusObjectives || []), createEmptyBonusObjective()])
+		onBonusChange([...(bonusObjectives || []), createEmptyBonusObjective()])
+	}
+
+	const parseList = (value: string): string[] => value.split(',').map(token => token.trim()).filter(Boolean)
+	const formatList = (value?: string[]) => value?.join(', ') ?? ''
+	const serializeFlags = (flags?: { key: string; value?: string }[]) => flags?.map(flag => (flag.value ? `${flag.key}=${flag.value}` : flag.key)).join('\n') || ''
+	const parseFlags = (value: string) => value.split(/\n+/).map(line => line.trim()).filter(Boolean).map(entry => {
+		const [key, ...rest] = entry.split(/[:=]/)
+		return { key: key.trim(), value: rest.length ? rest.join('=').trim() || undefined : undefined }
+	})
+	const formatReputation = (record?: Record<string, number>) => (
+		record ? Object.entries(record).map(([faction, score]) => `${faction}:${score}`).join('\n') : ''
+	)
+	const parseReputation = (raw: string) => {
+		const entries = raw.split(/\n+/).map(line => line.trim()).filter(Boolean)
+		const result: Record<string, number> = {}
+		entries.forEach(line => {
+			const [faction, value] = line.split(/[:=]/)
+			if (!faction) return
+			const parsed = Number(value)
+			if (Number.isFinite(parsed)) {
+				result[faction.trim()] = parsed
+			}
+		})
+		return result
 	}
 
 	const handleParamValueChange = (objectiveIndex: number, key: string, value: string) => {
@@ -851,68 +976,204 @@ const RewardsPanel: React.FC<RewardsPanelProps> = ({ bonusObjectives, onChange }
 		updateObjective(objectiveIndex, { params })
 	}
 
+	const OUTCOMES: Array<{ key: RewardOutcomeKey; label: string; helper: string }> = [
+		{ key: 'success', label: 'Success', helper: 'Primary objectives complete.' },
+		{ key: 'stealth', label: 'Stealth Success', helper: 'Primary + all stealth objectives.' },
+		{ key: 'failure', label: 'Failure / Detected', helper: 'Trace blown or objectives missed.' }
+	]
+
 	return (
-		<div className="wizard-form">
-			<p className="muted">Bonus objectives reward extra precision or stealth. They are optional goals that grant extra narrative beats.</p>
-			{bonusObjectives.length === 0 && <p className="muted">No bonus objectives yet. Add one to start experimenting.</p>}
-			<ol className="step-list">
-				{bonusObjectives.map((objective, index) => (
-					<li key={objective.id} className="step-card">
-						<div className="step-card-header">
-							<span>Bonus {index + 1}</span>
-							<button type="button" className="ghost" onClick={() => handleRemoveObjective(index)}>Remove</button>
-						</div>
-						<label>
-							Description
-							<textarea
-								rows={3}
-								value={objective.description}
-								onChange={e => updateObjective(index, { description: e.target.value })}
-								placeholder="Keep trace meter below 40 for the entire run."
-							/>
-						</label>
-						<label>
-							Bonus Type
-							<select value={objective.type} onChange={e => updateObjective(index, { type: e.target.value as BonusObjective['type'] })}>
-								{BONUS_OBJECTIVE_TYPES.map(type => (
-									<option key={type} value={type}>{BONUS_TYPE_LABELS[type]}</option>
-								))}
-							</select>
-						</label>
-						<label>
-							Reward Description (optional)
-							<input
-								value={objective.rewardDescription || ''}
-								onChange={e => updateObjective(index, { rewardDescription: e.target.value })}
-								placeholder="Atlas grants extra 200 credits."
-							/>
-						</label>
-						<div className="param-list">
-							<div className="param-list-header">
-								<strong>Params</strong>
-								<button type="button" className="ghost" onClick={() => handleAddParam(index)}>Add Param</button>
+		<div className="wizard-form rewards-panel">
+			<section>
+				<header>
+					<h4>Outcome rewards</h4>
+					<p className="muted">Define payouts per outcome tier.</p>
+				</header>
+				<div className="reward-grid">
+					{OUTCOMES.map(outcome => {
+						const block = rewards[outcome.key] || {}
+						return (
+							<article key={outcome.key} className="reward-card">
+								<header>
+									<strong>{outcome.label}</strong>
+									<p className="muted">{outcome.helper}</p>
+								</header>
+								<label>
+									Credits
+									<input
+										type="number"
+										value={block.credits ?? ''}
+										onChange={e => updateRewardField(outcome.key, 'credits', e.target.value ? Number(e.target.value) : undefined)}
+									/>
+								</label>
+								<label>
+									Tools unlocked
+									<input
+										value={formatList(block.tools)}
+										onChange={e => updateRewardField(outcome.key, 'tools', parseList(e.target.value))}
+										placeholder="overclock, ghostscan"
+									/>
+								</label>
+								<label>
+									Access granted (hosts, creds)
+									<input
+										value={formatList(block.access)}
+										onChange={e => updateRewardField(outcome.key, 'access', parseList(e.target.value))}
+										placeholder="corp-internal, vpn-alpha"
+									/>
+								</label>
+								<label>
+									Unlock commands
+									<input
+										value={formatList(block.unlocks_commands)}
+										onChange={e => updateRewardField(outcome.key, 'unlocks_commands', parseList(e.target.value))}
+										placeholder="deep_scan"
+									/>
+								</label>
+								<label>
+									Reputation (faction:points per line)
+									<textarea
+										rows={3}
+										value={formatReputation(block.reputation)}
+										onChange={e => updateRewardField(outcome.key, 'reputation', parseReputation(e.target.value))}
+									/>
+								</label>
+								<label>
+									Flags set (one per line)
+									<textarea
+										rows={3}
+										value={serializeFlags(block.flags)}
+										onChange={e => updateRewardField(outcome.key, 'flags', parseFlags(e.target.value))}
+									/>
+								</label>
+							</article>
+						)
+					})}
+				</div>
+			</section>
+			<section>
+				<header>
+					<h4>Branching outcomes</h4>
+					<p className="muted">Hook follow-up quests, world flags, and alternate emails per outcome.</p>
+				</header>
+				<div className="reward-grid">
+					{OUTCOMES.map(outcome => {
+						const block = branching[outcome.key] || {}
+						return (
+							<article key={`branch-${outcome.key}`} className="reward-card">
+								<header>
+									<strong>{outcome.label}</strong>
+								</header>
+								<label>
+									Follow-up quest ID
+									<input value={block.followUpQuestId || ''} onChange={e => updateBranching(outcome.key, { followUpQuestId: e.target.value })} />
+								</label>
+								<label>
+									Completion email variant ID
+									<input value={block.emailVariantId || ''} onChange={e => updateBranching(outcome.key, { emailVariantId: e.target.value })} />
+								</label>
+								<label>
+									Set flags (one per line)
+									<textarea
+										rows={3}
+										value={serializeFlags(block.setFlags)}
+										onChange={e => updateBranching(outcome.key, { setFlags: parseFlags(e.target.value) })}
+									/>
+								</label>
+								<label>
+									Requires flags
+									<textarea
+										rows={3}
+										value={serializeFlags(block.requireFlags)}
+										onChange={e => updateBranching(outcome.key, { requireFlags: parseFlags(e.target.value) })}
+									/>
+								</label>
+								<label>
+									Outcome note
+									<textarea rows={2} value={block.notes || ''} onChange={e => updateBranching(outcome.key, { notes: e.target.value })} />
+								</label>
+							</article>
+						)
+					})}
+				</div>
+			</section>
+			<section>
+				<header>
+					<h4>Bonus & stealth objectives</h4>
+					<p className="muted">Mark stealth goals to distinguish stealth completions.</p>
+				</header>
+				{bonusObjectives.length === 0 && <p className="muted">No bonus objectives yet. Add one to start experimenting.</p>}
+				<ol className="step-list">
+					{bonusObjectives.map((objective, index) => (
+						<li key={objective.id} className="step-card">
+							<div className="step-card-header">
+								<span>Bonus {index + 1}</span>
+								<button type="button" className="ghost" onClick={() => handleRemoveObjective(index)}>Remove</button>
 							</div>
-							{Object.entries(objective.params || {}).map(([key, value]) => (
-								<div key={key} className="param-row">
-									<input
-										value={key}
-										onChange={e => handleParamKeyChange(index, key, e.target.value)}
-										placeholder="Key"
-									/>
-									<input
-										value={String(value ?? '')}
-										onChange={e => handleParamValueChange(index, key, e.target.value)}
-										placeholder="Value"
-									/>
-									<button type="button" className="ghost" onClick={() => handleRemoveParam(index, key)}>Remove</button>
+							<label>
+								Title (optional)
+								<input value={objective.title || ''} onChange={e => updateObjective(index, { title: e.target.value })} placeholder="Ghosted Trace" />
+							</label>
+							<label>
+								Description
+								<textarea
+									rows={3}
+									value={objective.description}
+									onChange={e => updateObjective(index, { description: e.target.value })}
+									placeholder="Keep trace meter below 40 for the entire run."
+								/>
+							</label>
+							<label>
+								Objective Category
+								<select value={objective.category || 'stealth'} onChange={e => updateObjective(index, { category: e.target.value as BonusObjective['category'] })}>
+									<option value="stealth">Stealth</option>
+									<option value="optional">Optional</option>
+									<option value="cleanup">Cleanup</option>
+								</select>
+							</label>
+							<label>
+								Bonus Type
+								<select value={objective.type} onChange={e => updateObjective(index, { type: e.target.value as BonusObjective['type'] })}>
+									{BONUS_OBJECTIVE_TYPES.map(type => (
+										<option key={type} value={type}>{BONUS_TYPE_LABELS[type]}</option>
+									))}
+								</select>
+							</label>
+							<label>
+								Reward Description (optional)
+								<input
+									value={objective.rewardDescription || ''}
+									onChange={e => updateObjective(index, { rewardDescription: e.target.value })}
+									placeholder="Atlas grants extra 200 credits."
+								/>
+							</label>
+							<div className="param-list">
+								<div className="param-list-header">
+									<strong>Params</strong>
+									<button type="button" className="ghost" onClick={() => handleAddParam(index)}>Add Param</button>
 								</div>
-							))}
-							{Object.keys(objective.params || {}).length === 0 && <p className="muted">No params assigned.</p>}
-						</div>
-					</li>
-				))}
-			</ol>
-			<button type="button" className="ghost" onClick={handleAddObjective}>+ Add Bonus Objective</button>
+								{Object.entries(objective.params || {}).map(([key, value]) => (
+									<div key={key} className="param-row">
+										<input
+											value={key}
+											onChange={e => handleParamKeyChange(index, key, e.target.value)}
+											placeholder="Key"
+										/>
+										<input
+											value={String(value ?? '')}
+											onChange={e => handleParamValueChange(index, key, e.target.value)}
+											placeholder="Value"
+										/>
+										<button type="button" className="ghost" onClick={() => handleRemoveParam(index, key)}>Remove</button>
+									</div>
+								))}
+								{Object.keys(objective.params || {}).length === 0 && <p className="muted">No params assigned.</p>}
+							</div>
+						</li>
+					))}
+				</ol>
+				<button type="button" className="ghost" onClick={handleAddObjective}>+ Add Bonus Objective</button>
+			</section>
 		</div>
 	)
 }
@@ -924,62 +1185,424 @@ interface QuestDetailsStepProps {
 	onRequirementsChange(requirements: QuestRequirements): void
 }
 
-const QuestDetailsStep: React.FC<QuestDetailsStepProps> = ({ quest, errors, onChange, onRequirementsChange }) => (
-	<div className="wizard-form">
-		{errors.length > 0 && (
-			<div className="inline-alert error" role="alert">
-				<strong>Fix these before continuing</strong>
-				<ul>{errors.map(err => <li key={err}>{err}</li>)}</ul>
-			</div>
-		)}
-		<label>
-			Title
-			<input value={quest.title} onChange={e => onChange({ title: e.target.value })} placeholder="Atlas needs help" />
-		</label>
-		<label>
-			Short Description
-			<textarea
-				value={quest.shortDescription}
-				rows={3}
-				placeholder="Brief summary shown in quest lists."
-				onChange={e => onChange({ shortDescription: e.target.value })}
-			/>
-		</label>
-		<div className="field-row">
+interface ToolDropdownProps {
+	selected: HackingToolId[]
+	onChange(next: HackingToolId[]): void
+}
+
+const ToolDropdown: React.FC<ToolDropdownProps> = ({ selected, onChange }) => {
+	const [open, setOpen] = useState(false)
+	const containerRef = useRef<HTMLDivElement | null>(null)
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (!containerRef.current) return
+			if (!containerRef.current.contains(event.target as Node)) {
+				setOpen(false)
+			}
+		}
+		document.addEventListener('mousedown', handleClickOutside)
+		return () => document.removeEventListener('mousedown', handleClickOutside)
+	}, [])
+
+	const toggleTool = (toolId: HackingToolId) => {
+		const next = selected.includes(toolId)
+			? selected.filter(id => id !== toolId)
+			: [...selected, toolId]
+		onChange(next)
+	}
+
+	const summaryLabel = selected.length
+		? `${selected.length} tool${selected.length === 1 ? '' : 's'} selected`
+		: 'Select required tools'
+
+	return (
+		<div className={`tool-dropdown ${open ? 'open' : ''}`} ref={containerRef}>
+			<button
+				type="button"
+				className="tool-dropdown-trigger"
+				onClick={() => setOpen(value => !value)}
+				aria-haspopup="listbox"
+				aria-expanded={open}
+			>
+				{summaryLabel}
+			</button>
+			{open && (
+				<div className="tool-dropdown-panel" role="listbox" aria-multiselectable>
+					{TOOL_OPTION_DETAILS.map(option => {
+						const checked = selected.includes(option.id)
+						return (
+							<label key={option.id} className="tool-dropdown-option">
+								<input
+									type="checkbox"
+									checked={checked}
+									onChange={() => toggleTool(option.id)}
+								/>
+								<div>
+									<strong>{option.label}</strong>
+									<p className="muted">{option.description}</p>
+								</div>
+							</label>
+						)
+					})}
+				</div>
+			)}
+		</div>
+	)
+}
+
+const QuestDetailsStep: React.FC<QuestDetailsStepProps> = ({ quest, errors, onChange, onRequirementsChange }) => {
+	const currentRisk: QuestRiskProfile = quest.riskProfile || { ...DEFAULT_RISK_PROFILE }
+	const updateRisk = (patch: Partial<QuestRiskProfile>) => {
+		onChange({ riskProfile: { ...currentRisk, ...patch } })
+	}
+
+	const updateRequirements = (patch: Partial<QuestRequirements>) => {
+		onRequirementsChange({ ...(quest.requirements || {}), ...patch })
+	}
+
+	const selectedTools = quest.requirements?.requiredTools || []
+
+	const serializeFlagList = (flags?: { key: string; value?: string }[]) => (
+		flags?.map(flag => (flag.value ? `${flag.key}=${flag.value}` : flag.key)).join('\n') || ''
+	)
+
+	const parseFlagList = (value: string) => (
+		value
+			.split(/\n+/)
+			.map(line => line.trim())
+			.filter(Boolean)
+			.map(entry => {
+				const [key, ...rest] = entry.split(/[:=]/)
+				return { key: key.trim(), value: rest.length ? rest.join('=').trim() || undefined : undefined }
+			})
+	)
+
+	return (
+		<div className="wizard-form">
+			{errors.length > 0 && (
+				<div className="inline-alert error" role="alert">
+					<strong>Fix these before continuing</strong>
+					<ul>{errors.map(err => <li key={err}>{err}</li>)}</ul>
+				</div>
+			)}
 			<label>
-				Difficulty
-				<select value={quest.difficulty} onChange={e => onChange({ difficulty: e.target.value as SystemDifficulty })}>
-					{DIFFICULTY_ORDER.map(level => (
-						<option key={level} value={level}>{DIFFICULTY_LABELS[level]}</option>
-					))}
-				</select>
+				Title
+				<input value={quest.title} onChange={e => onChange({ title: e.target.value })} placeholder="Atlas needs help" />
 			</label>
 			<label>
-				Recommended Order
-				<input
-					type="number"
-					value={quest.recommendedOrder ?? ''}
-					onChange={e => onChange({ recommendedOrder: e.target.value ? Number(e.target.value) : undefined })}
-					placeholder="Optional"
+				Short Description
+				<textarea
+					value={quest.shortDescription}
+					rows={3}
+					placeholder="Brief summary shown in quest lists."
+					onChange={e => onChange({ shortDescription: e.target.value })}
 				/>
 			</label>
+			<div className="field-row">
+				<label>
+					Difficulty
+					<select value={quest.difficulty} onChange={e => onChange({ difficulty: e.target.value as SystemDifficulty })}>
+						{DIFFICULTY_ORDER.map(level => (
+							<option key={level} value={level}>{DIFFICULTY_LABELS[level]}</option>
+						))}
+					</select>
+				</label>
+				<label>
+					Quest Type
+					<select value={quest.questType || 'recon'} onChange={e => onChange({ questType: e.target.value as QuestType })}>
+						{QUEST_TYPE_OPTIONS.map(option => (
+							<option key={option.id} value={option.id}>{option.label}</option>
+						))}
+					</select>
+					<small className="muted">{QUEST_TYPE_OPTIONS.find(opt => opt.id === (quest.questType || 'recon'))?.helper}</small>
+				</label>
+			</div>
+			<div className="field-row">
+				<label>
+					Recommended Order
+					<input
+						type="number"
+						value={quest.recommendedOrder ?? ''}
+						onChange={e => onChange({ recommendedOrder: e.target.value ? Number(e.target.value) : undefined })}
+						placeholder="Optional"
+					/>
+				</label>
+				<fieldset className="tool-select-field">
+					<legend>
+						Required Tools
+						<small className="muted">{TOOL_OPTION_DETAILS.length} tools available. Pick the utilities this quest expects.</small>
+					</legend>
+					<ToolDropdown selected={selectedTools} onChange={next => updateRequirements({ requiredTools: next })} />
+					<small className="muted">Each option lists what the tool does so authors can set expectations.</small>
+				</fieldset>
+			</div>
+			<section className="risk-profile">
+				<header>
+					<h4>Risk Profile</h4>
+					<p className="muted">Trace guardrails and cleanup expectations.</p>
+				</header>
+				<div className="field-row">
+					<label>
+						Max recommended trace %
+						<input
+							type="number"
+							min={0}
+							max={100}
+							value={currentRisk.maxRecommendedTrace ?? ''}
+							onChange={e => updateRisk({ maxRecommendedTrace: e.target.value ? Number(e.target.value) : undefined })}
+						/>
+					</label>
+					<label>
+						Fail if trace exceeds %
+						<input
+							type="number"
+							min={0}
+							max={100}
+							value={currentRisk.failAboveTrace ?? ''}
+							onChange={e => updateRisk({ failAboveTrace: e.target.value ? Number(e.target.value) : undefined })}
+						/>
+					</label>
+					<label>
+						Required trace spike % (optional)
+						<input
+							type="number"
+							min={0}
+							max={100}
+							value={currentRisk.requiredTraceSpike ?? ''}
+							onChange={e => updateRisk({ requiredTraceSpike: e.target.value ? Number(e.target.value) : undefined })}
+						/>
+					</label>
+				</div>
+				<label className="checkbox">
+					<input
+						type="checkbox"
+						checked={Boolean(currentRisk.cleanupBeforeDisconnect)}
+						onChange={e => updateRisk({ cleanupBeforeDisconnect: e.target.checked })}
+					/>
+					<span>Require log cleanup before disconnecting</span>
+				</label>
+			</section>
+			<section className="requirements-section">
+				<header>
+					<h4>World Flags</h4>
+					<p className="muted">Gate quests or block them when certain flags exist.</p>
+				</header>
+				<div className="field-row">
+					<label>
+						Requires flags (one per line, key or key=value)
+						<textarea
+							rows={3}
+							value={serializeFlagList(quest.requirements?.requiredFlags)}
+							onChange={e => updateRequirements({ requiredFlags: parseFlagList(e.target.value) })}
+						/>
+					</label>
+					<label>
+						Blocked when flags present
+						<textarea
+							rows={3}
+							value={serializeFlagList(quest.requirements?.blockedByFlags)}
+							onChange={e => updateRequirements({ blockedByFlags: parseFlagList(e.target.value) })}
+						/>
+					</label>
+				</div>
+			</section>
 		</div>
-		<label>
-			Required Tools (comma-separated)
-			<input
-				value={(quest.requirements?.requiredTools || []).join(', ')}
-				onChange={e => {
-					const tokens = e.target.value
-						.split(',')
-						.map(token => token.trim())
-						.filter((token): token is HackingToolId => TOOL_OPTIONS.includes(token as HackingToolId))
-					onRequirementsChange({ requiredTools: tokens })
-				}}
-				placeholder="scan, clean_logs"
-			/>
-		</label>
-	</div>
+	)
+}
+
+interface ReconDiscoveryStepProps {
+	quest: QuestDefinition
+	errors: string[]
+	onChange(recon: QuestReconRequirements | undefined): void
+}
+
+const serializeReconList = (list?: string[]) => list?.join('\n') ?? ''
+
+const parseReconList = (value: string): string[] => (
+	value
+		.split(/\n+/)
+		.map(entry => entry.trim())
+		.filter(Boolean)
 )
+
+const buildDefaultRecon = (): QuestReconRequirements => ({
+	enabled: true,
+	mustUseScan: true,
+	discoveryTargets: [],
+	allowedRanges: [],
+	forbiddenRanges: []
+})
+
+const ReconDiscoveryStep: React.FC<ReconDiscoveryStepProps> = ({ quest, errors, onChange }) => {
+	const recon = quest.reconRequirements
+	const enabled = recon?.enabled ?? false
+	const targets = recon?.discoveryTargets ?? []
+
+	const ensureRecon = (): QuestReconRequirements => recon ? { ...recon, discoveryTargets: [...(recon.discoveryTargets ?? [])] } : buildDefaultRecon()
+
+	const updateRecon = (patch: Partial<QuestReconRequirements>) => {
+		const base = ensureRecon()
+		onChange({ ...base, ...patch, enabled: true })
+	}
+
+	const toggleEnabled = (checked: boolean) => {
+		if (!checked) {
+			onChange(undefined)
+			return
+		}
+		if (recon?.enabled) {
+			onChange({ ...recon, enabled: true })
+			return
+		}
+		onChange(buildDefaultRecon())
+	}
+
+	const updateTargets = (nextTargets: QuestReconDiscoveryTarget[]) => {
+		updateRecon({ discoveryTargets: nextTargets })
+	}
+
+	const addSystemTarget = () => {
+		if (!quest.system) return
+		if (targets.some(target => target.hostId === quest.system?.id)) return
+		updateTargets([...targets, { hostId: quest.system.id, rangeHint: '' }])
+	}
+
+	const addManualTarget = () => {
+		updateTargets([...targets, { hostId: '', rangeHint: '' }])
+	}
+
+	const updateTargetField = (index: number, field: keyof QuestReconDiscoveryTarget, value: string) => {
+		const next = targets.map((target, targetIndex) => (
+			targetIndex === index ? { ...target, [field]: value } : target
+		))
+		updateTargets(next)
+	}
+
+	const removeTarget = (index: number) => {
+		const next = targets.filter((_, targetIndex) => targetIndex !== index)
+		updateTargets(next)
+	}
+
+	const allowedRangesValue = serializeReconList(recon?.allowedRanges)
+	const forbiddenRangesValue = serializeReconList(recon?.forbiddenRanges)
+	const stealthConstraintsEnabled = Boolean(
+		recon?.allowedRanges?.length || recon?.forbiddenRanges?.length || typeof recon?.maxReconTracePercent === 'number'
+	)
+	const hasRangeHints = targets.some(target => target.rangeHint?.trim())
+	const needsHintWarning = enabled && stealthConstraintsEnabled && !hasRangeHints
+	const maxTraceValue = typeof recon?.maxReconTracePercent === 'number' ? recon.maxReconTracePercent : undefined
+
+	return (
+		<div className="recon-step">
+			{errors.length > 0 && (
+				<div className="inline-alert error" role="alert">
+					<strong>Fix these before continuing</strong>
+					<ul>{errors.map(err => <li key={err}>{err}</li>)}</ul>
+				</div>
+			)}
+			<label className="checkbox">
+				<input type="checkbox" checked={enabled} onChange={e => toggleEnabled(e.target.checked)} />
+				<span>Does this quest involve discovering a target via recon?</span>
+			</label>
+			<p className="muted">Enable this when players must run scan before progressing the quest.</p>
+			{enabled && !quest.system && (
+				<div className="inline-alert info">
+					Add a system to surface real host targets. You can still add manual placeholders below.
+				</div>
+			)}
+			{enabled && (
+				<>
+					<section className="recon-section">
+						<header>
+							<h4>Discovery Targets</h4>
+							<p className="muted">Pick which hosts must appear in scan results and add optional range hints.</p>
+						</header>
+						<div className="recon-target-actions">
+							<button type="button" className="ghost" onClick={addSystemTarget} disabled={!quest.system || targets.some(target => target.hostId === quest.system?.id)}>
+								Add target system
+							</button>
+							<button type="button" className="ghost" onClick={addManualTarget}>Add manual target</button>
+						</div>
+						{targets.length === 0 && (
+							<p className="muted">No discovery targets selected yet.</p>
+						)}
+						<div className="recon-target-list">
+							{targets.map((target, index) => (
+								<div key={`${target.hostId || 'manual'}-${index}`} className="recon-target-card">
+									<label>
+										Host ID
+										<input value={target.hostId} onChange={e => updateTargetField(index, 'hostId', e.target.value)} placeholder="quest-system-id or hostname" />
+									</label>
+									<label>
+										Range hint (optional)
+										<input value={target.rangeHint ?? ''} onChange={e => updateTargetField(index, 'rangeHint', e.target.value)} placeholder="e.g. 10.0.5.0/24 lab" />
+									</label>
+									<button type="button" className="ghost danger" onClick={() => removeTarget(index)}>Remove</button>
+								</div>
+							))}
+						</div>
+					</section>
+					<section className="recon-section">
+						<header>
+							<h4>Stealth Constraints</h4>
+							<p className="muted">Optional guardrails that define where and how players may scan.</p>
+						</header>
+						<div className="recon-constraints-grid">
+							<label>
+								Allowed ranges (one per line)
+								<textarea
+									rows={3}
+									value={allowedRangesValue}
+									onChange={e => updateRecon({ allowedRanges: parseReconList(e.target.value) })}
+								/>
+							</label>
+							<label>
+								Forbidden ranges (one per line)
+								<textarea
+									rows={3}
+									value={forbiddenRangesValue}
+									onChange={e => updateRecon({ forbiddenRanges: parseReconList(e.target.value) })}
+								/>
+							</label>
+							<div className="recon-trace-cap">
+								<label>
+									Max trace during recon (%): {typeof maxTraceValue === 'number' ? `${maxTraceValue}%` : 'No cap'}
+								</label>
+								<input
+									type="range"
+									min={10}
+									max={100}
+									step={5}
+									value={typeof maxTraceValue === 'number' ? maxTraceValue : 60}
+									onChange={e => updateRecon({ maxReconTracePercent: Number(e.target.value) })}
+								/>
+								<div className="recon-trace-actions">
+									<button type="button" className="ghost" onClick={() => updateRecon({ maxReconTracePercent: undefined })}>
+										Clear cap
+									</button>
+								</div>
+							</div>
+						</div>
+						<label className="checkbox">
+							<input
+								type="checkbox"
+								checked={Boolean(recon?.mustUseScan ?? true)}
+								onChange={e => updateRecon({ mustUseScan: e.target.checked })}
+							/>
+							<span>Require players to use scan before other commands</span>
+						</label>
+						{needsHintWarning && (
+							<div className="inline-alert warning">
+								Add at least one range hint so players know where stealth scans are expected.
+							</div>
+						)}
+					</section>
+				</>
+			)}
+		</div>
+	)
+}
 
 interface IntroEmailStepProps {
 	quest: QuestDefinition

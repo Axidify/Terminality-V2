@@ -84,19 +84,59 @@ export interface QuestSystemDefinition {
   templateId?: string | null
 }
 
+export interface QuestRewardFlag {
+  key: string
+  value?: string
+}
+
+export type QuestType = 'data_theft' | 'sabotage' | 'recon' | 'cleanup' | 'misdirection'
+
+export interface QuestRiskProfile {
+  maxRecommendedTrace?: number
+  failAboveTrace?: number
+  requiredTraceSpike?: number
+  cleanupBeforeDisconnect?: boolean
+}
+
 export interface QuestRequirements {
   requiredTools?: HackingToolId[]
+  requiredFlags?: QuestRewardFlag[]
+  blockedByFlags?: QuestRewardFlag[]
 }
+
+export interface QuestReconDiscoveryTarget {
+  hostId: string
+  rangeHint?: string
+}
+
+export interface QuestReconRequirements {
+  enabled?: boolean
+  mustUseScan?: boolean
+  discoveryTargets?: QuestReconDiscoveryTarget[]
+  allowedRanges?: string[]
+  forbiddenRanges?: string[]
+  maxReconTracePercent?: number
+}
+
+export type BonusObjectiveCategory = 'stealth' | 'optional' | 'cleanup'
+
+export type BonusObjectiveType =
+  | 'keep_trace_below'
+  | 'avoid_trace_spike'
+  | 'dont_delete_file'
+  | 'exfiltrate_file'
+  | 'dont_trigger_trap'
+  | 'clean_logs'
+  | 'sanitize_logs'
+  | 'delete_logs'
+  | 'retrieve_files'
 
 export interface BonusObjective {
   id: string
+  title?: string
   description: string
-  type:
-    | 'keep_trace_below'
-    | 'dont_delete_file'
-    | 'exfiltrate_file'
-    | 'dont_trigger_trap'
-    | 'clean_logs'
+  category?: BonusObjectiveCategory
+  type: BonusObjectiveType
   params: Record<string, any>
   rewardDescription?: string
 }
@@ -108,8 +148,16 @@ export interface MailTemplateFields {
   preheader?: string
 }
 
+export type CompletionEmailConditionType =
+  | 'trace_below'
+  | 'trace_between'
+  | 'bonus_objective_completed'
+  | 'trap_triggered'
+  | 'quest_outcome'
+  | 'world_flag'
+
 export interface CompletionEmailVariantCondition {
-  type: 'trace_below' | 'bonus_objective_completed' | 'trap_triggered'
+  type: CompletionEmailConditionType
   data: Record<string, any>
 }
 
@@ -121,6 +169,36 @@ export interface CompletionEmailVariant extends MailTemplateFields {
 export interface QuestCompletionEmailConfig {
   default: MailTemplateFields
   variants?: CompletionEmailVariant[]
+}
+
+export interface QuestRewardsBlock {
+  credits?: number
+  flags?: QuestRewardFlag[]
+  unlocks_commands?: string[]
+  tools?: string[]
+  access?: string[]
+  reputation?: Record<string, number>
+}
+
+export interface QuestRewardsMatrix {
+  success?: QuestRewardsBlock
+  stealth?: QuestRewardsBlock
+  failure?: QuestRewardsBlock
+  default?: QuestRewardsBlock
+}
+
+export interface QuestBranchOutcome {
+  followUpQuestId?: string
+  setFlags?: QuestRewardFlag[]
+  requireFlags?: QuestRewardFlag[]
+  emailVariantId?: string
+  notes?: string
+}
+
+export interface QuestBranchingConfig {
+  success?: QuestBranchOutcome
+  stealth?: QuestBranchOutcome
+  failure?: QuestBranchOutcome
 }
 
 export interface QuestIntroEmailConfig extends MailTemplateFields {}
@@ -138,10 +216,15 @@ export interface QuestDefinition {
   shortDescription: string
   recommendedOrder?: number
   difficulty: SystemDifficulty
+  questType?: QuestType
+  riskProfile?: QuestRiskProfile
   system?: QuestSystemDefinition
+  reconRequirements?: QuestReconRequirements
   requirements?: QuestRequirements
   bonusObjectives?: BonusObjective[]
   introEmail?: QuestIntroEmailConfig
   completionEmail?: QuestCompletionEmailConfig
+  rewards?: QuestRewardsMatrix
+  branching?: QuestBranchingConfig
   steps: QuestStepDefinition[]
 }
