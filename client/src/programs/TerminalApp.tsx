@@ -288,7 +288,16 @@ export const TerminalApp: React.FC<TerminalAppProps> = ({
   const tracePercent = session.trace.max > 0 ? Math.min(100, Math.round((session.trace.current / session.trace.max) * 100)) : 0
   const prompt = formatPrompt(session)
   const questTitle = session.quest?.title || quest?.title || 'No quest loaded'
+  const questObjective =
+    session.quest?.objectiveShort ||
+    quest?.objectiveShort ||
+    ''
   const isRemoteSession = Boolean(session.connectedIp)
+  const questStatusLabel = !session.quest
+    ? 'No contract loaded'
+    : session.questProgress?.status === 'completed'
+      ? 'Quest complete'
+      : 'Quest active'
 
   return (
     <div className="terminal-container" onClick={focusInput}>
@@ -297,6 +306,9 @@ export const TerminalApp: React.FC<TerminalAppProps> = ({
           <div>
             <p className="terminal-title">Atlas Terminal</p>
             <small>{questTitle}</small>
+            {questObjective && (
+              <p className="terminal-objective">Objective: {questObjective}</p>
+            )}
           </div>
           <div className="terminal-header-actions">
             {onCloseRequest && (
@@ -347,8 +359,8 @@ export const TerminalApp: React.FC<TerminalAppProps> = ({
         </div>
 
         <footer className="terminal-footer">
-          <span>{session.questProgress?.status === 'completed' ? 'Quest complete' : 'Quest active'}</span>
-          <span className="terminal-footer-hint">Press Enter to execute · ↑↓ to scroll history</span>
+          <span>{questStatusLabel}</span>
+          <span className="terminal-footer-hint">Press Enter to execute · ↑↓ to scroll history · type `help` for commands</span>
         </footer>
       </div>
     </div>

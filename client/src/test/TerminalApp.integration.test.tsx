@@ -46,6 +46,7 @@ const sampleQuest: QuestDefinition = {
   id: 'quest_wipe_evidence',
   title: 'Wipe the Evidence',
   shortDescription: 'Clean the relay logs.',
+  objectiveShort: 'Wipe the incriminating relay logs.',
   difficulty: 'tutorial',
   riskProfile: {
     maxRecommendedTrace: 20,
@@ -115,7 +116,7 @@ describe('TerminalApp runtime integration', () => {
     const onQuestCompleted = vi.fn()
     renderTerminal({ onQuestCompleted })
     const input = screen.getByLabelText<HTMLInputElement>('Terminal command input')
-    await submitCommand(input, `scan ${questSystem.ip}`, /Scan complete/i)
+    await submitCommand(input, `scan ${questSystem.ip}`, /Found 1 host/i)
     await submitCommand(input, `connect ${questSystem.ip}`, /Connected to/i)
     await submitCommand(input, 'cat /evidence.log', /Flagged by audit daemon/i)
     await submitCommand(input, 'rm /evidence.log', /Deleted \/evidence\.log/i)
@@ -155,7 +156,7 @@ describe('TerminalApp runtime integration', () => {
     const onQuestCompleted = vi.fn()
     renderTerminal({ quest: loudQuest, onQuestCompleted })
     const input = screen.getByLabelText<HTMLInputElement>('Terminal command input')
-    await submitCommand(input, `scan ${questSystem.ip}`, /Scan complete/i)
+    await submitCommand(input, `scan ${questSystem.ip}`, /Found 1 host/i)
     await submitCommand(input, `connect ${questSystem.ip}`, /Connected to/i)
     await submitCommand(input, 'bruteforce front', /Backdoor planted/i)
     await submitCommand(input, 'bruteforce front', /Door already compromised/i)
@@ -175,7 +176,7 @@ describe('TerminalApp runtime integration', () => {
     const onQuestCompleted = vi.fn()
     renderTerminal({ quest: failureQuest, onQuestCompleted })
     const input = screen.getByLabelText<HTMLInputElement>('Terminal command input')
-    await submitCommand(input, `scan ${questSystem.ip}`, /Scan complete/i)
+    await submitCommand(input, `scan ${questSystem.ip}`, /Found 1 host/i)
     await submitCommand(input, `connect ${questSystem.ip}`, /Connected to/i)
     await submitCommand(input, 'bruteforce front', /Backdoor planted/i)
     await submitCommand(input, 'bruteforce front', /Door already compromised/i)

@@ -1,6 +1,7 @@
 import type {
   CompletionEmailVariant,
   CompletionEmailVariantCondition,
+  HackingToolId,
   QuestDefinition,
   QuestReconRequirements,
   QuestStepDefinition,
@@ -24,6 +25,12 @@ const validateDetails = (quest: QuestDefinition) => {
   const issues: string[] = []
   if (!hasText(quest.title)) issues.push('Quest title is required.')
   if (!hasText(quest.shortDescription)) issues.push('Short description cannot be empty.')
+  if (!hasText(quest.objectiveShort)) issues.push('Terminal objective cannot be empty.')
+  const requiredTools = quest.requirements?.requiredTools || []
+  const unsupportedTools = requiredTools.filter((tool: HackingToolId) => tool !== 'scan')
+  if (unsupportedTools.length) {
+    issues.push(`Only the scan tool is supported right now. Remove unsupported requirements: ${unsupportedTools.join(', ')}.`)
+  }
   return issues
 }
 
@@ -109,13 +116,37 @@ const validateRecon = (quest: QuestDefinition) => {
   const issues: string[] = []
   const recon = quest.reconRequirements
   if (!recon || !recon.enabled) return issues
+  if (!quest.system) {
+    issues.push('Assign a system before enabling recon requirements.')
+    return issues
+  }
   const targets = (recon.discoveryTargets || []).filter(target => target.hostId && target.hostId.trim().length > 0)
   if (!targets.length) {
     issues.push('Add at least one discovery target when recon is enabled.')
   }
+  if (targets.length > 1) {
+    issues.push('Recon currently supports only a single discovery target. Remove additional hosts.')
+  }
+  const systemId = quest.system?.id?.trim()
+  if (systemId) {
+    const systemTargeted = targets.some(target => target.hostId.trim() === systemId)
+    if (!systemTargeted) {
+      issues.push('Recon currently only supports the assigned quest system. Add it as a discovery target.')
+    }
+    const unsupportedTargets = targets.filter(target => target.hostId.trim() !== systemId)
+    if (unsupportedTargets.length) {
+      issues.push('Additional recon targets are not yet supported in the terminal runtime.')
+    }
+  }
   const stealthConstraintsEnabled = Boolean(
     recon.allowedRanges?.length || recon.forbiddenRanges?.length || typeof recon.maxReconTracePercent === 'number'
   )
+  if (recon.allowedRanges?.length) {
+    issues.push('Allowed scan ranges are not supported yet.')
+  }
+  if (recon.forbiddenRanges?.length) {
+    issues.push('Forbidden scan ranges are not supported yet.')
+  }
   if (stealthConstraintsEnabled && !targets.some(target => target.rangeHint && target.rangeHint.trim().length > 0)) {
     issues.push('Provide at least one range hint when defining stealth constraints.')
   }

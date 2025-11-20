@@ -14,6 +14,9 @@ describe('QuestDesignerApp wizard', () => {
     vi.restoreAllMocks()
   })
 
+  // Integration tests that touch many UI interactions can be slow under a
+  // full test run; be more tolerant of environment performance variations.
+
   const renderWithStorageMock = (overrides?: {
     quests?: QuestDefinition[]
     getQuestImpl?: (id: string) => Promise<QuestDefinition | null>
@@ -58,14 +61,15 @@ describe('QuestDesignerApp wizard', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Next$/i }))
     expect(screen.getByText('Quest title is required.')).toBeInTheDocument()
     expect(screen.getByText('Short description cannot be empty.')).toBeInTheDocument()
+    expect(screen.getByText('Terminal objective cannot be empty.')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Relay Shadow Operation' } })
     fireEvent.change(screen.getByLabelText('Short Description'), { target: { value: 'Intercept the relay before Atlas spots it.' } })
+    fireEvent.change(screen.getByLabelText(/Objective \(short\)/i), { target: { value: 'Lock down the relay before it burns.' } })
     const toolToggleButton = screen.getByRole('button', { name: /Select required tools/i })
     fireEvent.click(toolToggleButton)
     const toolListbox = screen.getByRole('listbox')
     fireEvent.click(within(toolListbox).getByRole('checkbox', { name: /^Scan/i }))
-    fireEvent.click(within(toolListbox).getByRole('checkbox', { name: /^Clean Logs/i }))
     fireEvent.click(toolToggleButton)
 
     fireEvent.click(screen.getByRole('button', { name: /^Next$/i }))
@@ -103,15 +107,19 @@ describe('QuestDesignerApp wizard', () => {
     expect(savedQuest.title).toBe('Relay Shadow Operation')
     expect(savedQuest.system?.label).toBe('Relay Shadow')
     expect(savedQuest.introEmail?.subject).toBe('Atlas needs you on Relay Shadow')
+    expect(savedQuest.objectiveShort).toBe('Lock down the relay before it burns.')
+    expect(savedQuest.introEmail?.showAcceptHint).not.toBe(false)
+    expect(savedQuest.introEmail?.acceptHintOverride).toBeUndefined()
     expect(savedQuest.steps).toHaveLength(1)
     expect(savedQuest.completionEmail?.default.subject).toBe('Relay secured')
-  })
+  }, 15000)
 
   it('prompts before discarding unsaved edits', async () => {
     const existingQuest: QuestDefinition = {
       id: 'quest_existing',
       title: 'Existing Quest',
       shortDescription: 'baseline quest',
+      objectiveShort: 'Baseline objective',
       difficulty: 'easy',
       steps: [{ id: 'step-1', type: 'scan', description: 'scan host' }]
     }

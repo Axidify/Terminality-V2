@@ -23,6 +23,22 @@ const withPreheader = (body: string, preheader?: string) => {
 	return `${trimmed}\n\n${body}`
 }
 
+const buildAcceptHintBlock = (quest: QuestDefinition): string => {
+	const override = quest.introEmail?.acceptHintOverride?.trim()
+	if (override) return override
+	return `To accept this contract, run:\n\nquest start ${quest.id}`
+}
+
+export const buildIntroMailBody = (quest: QuestDefinition): string => {
+	if (!quest.introEmail) return ''
+	const baseBody = withPreheader(quest.introEmail.body || '', quest.introEmail.preheader)
+	const showHint = quest.introEmail.showAcceptHint ?? true
+	if (!showHint) return baseBody || ''
+	const hintBlock = buildAcceptHintBlock(quest)
+	if (!baseBody) return hintBlock
+	return `${baseBody.trimEnd()}\n\n${hintBlock}`.trim()
+}
+
 const describeCondition = (condition: CompletionEmailVariantCondition): string => {
 	switch (condition.type) {
 		case 'trace_below':
@@ -54,12 +70,13 @@ const buildIntroMail = (quest: QuestDefinition): GameMail | null => {
 		from: quest.introEmail.from || DEFAULT_MAIL_SENDER,
 		to: PLAYER_INBOX_ADDRESS,
 		subject: quest.introEmail.subject || `${quest.title || 'Quest'} briefing`,
-		body: withPreheader(quest.introEmail.body || '', quest.introEmail.preheader),
+		body: buildIntroMailBody(quest),
 		receivedAt: new Date().toISOString(),
 		read: false,
 		archived: false,
 		tags: ['quest'],
 		questId: quest.id,
+		linkedQuestId: quest.id,
 		type: 'intro',
 		folder: 'inbox'
 	}
@@ -81,6 +98,7 @@ const buildCompletionMails = (quest: QuestDefinition): GameMail[] => {
 			archived: false,
 			tags: ['quest'],
 			questId: quest.id,
+			linkedQuestId: quest.id,
 			type: 'completion',
 			folder: 'inbox'
 		})
@@ -97,6 +115,7 @@ const buildCompletionMails = (quest: QuestDefinition): GameMail[] => {
 			archived: false,
 			tags: ['quest'],
 			questId: quest.id,
+			linkedQuestId: quest.id,
 			type: 'completion',
 			folder: 'inbox'
 		})

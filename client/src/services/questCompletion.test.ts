@@ -11,6 +11,7 @@ const demoQuest: QuestDefinition = {
   id: 'quest_demo',
   title: 'Demo Operation',
   shortDescription: 'Test harness quest',
+  objectiveShort: 'Demonstrate completion variants.',
   difficulty: 'tutorial',
   steps: []
 }

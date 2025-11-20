@@ -46,6 +46,7 @@ const buildQuest = (overrides: Partial<QuestDefinition> = {}): QuestDefinition =
   id: 'quest_alpha',
   title: 'Quest Alpha',
   shortDescription: 'Assemble a relay.',
+  objectiveShort: 'Stabilize the relay core.',
   difficulty: 'easy',
   steps: [],
   ...overrides

@@ -7,13 +7,14 @@ import type {
   QuestDefinition
 } from '../types/quest'
 import type { GameMail } from '../types/mail'
-import type { QuestOutcomeKey } from '../programs/terminalRuntime'
+import type { QuestOutcomeKey, TerminalReconTelemetry } from '../programs/terminalRuntime'
 
 export interface CompletionContext {
   maxTraceSeen: number
   trapsTriggered: string[]
   bonusCompletedIds: string[]
-  outcome: QuestOutcomeKey
+  outcome?: QuestOutcomeKey
+  reconTelemetry?: TerminalReconTelemetry | null
 }
 
 export interface MailTemplate {

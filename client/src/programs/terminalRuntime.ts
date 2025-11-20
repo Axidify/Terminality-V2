@@ -4,6 +4,7 @@ import type {
   HackingToolId,
   QuestBranchOutcome,
   QuestDefinition,
+  QuestReconRequirements,
   QuestRewardsBlock,
   QuestStepDefinition,
   QuestSystemDefinition,
@@ -132,12 +133,89 @@ const removeMailListingEntry = (
   }
 }
 
+const createNoContractLines = (): TerminalLine[] => {
+  const lines = [
+    'No active contract.',
+    '',
+    'Use `quest list` to browse available jobs, e.g.:',
+    '  quest list',
+    'Then accept one with:',
+    '  quest start <questId>'
+  ]
+  return lines.map(line => createTerminalLine(line))
+}
+
+const sanitizeSingleLine = (value?: string | null): string | null => {
+  if (!value) return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  return normalized.length ? normalized : null
+}
+
+const firstNonEmptyLine = (value?: string | null): string | null => {
+  if (!value) return null
+  const lines = value.replace(/\r/g, '').split('\n')
+  const picked = lines.map(line => line.trim()).find(Boolean)
+  return picked ?? null
+}
+
+const deriveQuestObjectiveText = (quest?: QuestDefinition | null): string | null => {
+  if (!quest) return null
+  return sanitizeSingleLine(quest.objectiveShort) ?? sanitizeSingleLine(quest.shortDescription) ?? (() => {
+    const describedStep = quest.steps?.find(step => step.description && step.description.trim().length)
+    return sanitizeSingleLine(describedStep?.description)
+  })() ?? null
+}
+
+const deriveQuestWelcomeMessage = (quest?: QuestDefinition | null): string | null => {
+  if (!quest?.introEmail) return null
+  return sanitizeSingleLine(quest.introEmail.preheader) ?? sanitizeSingleLine(firstNonEmptyLine(quest.introEmail.body))
+}
+
+const buildQuestStartHintLines = (system?: QuestSystemDefinition | null): TerminalLine[] => {
+  if (system?.ip) {
+    return [
+      createTerminalLine('Hint:'),
+      createTerminalLine(`  1) Run \`scan ${system.ip}\` to probe ${system.label}.`),
+      createTerminalLine(`  2) Then \`connect ${system.ip}\` to jack in.`),
+      createTerminalLine('  3) Complete the objective, clean logs, then `disconnect`.'),
+      createTerminalLine('Need help? Type `help` anytime for command reference.')
+    ]
+  }
+  return [
+    createTerminalLine('Hint:'),
+    createTerminalLine('  1) Use `scan <ip>` on any host your handler mentioned.'),
+    createTerminalLine('  2) Once you ID the target, run `connect <ip>` to jack in.'),
+    createTerminalLine('  3) Complete the objective, clean logs, then `disconnect`.'),
+    createTerminalLine('Need help? Type `help` anytime for command reference.')
+  ]
+}
+
 export interface TerminalQuestProgress {
   questId: string | null
   currentStepIndex: number
   completedStepIds: string[]
   completedBonusIds: string[]
   status: 'not_started' | 'in_progress' | 'completed'
+}
+
+interface TerminalReconProgress {
+  scanCompleted: boolean
+  discoveredHostIds: string[]
+}
+
+interface ReconConstraintTelemetry {
+  respectedAllowedRanges: boolean
+  avoidedForbiddenRanges: boolean
+  stayedUnderTraceCap: boolean
+  honoredMustUseScan: boolean
+}
+
+export interface TerminalReconTelemetry {
+  hostDiscovered: boolean
+  assignedRangeScanCount: number
+  offRangeScanCount: number
+  maxTracePercentObserved: number
+  constraint: ReconConstraintTelemetry
 }
 
 export interface TerminalMailListingEntry {
@@ -239,6 +317,8 @@ export interface TerminalSessionState {
   quest: QuestDefinition | null
   system: QuestSystemDefinition | null
   questProgress: TerminalQuestProgress | null
+  reconProgress: TerminalReconProgress | null
+  reconTelemetry: TerminalReconTelemetry | null
   trace: TraceMeterState
   securityRules?: QuestSystemSecurityRules
   maxTraceSeen: number
@@ -248,9 +328,68 @@ export interface TerminalSessionState {
   deletedPaths: string[]
   mailListing?: TerminalMailListing | null
   questDirectory?: TerminalQuestDirectory | null
+  questWelcomeMessage: string | null
+  questObjectiveText: string | null
   scanDiscovery: ScanDiscoveryState
   toolTiers: Partial<Record<HackingToolId, number>>
 }
+
+const buildLocalHelpLines = (state: TerminalSessionState): string[] => {
+  const lines = [
+    'Local commands:',
+    '  help                 Show this help text',
+    '  mail [folder]        Open Atlas mail (default: INBOX)',
+    '  mail open <index>    Read a specific message',
+    '  quest list           Browse available contracts',
+    '  quest info <id>      View contract details',
+    '  quest start <id>     Accept a contract',
+    '  scan <ip>            Probe a host for reachability',
+    '  connect <ip>         Open a remote session',
+    '  disconnect           Close the current session'
+  ]
+  if (state.quest) {
+    lines.push(
+      '',
+      'Contract status:',
+      `  ${state.quest.title}`,
+      `  Objective: ${state.questObjectiveText || 'Follow the latest briefing.'}`
+    )
+    if (state.system?.ip) {
+      lines.push(`  Target: ${state.system.label} (${state.system.ip})`)
+    }
+    if (state.questWelcomeMessage) {
+      lines.push(`  Briefing: ${state.questWelcomeMessage}`)
+    }
+  } else {
+    lines.push(
+      '',
+      'No active contract:',
+      '  Run `quest list` or read Atlas mail to accept new work.'
+    )
+  }
+  lines.push(
+    '',
+    'Pro tip:',
+    '  Mail briefings often include intel plus ready-to-run `quest start` commands.'
+  )
+  return lines
+}
+
+const buildRemoteHelpLines = (state: TerminalSessionState): string[] => ([
+  'Remote commands:',
+  '  ls                   List directory contents',
+  '  cd <path>            Change working directory',
+  '  cat <file>           Display file contents',
+  '  rm <file>            Delete a file',
+  '  clean_logs <path>    Scrub log files for stealth runs',
+  '  disconnect           Close the remote session',
+  '',
+  'Objective reminder:',
+  `  ${state.questObjectiveText || 'Finish the contract goal, clean logs, then disconnect.'}`,
+  '',
+  'Remember:',
+  '  Sensitive actions raise trace. Clean logs and `disconnect` once you are done.'
+])
 
 const DEFAULT_TRACE_LIMIT = 100
 const DEFAULT_NERVOUS_THRESHOLD = 60
@@ -470,6 +609,128 @@ const ensureQuestProgress = (progress?: TerminalQuestProgress | null): TerminalQ
   }
 }
 
+const createReconProgress = (quest?: QuestDefinition | null): TerminalReconProgress | null => {
+  if (!quest?.reconRequirements?.enabled) return null
+  return {
+    scanCompleted: false,
+    discoveredHostIds: []
+  }
+}
+
+const cloneReconProgress = (progress?: TerminalReconProgress | null): TerminalReconProgress | null => {
+  if (!progress) return null
+  return {
+    scanCompleted: progress.scanCompleted,
+    discoveredHostIds: [...progress.discoveredHostIds]
+  }
+}
+
+const getReconRequirements = (quest?: QuestDefinition | null): QuestReconRequirements | null => {
+  if (!quest?.reconRequirements?.enabled) return null
+  return quest.reconRequirements
+}
+
+const createReconTelemetry = (quest?: QuestDefinition | null): TerminalReconTelemetry | null => {
+  if (!getReconRequirements(quest)) return null
+  return {
+    hostDiscovered: false,
+    assignedRangeScanCount: 0,
+    offRangeScanCount: 0,
+    maxTracePercentObserved: 0,
+    constraint: {
+      respectedAllowedRanges: true,
+      avoidedForbiddenRanges: true,
+      stayedUnderTraceCap: true,
+      honoredMustUseScan: true
+    }
+  }
+}
+
+const cloneReconTelemetry = (telemetry?: TerminalReconTelemetry | null): TerminalReconTelemetry | null => {
+  if (!telemetry) return null
+  return {
+    ...telemetry,
+    constraint: { ...telemetry.constraint }
+  }
+}
+
+const updateReconTelemetry = (
+  state: TerminalSessionState,
+  mutate: (telemetry: TerminalReconTelemetry) => void
+): TerminalSessionState => {
+  const base = cloneReconTelemetry(state.reconTelemetry ?? createReconTelemetry(state.quest))
+  if (!base) return state
+  mutate(base)
+  return { ...state, reconTelemetry: base }
+}
+
+const normalizeReconRangeToken = (value?: string): string => {
+  if (!value) return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  const [token] = trimmed.split(/\s+/)
+  return token.toLowerCase()
+}
+
+const matchesReconConstraintList = (input: string, list?: string[]): boolean => {
+  if (!list?.length) return false
+  const normalizedInput = normalizeReconRangeToken(input)
+  if (!normalizedInput) return false
+  return list.some(entry => normalizeReconRangeToken(entry) === normalizedInput)
+}
+
+const computeTracePercent = (trace: TraceMeterState): number => (
+  trace.max > 0 ? Math.round((trace.current / trace.max) * 100) : trace.current
+)
+
+const getSupportedReconTargetIds = (quest?: QuestDefinition | null): string[] => {
+  const recon = getReconRequirements(quest)
+  if (!recon) return []
+  const systemId = quest?.system?.id?.trim()
+  if (!systemId) return []
+  const targets = recon.discoveryTargets ?? []
+  const hostIds = targets.map(target => target.hostId?.trim()).filter(Boolean) as string[]
+  return hostIds.includes(systemId) ? [systemId] : []
+}
+
+const applyReconScanProgress = (
+  state: TerminalSessionState,
+  hosts: ScanHostSummary[],
+  assignedRange: boolean
+): TerminalSessionState => {
+  if (!assignedRange) return state
+  if (!state.quest) return state
+  const recon = getReconRequirements(state.quest)
+  if (!recon) return state
+  const systemId = state.quest.system?.id
+  const systemIp = state.quest.system?.ip
+  if (!systemId || !systemIp) return state
+  const supportedTargets = getSupportedReconTargetIds(state.quest)
+  const progress = state.reconProgress ?? createReconProgress(state.quest)
+  if (!progress) {
+    return state
+  }
+  const discovered = new Set(progress.discoveredHostIds)
+  if (supportedTargets.includes(systemId) && hosts.some(host => host.ip === systemIp)) {
+    discovered.add(systemId)
+  }
+  const nextState: TerminalSessionState = {
+    ...state,
+    reconProgress: {
+      scanCompleted: true,
+      discoveredHostIds: [...discovered]
+    }
+  }
+  if (!discovered.size) {
+    return nextState
+  }
+  return updateReconTelemetry(nextState, telemetry => {
+    if (discovered.has(systemId)) {
+      telemetry.hostDiscovered = true
+    }
+  })
+}
+
 const normalizeStepType = (step?: QuestStepDefinition): string => step?.type?.toLowerCase().trim() || ''
 
 const normalizeQuestPath = (input?: string): string | undefined => (input ? normalizePath(input) : undefined)
@@ -535,12 +796,19 @@ interface QuestEventPayload {
   command?: string
 }
 
-const matchesQuestStep = (step: QuestStepDefinition, event: QuestEventPayload): boolean => {
+const STEP_TYPES_WITH_DEFAULT_SYSTEM_IP: QuestEventType[] = ['scan', 'deep_scan', 'connect', 'disconnect']
+
+const matchesQuestStep = (
+  quest: QuestDefinition | null,
+  step: QuestStepDefinition,
+  event: QuestEventPayload
+): boolean => {
   const stepType = normalizeStepType(step)
   if (!stepType || stepType === 'custom') return false
   const expectedType = questStepToEventType(stepType)
   if (!expectedType || expectedType !== event.type) return false
-  const expectedIp = step.params?.target_ip || step.params?.ip
+  const defaultSystemIp = STEP_TYPES_WITH_DEFAULT_SYSTEM_IP.includes(expectedType) ? quest?.system?.ip : undefined
+  const expectedIp = step.params?.target_ip || step.params?.ip || defaultSystemIp
   if (expectedIp && event.ip && expectedIp !== event.ip) return false
   const expectedPath = normalizeQuestPath(step.params?.path || step.params?.file_path)
   if (expectedPath && event.path && normalizePath(event.path) !== expectedPath) return false
@@ -561,7 +829,7 @@ const advanceQuestProgress = (
     return { progress, completed: false }
   }
   const step = quest.steps[progress.currentStepIndex]
-  if (!step || !matchesQuestStep(step, event)) {
+  if (!step || !matchesQuestStep(quest, step, event)) {
     return { progress, completed: false }
   }
   const completedStepIds = [...progress.completedStepIds, step.id]
@@ -588,6 +856,7 @@ export interface QuestCompletionSummary {
   failedBonusIds: string[]
   totalBonusCount: number
   maxTrace: number
+  reconTelemetry?: TerminalReconTelemetry | null
 }
 
 interface BonusEvaluationResult {
@@ -736,7 +1005,8 @@ export const buildQuestCompletionSummary = (
     completedBonusIds: bonus.completedIds,
     failedBonusIds: bonus.failedIds,
     totalBonusCount: bonus.total,
-    maxTrace: state.maxTraceSeen ?? 0
+    maxTrace: state.maxTraceSeen ?? 0,
+    reconTelemetry: cloneReconTelemetry(state.reconTelemetry)
   }
 }
 
@@ -816,16 +1086,20 @@ export interface TerminalSnapshot {
   state: TerminalSessionState
 }
 
-export const TERMINAL_SNAPSHOT_SCHEMA_VERSION = 5
+export const TERMINAL_SNAPSHOT_SCHEMA_VERSION = 7
 
 export const createTerminalSessionState = (init?: Partial<TerminalSessionState>): TerminalSessionState => {
   const quest = init?.quest ?? null
   const system = init?.system ?? null
   const filesystem = ensureFilesystem(init?.filesystem ?? (system ? buildFilesystemFromSystem(system.filesystemRoot) : DEFAULT_FILESYSTEM))
   const questProgress = ensureQuestProgress(init?.questProgress ?? createQuestProgress(quest))
+  const reconProgress = cloneReconProgress(init?.reconProgress ?? createReconProgress(quest))
+  const reconTelemetry = cloneReconTelemetry(init?.reconTelemetry ?? createReconTelemetry(quest))
   const trace = init?.trace ?? createTraceMeterState()
   const scanDiscovery = cloneScanDiscovery(init?.scanDiscovery ?? DEFAULT_SCAN_DISCOVERY_STATE)
   const toolTiers = { ...DEFAULT_TOOL_TIERS, ...(init?.toolTiers ?? {}) }
+  const questObjectiveText = init?.questObjectiveText ?? deriveQuestObjectiveText(quest)
+  const questWelcomeMessage = init?.questWelcomeMessage ?? deriveQuestWelcomeMessage(quest)
   return {
     lines: init?.lines && init.lines.length ? clampTerminalLines(init.lines) : [createTerminalLine('Terminal ready. Type help.')],
     connectedIp: init?.connectedIp ?? null,
@@ -834,6 +1108,8 @@ export const createTerminalSessionState = (init?: Partial<TerminalSessionState>)
     quest,
     system,
     questProgress,
+    reconProgress,
+    reconTelemetry,
     trace,
     securityRules: init?.securityRules ?? system?.securityRules,
     maxTraceSeen: init?.maxTraceSeen ?? trace.current ?? 0,
@@ -843,6 +1119,8 @@ export const createTerminalSessionState = (init?: Partial<TerminalSessionState>)
     deletedPaths: init?.deletedPaths ? [...init.deletedPaths] : [],
     mailListing: cloneMailListing(init?.mailListing ?? null),
     questDirectory: cloneQuestDirectory(init?.questDirectory ?? null),
+    questWelcomeMessage: questWelcomeMessage ?? null,
+    questObjectiveText: questObjectiveText ?? null,
     scanDiscovery,
     toolTiers
   }
@@ -881,19 +1159,41 @@ export const startQuestSession = (quest: QuestDefinition): TerminalSessionState 
     nervousThreshold: system?.securityRules?.nervousThreshold,
     panicThreshold: system?.securityRules?.panicThreshold
   })
-  const introLines = [
-    createTerminalLine(`Quest accepted: ${quest.title}`),
+  const questObjectiveText = deriveQuestObjectiveText(quest)
+  const questWelcomeMessage = deriveQuestWelcomeMessage(quest)
+  const introLines: TerminalLine[] = [createTerminalLine(`Quest accepted: ${quest.title}`)]
+  if (questWelcomeMessage) {
+    introLines.push(createTerminalLine(`Briefing: ${questWelcomeMessage}`))
+  }
+  if (questObjectiveText) {
+    introLines.push(createTerminalLine(`Objective: ${questObjectiveText}`))
+  }
+  // If designers enable the mail acceptance hint, also show it in the terminal
+  // briefing so players see how to accept without opening the inbox.
+  const showHint = quest.introEmail?.showAcceptHint ?? true
+  if (showHint) {
+    const override = quest.introEmail?.acceptHintOverride?.trim()
+    const hintBlock = override && override.length
+      ? override
+      : `To accept this contract, run:\n\nquest start ${quest.id}`
+    introLines.push(...createLinesFromMultilineText(hintBlock))
+  }
+  introLines.push(
     system
       ? createTerminalLine(`Target system ${system.label} (${system.ip}) online.`)
       : createTerminalLine('No system is attached to this quest yet.')
-  ]
+  )
+  introLines.push(...buildQuestStartHintLines(system))
   return createTerminalSessionState({
     quest,
     system,
     filesystem,
     trace,
+     questObjectiveText,
+     questWelcomeMessage,
     securityRules: system?.securityRules,
     questProgress: createQuestProgress(quest),
+    reconProgress: createReconProgress(quest),
     lines: introLines,
     maxTraceSeen: trace.current,
     trapsTriggered: [],
@@ -1224,31 +1524,15 @@ export const handleTerminalCommand = async (
 
   switch (command) {
     case 'help': {
-      const lines = nextState.connectedIp
-        ? [
-            'Remote commands:',
-            '  ls                List directory contents',
-            '  cd <path>         Change working directory',
-            '  cat <file>        Display file contents',
-            '  rm <file>         Delete a file',
-            '  disconnect        Close the remote session'
-          ]
-        : [
-            'Local commands:',
-            '  help              Show this help text',
-            '  scan <ip>         Probe a host for reachability',
-            '  connect <ip>      Open a remote session',
-            '  disconnect        Close the current session',
-            '  mail [folder]     Inspect Atlas mail system',
-            '  quest list        Browse available contracts'
-          ]
+      const lines = nextState.connectedIp ? buildRemoteHelpLines(nextState) : buildLocalHelpLines(nextState)
       outputLines = lines.map(line => createLine(line))
       break
     }
     case 'mail': {
       const mailService = context?.mailService
       if (!mailService) {
-        outputLines = [...outputLines, createLine('Mail subsystem unavailable. Install mailService to enable.')] 
+        console.error('Mail subsystem unavailable. No mailService configured in TerminalCommandContext.')
+        outputLines = [...outputLines, createLine('Atlas mail system is offline. Please contact your operator.')]
         break
       }
       try {
@@ -1293,9 +1577,22 @@ export const handleTerminalCommand = async (
             createLine(`Subject: ${mail.subject}`),
             createLine(`Received: ${formatMailTimestamp(mail.receivedAt)}`),
             createLine('-----'),
-            ...createLinesFromMultilineText(mail.body),
-            createLine('----- end message -----')
+            ...createLinesFromMultilineText(mail.body)
           ]
+          const contractId = mail.linkedQuestId || mail.questId
+          const questCompleted = Boolean(
+            contractId &&
+            nextState.questProgress?.questId === contractId &&
+            nextState.questProgress?.status === 'completed'
+          )
+          if (contractId && !questCompleted) {
+            const subjectBlurb = mail.subject ? ` "${mail.subject}"` : ''
+            outputLines = [
+              ...outputLines,
+              createLine(`(Contract: ${contractId}${subjectBlurb} — start with \`quest start ${contractId}\`)`)
+            ]
+          }
+          outputLines = [...outputLines, createLine('----- end message -----')]
           break
         }
         if (sub === 'archive' && args[1]) {
@@ -1351,7 +1648,8 @@ export const handleTerminalCommand = async (
     case 'quest': {
       const questStorage = context?.questStorage
       if (!questStorage) {
-        outputLines = [...outputLines, createLine('Quest archive unavailable. Install quest storage service.')] 
+        console.error('Quest archive unavailable. No questStorage configured in TerminalCommandContext.')
+        outputLines = [...outputLines, createLine('Contract directory is offline. Please contact your operator.')]
         break
       }
       try {
@@ -1426,7 +1724,7 @@ export const handleTerminalCommand = async (
     }
     case 'scan': {
       if (!nextState.system || !systemIp) {
-        outputLines = [...outputLines, createLine('No active quest system configured.')]
+        outputLines = createNoContractLines()
         break
       }
       const { positional, flags } = partitionScanArgs(args)
@@ -1484,6 +1782,30 @@ export const handleTerminalCommand = async (
       nextState = traceResult.nextState
       outputLines = traceResult.lines
       if (assignedRange) {
+        nextState = applyReconScanProgress(nextState, hosts, assignedRange)
+      }
+      const recon = getReconRequirements(nextState.quest)
+      const tracePercent = computeTracePercent(nextState.trace)
+      nextState = updateReconTelemetry(nextState, telemetry => {
+        if (assignedRange) telemetry.assignedRangeScanCount += 1
+        else telemetry.offRangeScanCount += 1
+        telemetry.maxTracePercentObserved = Math.max(telemetry.maxTracePercentObserved, tracePercent)
+        if (recon?.allowedRanges?.length && !matchesReconConstraintList(targetRange, recon.allowedRanges)) {
+          telemetry.constraint.respectedAllowedRanges = false
+        }
+        if (recon?.forbiddenRanges?.length && matchesReconConstraintList(targetRange, recon.forbiddenRanges)) {
+          telemetry.constraint.avoidedForbiddenRanges = false
+        }
+        if (recon?.maxReconTracePercent != null && tracePercent > recon.maxReconTracePercent) {
+          telemetry.constraint.stayedUnderTraceCap = false
+        }
+      })
+      if (recon && typeof recon.maxReconTracePercent === 'number' && recon.maxReconTracePercent >= 0) {
+        if (tracePercent > recon.maxReconTracePercent) {
+          outputLines = [...outputLines, createLine(`Recon trace cap ${recon.maxReconTracePercent}% exceeded (${tracePercent}%).`)]
+        }
+      }
+      if (assignedRange) {
         applyQuest({ type: deepMode ? 'deep_scan' : 'scan', ip: systemIp })
       }
       break
@@ -1529,7 +1851,7 @@ export const handleTerminalCommand = async (
       }
       const targetIp = args[0]
       if (!nextState.system || !systemIp) {
-        outputLines = [createLine('No active quest system configured.')]
+        outputLines = createNoContractLines()
         break
       }
       if (targetIp !== systemIp) {
@@ -1538,6 +1860,14 @@ export const handleTerminalCommand = async (
       }
       if (nextState.connectedIp === systemIp) {
         outputLines = [createLine(`Already connected to ${systemIp}.`)]
+        break
+      }
+      const recon = getReconRequirements(nextState.quest)
+      if (recon?.mustUseScan && !(nextState.reconProgress?.scanCompleted)) {
+        nextState = updateReconTelemetry(nextState, telemetry => {
+          telemetry.constraint.honoredMustUseScan = false
+        })
+        outputLines = [createLine('Quest requires scanning the target before connecting. Run scan first.')]
         break
       }
       const traceResult = withTraceUpdate(nextState, 'connect', outputLines)

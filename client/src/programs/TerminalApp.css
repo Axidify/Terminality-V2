@@ -87,6 +87,15 @@
   letter-spacing: 0.05em;
 }
 
+.terminal-header .terminal-objective {
+  margin: 2px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0.8;
+  color: var(--terminal-secondary);
+  font-weight: 400;
+}
+
 .terminal-header-actions {
   display: flex;
   gap: 10px;

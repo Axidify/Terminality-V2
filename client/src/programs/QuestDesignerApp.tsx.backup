@@ -109,14 +109,16 @@ const VARIANT_CONDITION_METADATA: Record<CompletionEmailVariantCondition['type']
 	}
 }
 
-type QuestTab = 'overview' | 'wizard' | 'steps' | 'systems' | 'mail-rewards'
+type QuestWorkspaceView = 'wizard' | 'overview' | 'systems' | 'recon' | 'steps' | 'mail' | 'rewards'
 
-const QUEST_TABS: Array<{ id: QuestTab; label: string; helper: string }> = [
-	{ id: 'overview', label: 'Overview', helper: 'Read-only summary of the quest.' },
-	{ id: 'wizard', label: 'Guided Wizard', helper: 'Step-by-step flow for creating quests.' },
-	{ id: 'steps', label: 'Steps', helper: 'Detailed quest step editor.' },
-	{ id: 'systems', label: 'Systems & Files', helper: 'Target system and file configuration.' },
-	{ id: 'mail-rewards', label: 'Mail & Rewards', helper: 'Emails and reward configuration.' }
+const WORKSPACE_TABS: Array<{ id: QuestWorkspaceView; label: string; helper: string }> = [
+	{ id: 'wizard', label: 'Guided Wizard', helper: 'Step-by-step flow for new quests.' },
+	{ id: 'overview', label: 'Overview', helper: 'Quick edits to title, description, and difficulty.' },
+	{ id: 'systems', label: 'Systems', helper: 'Tweak the target host snapshot.' },
+	{ id: 'recon', label: 'Recon', helper: 'Tune scan requirements, discovery targets, and stealth expectations.' },
+	{ id: 'steps', label: 'Steps', helper: 'Adjust the quest beats and ordering.' },
+	{ id: 'mail', label: 'Mail', helper: 'Craft intro and completion emails.' },
+	{ id: 'rewards', label: 'Rewards', helper: 'Bonus objectives and reward hooks.' }
 ]
 
 const QUEST_TYPE_OPTIONS: Array<{ id: QuestType; label: string; helper: string }> = [
@@ -215,7 +217,8 @@ export const QuestDesignerApp: React.FC = () => {
 	const [unsavedPromptOpen, setUnsavedPromptOpen] = useState(false)
 	const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
 	const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
-	const [activeTab, setActiveTab] = useState<QuestTab>('overview')
+	const [workspaceView, setWorkspaceView] = useState<QuestWorkspaceView>('wizard')
+	const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
 	useEffect(() => {
 		let mounted = true
@@ -292,7 +295,7 @@ export const QuestDesignerApp: React.FC = () => {
 			setDirty(false)
 			setValidationErrors({})
 			setActiveStep('details')
-			setActiveTab('overview')
+			setWorkspaceView('wizard')
 			return
 		}
 		setDraft(cloneQuest(quest))
@@ -300,7 +303,7 @@ export const QuestDesignerApp: React.FC = () => {
 		setDirty(false)
 		setValidationErrors({})
 		setActiveStep('details')
-		setActiveTab('wizard')
+		setWorkspaceView('wizard')
 	}, [])
 
 	const confirmAndExecute = useCallback((action: () => void) => {
@@ -457,19 +460,6 @@ export const QuestDesignerApp: React.FC = () => {
 		})
 	}, [draft, mailService, storage])
 
-	const handleSave = handleSaveQuest
-
-	const handleValidate = useCallback(() => {
-		if (!draft) return
-		const errors = validateQuest(draft)
-		setValidationErrors(errors)
-		const hasErrors = Object.values(errors).some(list => list && list.length > 0)
-		if (hasErrors) {
-			setActiveTab('wizard')
-			setActiveStep('summary')
-		}
-	}, [draft])
-
 	const toggleDifficultyFilter = (difficulty: SystemDifficulty) => {
 		setDifficultyFilters(prev => {
 			const next = new Set(prev)
@@ -480,29 +470,21 @@ export const QuestDesignerApp: React.FC = () => {
 	}
 
 	const selectedQuestTitle = draft?.title || 'Untitled Quest'
-	const activeTabMeta = QUEST_TABS.find(tab => tab.id === activeTab) ?? QUEST_TABS[0]
+	const activeWorkspaceMeta = WORKSPACE_TABS.find(tab => tab.id === workspaceView) ?? WORKSPACE_TABS[0]
 
 	return (
-		    <div className="quest-designer-app">
-				{/* Top Bar */}
-				<header className="quest-designer-topbar">
-					<div className="quest-topbar-left">
-						<h1>Quest Designer</h1>
-						{draft && <span className="quest-topbar-quest-name">{selectedQuestTitle}</span>}
+		    <div className={`quest-designer-app${sidebarCollapsed ? ' collapsed' : ''}`}>
+			    <aside className={`quest-designer-sidebar${sidebarCollapsed ? ' compact' : ''}`}>
+				<header className="quest-sidebar-header">
+					<div>
+						<h2>Quest Designer</h2>
+						<p className="muted">Batch 2 • Guided rebuild</p>
 					</div>
-					<div className="quest-topbar-right">
-						{draft && (
-							<>
-								{dirty && <span className="pill warning">Unsaved Changes</span>}
-								<button type="button" className="quest-btn quest-btn-secondary" onClick={handleValidate}>Validate</button>
-								<button type="button" className="quest-btn quest-btn-primary" onClick={handleSave} disabled={!dirty}>Save Quest</button>
-							</>
-						)}
+					<div style={{ display: 'flex', gap: '0.5rem' }}>
+						<button type="button" className="ghost" onClick={() => setSidebarCollapsed(prev => !prev)} aria-label="Toggle sidebar">{sidebarCollapsed ? 'Expand' : 'Collapse'}</button>
+						<button type="button" className="primary" onClick={handleCreateQuest}>+ New Quest</button>
 					</div>
 				</header>
-
-				{/* Sidebar */}
-			    <aside className="quest-designer-sidebar">
 				<div className="quest-sidebar-controls">
 					<input
 						className="quest-search"
@@ -523,7 +505,7 @@ export const QuestDesignerApp: React.FC = () => {
 						))}
 					</div>
 				</div>
-				<div className="quest-list" role="region" aria-label="Quest list">
+				<div className="quest-list" role="region" aria-label="Quest list" style={{ display: sidebarCollapsed ? 'none' : undefined }}>
 					{loading && <p className="muted">Loading quests…</p>}
 					{!loading && filteredQuests.length === 0 && (
 						<p className="muted empty-state">No quests match the current filters.</p>
@@ -554,36 +536,31 @@ export const QuestDesignerApp: React.FC = () => {
 						})}
 					</ul>
 				</div>
-				<div className="quest-sidebar-footer">
-					<button type="button" className="quest-btn quest-btn-primary" onClick={handleCreateQuest}>+ New Quest</button>
-				</div>
 			</aside>
-
-			{/* Main Content */}
-			<main className="quest-designer-main">
+			<section className="quest-designer-workspace">
 				{!draft && (
 					<div className="quest-empty-state">
 						<h3>No quest selected</h3>
 						<p className="muted">Select a quest on the left or create a new one to begin.</p>
+						<button type="button" className="primary" onClick={handleCreateQuest}>Start a new quest</button>
 					</div>
 				)}
 				{draft && (
 					<>
-						<nav className="quest-designer-tabs" aria-label="Quest tabs">
-							{QUEST_TABS.map(tab => (
+						<nav className="quest-workspace-tabs" aria-label="Quest workspace views">
+							{WORKSPACE_TABS.map(tab => (
 								<button
 									key={tab.id}
 									type="button"
-									className={`quest-designer-tab ${activeTab === tab.id ? 'active' : ''}`}
-									onClick={() => setActiveTab(tab.id)}
-									title={tab.helper}
+									className={`workspace-tab ${workspaceView === tab.id ? 'active' : ''}`}
+									onClick={() => setWorkspaceView(tab.id)}
 								>
 									{tab.label}
 								</button>
 							))}
 						</nav>
-						<div className="quest-designer-content">
-						{activeTab === 'wizard' ? (
+						<p className="muted workspace-helper">{activeWorkspaceMeta.helper}</p>
+						{workspaceView === 'wizard' ? (
 							<QuestWizard
 								quest={draft}
 								dirty={dirty}
@@ -603,60 +580,71 @@ export const QuestDesignerApp: React.FC = () => {
 								onCancel={handleCancelDraft}
 								onSave={handleSaveQuest}
 							/>
-						) : activeTab === 'overview' ? (
-							<div className="quest-section">
-								<QuestDetailsStep
-									quest={draft}
-									onChange={applyDraftPatch}
-									onRequirementsChange={handleRequirementsChange}
-									errors={validationErrors.details || []}
-								/>
-							</div>
-						) : activeTab === 'steps' ? (
-							<div className="quest-section">
-								<QuestStepsStep steps={draft.steps} onChange={handleStepsChange} errors={validationErrors.steps || []} />
-							</div>
-						) : activeTab === 'systems' ? (
-							<div className="quest-section">
-								<SystemDesignerStep
-									questId={draft.id}
-									system={draft.system}
-									onChange={handleSystemChange}
-									errors={validationErrors.system || []}
-									templateService={systemTemplates}
-								/>
-								<ReconDiscoveryStep
-									quest={draft}
-									errors={validationErrors.recon || []}
-									onChange={handleReconChange}
-								/>
-							</div>
-						) : activeTab === 'mail-rewards' ? (
-							<div className="quest-section">
-								<IntroEmailStep
-									quest={draft}
-									email={draft.introEmail}
-									onChange={handleIntroEmailChange}
-									errors={validationErrors.intro_email || []}
-								/>
-								<CompletionEmailStep
-									quest={draft}
-									email={draft.completionEmail}
-									onChange={handleCompletionEmailChange}
-									errors={validationErrors.completion_email || []}
-								/>
-								<RewardsPanel
-									quest={draft}
-									bonusObjectives={draft.bonusObjectives || []}
-									onBonusChange={(next: BonusObjective[]) => applyDraftPatch({ bonusObjectives: next })}
-									onQuestChange={applyDraftPatch}
-								/>
-							</div>
-						) : null}
-						</div>
+						) : (
+							<QuestStandaloneEditor
+								questLabel={selectedQuestTitle}
+								dirty={dirty}
+								title={activeWorkspaceMeta.label}
+								helper={activeWorkspaceMeta.helper}
+								onCancel={handleCancelDraft}
+								onSave={handleSaveQuest}
+							>
+								{workspaceView === 'overview' && (
+									<QuestDetailsStep
+										quest={draft}
+										onChange={applyDraftPatch}
+										onRequirementsChange={handleRequirementsChange}
+										errors={validationErrors.details || []}
+									/>
+								)}
+								{workspaceView === 'systems' && (
+									<SystemDesignerStep
+										questId={draft.id}
+										system={draft.system}
+										onChange={handleSystemChange}
+										errors={validationErrors.system || []}
+										templateService={systemTemplates}
+									/>
+								)}
+								{workspaceView === 'recon' && (
+									<ReconDiscoveryStep
+										quest={draft}
+										errors={validationErrors.recon || []}
+										onChange={handleReconChange}
+									/>
+								)}
+								{workspaceView === 'steps' && (
+									<QuestStepsStep steps={draft.steps} onChange={handleStepsChange} errors={validationErrors.steps || []} />
+								)}
+								{workspaceView === 'mail' && (
+									<div className="quest-mail-panel">
+										<IntroEmailStep
+											quest={draft}
+											email={draft.introEmail}
+											onChange={handleIntroEmailChange}
+											errors={validationErrors.intro_email || []}
+										/>
+										<CompletionEmailStep
+											quest={draft}
+											email={draft.completionEmail}
+											onChange={handleCompletionEmailChange}
+											errors={validationErrors.completion_email || []}
+										/>
+									</div>
+								)}
+								{workspaceView === 'rewards' && (
+									<RewardsPanel
+										quest={draft}
+										bonusObjectives={draft.bonusObjectives || []}
+										onBonusChange={(next: BonusObjective[]) => applyDraftPatch({ bonusObjectives: next })}
+										onQuestChange={applyDraftPatch}
+									/>
+								)}
+							</QuestStandaloneEditor>
+						)}
 					</>
 				)}
-			</main>
+			</section>
 
 			{unsavedPromptOpen && (
 				<ConfirmDialog
@@ -806,6 +794,10 @@ const QuestWizard: React.FC<QuestWizardProps> = ({
 	return (
 		<div className="quest-wizard">
 			<header className="quest-wizard-header">
+				<div>
+					<p className="muted">Editing • {questLabel}</p>
+					{dirty && <span className="pill warning">Unsaved changes</span>}
+				</div>
 				<nav className="quest-stepper" aria-label="Quest wizard steps">
 					{QUEST_WIZARD_STEPS.map((step, index) => {
 						const label = STEP_LABELS[step]
@@ -859,7 +851,7 @@ const QuestWizard: React.FC<QuestWizardProps> = ({
 				<div className="spacer" />
 				<button type="button" className="ghost" onClick={handleBack} disabled={currentIndex === 0}>Back</button>
 				<button type="button" className="primary" onClick={handleNext}>
-					{isLastStep ? 'Finish' : 'Next'}
+					{isLastStep ? 'Save Quest' : 'Next'}
 				</button>
 			</footer>
 		</div>
@@ -1308,179 +1300,142 @@ const QuestDetailsStep: React.FC<QuestDetailsStepProps> = ({ quest, errors, onCh
 	)
 
 	return (
-		<div className="wizard-step-body">
+		<div className="wizard-form">
 			{errors.length > 0 && (
 				<div className="inline-alert error" role="alert">
 					<strong>Fix these before continuing</strong>
 					<ul>{errors.map(err => <li key={err}>{err}</li>)}</ul>
 				</div>
 			)}
-
-			<section className="wizard-section">
-				<h3>Basic Information</h3>
-				<p className="wizard-section-help">Core quest metadata shown to players.</p>
-				<div className="wizard-form-grid">
-					<div className="wizard-field full-width">
-						<label className="wizard-label" htmlFor="quest-title">Title</label>
-						<div className="wizard-control">
-							<input id="quest-title" value={quest.title} onChange={e => onChange({ title: e.target.value })} placeholder="Atlas needs help" />
-						</div>
-					</div>
-					<div className="wizard-field full-width">
-						<label className="wizard-label" htmlFor="quest-short-description">Short Description</label>
-						<div className="wizard-control">
-							<textarea
-								id="quest-short-description"
-								value={quest.shortDescription}
-								rows={3}
-								placeholder="Brief summary shown in quest lists."
-								onChange={e => onChange({ shortDescription: e.target.value })}
-							/>
-						</div>
-						<p className="wizard-help">Appears in quest lists and selection screens.</p>
-					</div>
-					<div className="wizard-field full-width">
-						<label className="wizard-label" htmlFor="quest-objective">Objective (Short)</label>
-						<div className="wizard-control">
-							<input
-								id="quest-objective"
-								type="text"
-								value={quest.objectiveShort || ''}
-								placeholder="Wipe /logs/auth/trace.log on 10.23.4.8"
-								onChange={e => onChange({ objectiveShort: e.target.value })}
-							/>
-						</div>
-						<p className="wizard-help">One-line objective shown in the terminal header.</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label" htmlFor="quest-difficulty">Difficulty</label>
-						<div className="wizard-control">
-							<select id="quest-difficulty" value={quest.difficulty} onChange={e => onChange({ difficulty: e.target.value as SystemDifficulty })}>
-								{DIFFICULTY_ORDER.map(level => (
-									<option key={level} value={level}>{DIFFICULTY_LABELS[level]}</option>
-								))}
-							</select>
-						</div>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label" htmlFor="quest-type">Quest Type</label>
-						<div className="wizard-control">
-							<select id="quest-type" value={quest.questType || 'recon'} onChange={e => onChange({ questType: e.target.value as QuestType })}>
-								{QUEST_TYPE_OPTIONS.map(option => (
-									<option key={option.id} value={option.id}>{option.label}</option>
-								))}
-							</select>
-						</div>
-						<p className="wizard-help">{QUEST_TYPE_OPTIONS.find(opt => opt.id === (quest.questType || 'recon'))?.helper}</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label" htmlFor="quest-order">Recommended Order</label>
-						<div className="wizard-control">
-							<input
-								id="quest-order"
-								type="number"
-								value={quest.recommendedOrder ?? ''}
-								onChange={e => onChange({ recommendedOrder: e.target.value ? Number(e.target.value) : undefined })}
-								placeholder="Optional"
-							/>
-						</div>
-						<p className="wizard-help">Suggested sequence number for quest progression.</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label">Required Tools</label>
-						<div className="wizard-control">
-							<ToolDropdown selected={selectedTools} onChange={next => updateRequirements({ requiredTools: next })} />
-						</div>
-						<p className="wizard-help">{TOOL_OPTION_DETAILS.length} tools available. Pick the utilities this quest expects.</p>
-					</div>
+			<label>
+				Title
+				<input value={quest.title} onChange={e => onChange({ title: e.target.value })} placeholder="Atlas needs help" />
+			</label>
+			<label>
+				Short Description
+				<textarea
+					value={quest.shortDescription}
+					rows={3}
+					placeholder="Brief summary shown in quest lists."
+					onChange={e => onChange({ shortDescription: e.target.value })}
+				/>
+			</label>
+			<label>
+				Objective (short)
+				<input
+					type="text"
+					value={quest.objectiveShort || ''}
+					placeholder="Wipe /logs/auth/trace.log on 10.23.4.8"
+					onChange={e => onChange({ objectiveShort: e.target.value })}
+				/>
+				<small className="muted">One-line objective shown in the terminal header (e.g. "Wipe /logs/auth/trace.log on 10.23.4.8").</small>
+			</label>
+			<div className="field-row">
+				<label>
+					Difficulty
+					<select value={quest.difficulty} onChange={e => onChange({ difficulty: e.target.value as SystemDifficulty })}>
+						{DIFFICULTY_ORDER.map(level => (
+							<option key={level} value={level}>{DIFFICULTY_LABELS[level]}</option>
+						))}
+					</select>
+				</label>
+				<label>
+					Quest Type
+					<select value={quest.questType || 'recon'} onChange={e => onChange({ questType: e.target.value as QuestType })}>
+						{QUEST_TYPE_OPTIONS.map(option => (
+							<option key={option.id} value={option.id}>{option.label}</option>
+						))}
+					</select>
+					<small className="muted">{QUEST_TYPE_OPTIONS.find(opt => opt.id === (quest.questType || 'recon'))?.helper}</small>
+				</label>
+			</div>
+			<div className="field-row">
+				<label>
+					Recommended Order
+					<input
+						type="number"
+						value={quest.recommendedOrder ?? ''}
+						onChange={e => onChange({ recommendedOrder: e.target.value ? Number(e.target.value) : undefined })}
+						placeholder="Optional"
+					/>
+				</label>
+				<fieldset className="tool-select-field">
+					<legend>
+						Required Tools
+						<small className="muted">{TOOL_OPTION_DETAILS.length} tools available. Pick the utilities this quest expects.</small>
+					</legend>
+					<ToolDropdown selected={selectedTools} onChange={next => updateRequirements({ requiredTools: next })} />
+					<small className="muted">Each option lists what the tool does so authors can set expectations.</small>
+				</fieldset>
+			</div>
+			<section className="risk-profile">
+				<header>
+					<h4>Risk Profile</h4>
+					<p className="muted">Trace guardrails and cleanup expectations.</p>
+				</header>
+				<div className="field-row">
+					<label>
+						Max recommended trace %
+						<input
+							type="number"
+							min={0}
+							max={100}
+							value={currentRisk.maxRecommendedTrace ?? ''}
+							onChange={e => updateRisk({ maxRecommendedTrace: e.target.value ? Number(e.target.value) : undefined })}
+						/>
+					</label>
+					<label>
+						Fail if trace exceeds %
+						<input
+							type="number"
+							min={0}
+							max={100}
+							value={currentRisk.failAboveTrace ?? ''}
+							onChange={e => updateRisk({ failAboveTrace: e.target.value ? Number(e.target.value) : undefined })}
+						/>
+					</label>
+					<label>
+						Required trace spike % (optional)
+						<input
+							type="number"
+							min={0}
+							max={100}
+							value={currentRisk.requiredTraceSpike ?? ''}
+							onChange={e => updateRisk({ requiredTraceSpike: e.target.value ? Number(e.target.value) : undefined })}
+						/>
+					</label>
 				</div>
+				<label className="checkbox">
+					<input
+						type="checkbox"
+						checked={Boolean(currentRisk.cleanupBeforeDisconnect)}
+						onChange={e => updateRisk({ cleanupBeforeDisconnect: e.target.checked })}
+					/>
+					<span>Require log cleanup before disconnecting</span>
+				</label>
 			</section>
-
-			<section className="wizard-section">
-				<h3>Risk Profile</h3>
-				<p className="wizard-section-help">Trace guardrails and cleanup expectations.</p>
-				<div className="wizard-form-grid">
-					<div className="wizard-field">
-						<label className="wizard-label">Max Recommended Trace %</label>
-						<div className="wizard-control">
-							<input
-								type="number"
-								min={0}
-								max={100}
-								value={currentRisk.maxRecommendedTrace ?? ''}
-								onChange={e => updateRisk({ maxRecommendedTrace: e.target.value ? Number(e.target.value) : undefined })}
-							/>
-						</div>
-						<p className="wizard-help">Players should try to stay below this threshold.</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label">Fail if Trace Exceeds %</label>
-						<div className="wizard-control">
-							<input
-								type="number"
-								min={0}
-								max={100}
-								value={currentRisk.failAboveTrace ?? ''}
-								onChange={e => updateRisk({ failAboveTrace: e.target.value ? Number(e.target.value) : undefined })}
-							/>
-						</div>
-						<p className="wizard-help">Quest fails automatically above this trace level.</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label">Required Trace Spike % (Optional)</label>
-						<div className="wizard-control">
-							<input
-								type="number"
-								min={0}
-								max={100}
-								value={currentRisk.requiredTraceSpike ?? ''}
-								onChange={e => updateRisk({ requiredTraceSpike: e.target.value ? Number(e.target.value) : undefined })}
-							/>
-						</div>
-						<p className="wizard-help">Quest requires at least one trace spike of this amount.</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-checkbox-label">
-							<input
-								type="checkbox"
-								checked={Boolean(currentRisk.cleanupBeforeDisconnect)}
-								onChange={e => updateRisk({ cleanupBeforeDisconnect: e.target.checked })}
-							/>
-							<span>Require log cleanup before disconnecting</span>
-						</label>
-						<p className="wizard-help">Players must clean logs before completing the quest.</p>
-					</div>
-				</div>
-			</section>
-
-			<section className="wizard-section">
-				<h3>World Flags</h3>
-				<p className="wizard-section-help">Gate quests or block them when certain flags exist.</p>
-				<div className="wizard-form-grid">
-					<div className="wizard-field">
-						<label className="wizard-label">Requires Flags</label>
-						<div className="wizard-control">
-							<textarea
-								rows={3}
-								value={serializeFlagList(quest.requirements?.requiredFlags)}
-								onChange={e => updateRequirements({ requiredFlags: parseFlagList(e.target.value) })}
-								placeholder="key1&#10;key2=value"
-							/>
-						</div>
-						<p className="wizard-help">One per line, format: key or key=value</p>
-					</div>
-					<div className="wizard-field">
-						<label className="wizard-label">Blocked By Flags</label>
-						<div className="wizard-control">
-							<textarea
-								rows={3}
-								value={serializeFlagList(quest.requirements?.blockedByFlags)}
-								onChange={e => updateRequirements({ blockedByFlags: parseFlagList(e.target.value) })}
-								placeholder="key1&#10;key2=value"
-							/>
-						</div>
-						<p className="wizard-help">Quest unavailable when these flags are present.</p>
-					</div>
+			<section className="requirements-section">
+				<header>
+					<h4>World Flags</h4>
+					<p className="muted">Gate quests or block them when certain flags exist.</p>
+				</header>
+				<div className="field-row">
+					<label>
+						Requires flags (one per line, key or key=value)
+						<textarea
+							rows={3}
+							value={serializeFlagList(quest.requirements?.requiredFlags)}
+							onChange={e => updateRequirements({ requiredFlags: parseFlagList(e.target.value) })}
+						/>
+					</label>
+					<label>
+						Blocked when flags present
+						<textarea
+							rows={3}
+							value={serializeFlagList(quest.requirements?.blockedByFlags)}
+							onChange={e => updateRequirements({ blockedByFlags: parseFlagList(e.target.value) })}
+						/>
+					</label>
 				</div>
 			</section>
 		</div>
@@ -1575,60 +1530,49 @@ const ReconDiscoveryStep: React.FC<ReconDiscoveryStepProps> = ({ quest, errors, 
 	const maxTraceValue = typeof recon?.maxReconTracePercent === 'number' ? recon.maxReconTracePercent : undefined
 
 	return (
-		<div className="wizard-step-body">
+		<div className="recon-step">
 			{errors.length > 0 && (
 				<div className="inline-alert error" role="alert">
 					<strong>Fix these before continuing</strong>
 					<ul>{errors.map(err => <li key={err}>{err}</li>)}</ul>
 				</div>
 			)}
-
-			<section className="wizard-section">
-				<h3>Enable Recon Discovery</h3>
-				<p className="wizard-section-help">Enable when players must run scan before progressing the quest.</p>
-				<div className="wizard-form-grid single-column">
-					<div className="wizard-field">
-						<label className="wizard-checkbox-label">
-							<input type="checkbox" checked={enabled} onChange={e => toggleEnabled(e.target.checked)} />
-							<span>Does this quest involve discovering a target via recon?</span>
-						</label>
-					</div>
+			<label className="checkbox">
+				<input type="checkbox" checked={enabled} onChange={e => toggleEnabled(e.target.checked)} />
+				<span>Does this quest involve discovering a target via recon?</span>
+			</label>
+			<p className="muted">Enable this when players must run scan before progressing the quest.</p>
+			{enabled && !quest.system && (
+				<div className="inline-alert info">
+					Add a system to surface real host targets. You can still add manual placeholders below.
 				</div>
-				{enabled && !quest.system && (
-					<div className="inline-alert info">
-						Add a system to surface real host targets. You can still add manual placeholders below.
-					</div>
-				)}
-			</section>
-
+			)}
 			{enabled && (
 				<>
-					<section className="wizard-section">
-						<h3>Discovery Target</h3>
-						<p className="wizard-section-help">Single-host recon only. Pick the host that must appear in scan results.</p>
-						<div className="wizard-form-grid single-column">
-							<div className="wizard-field">
-								<div className="quest-btn-group">
-									<button
-										type="button"
-										className="quest-btn quest-btn-secondary"
-										onClick={addSystemTarget}
-										disabled={!quest.system || targets.some(target => target.hostId === quest.system?.id) || !canAddTarget}
-										title={!canAddTarget ? 'Remove the existing target before adding a new one.' : undefined}
-									>
-										Add Target System
-									</button>
-									<button
-										type="button"
-										className="quest-btn quest-btn-secondary"
-										onClick={addManualTarget}
-										disabled={!canAddTarget}
-										title={!canAddTarget ? 'Single-host recon only.' : undefined}
-									>
-										Add Manual Target
-									</button>
-								</div>
-							</div>
+					<section className="recon-section">
+						<header>
+							<h4>Discovery Target</h4>
+							<p className="muted">Single-host recon only. Pick the host that must appear in scan results.</p>
+						</header>
+						<div className="recon-target-actions">
+							<button
+								type="button"
+								className="ghost"
+								onClick={addSystemTarget}
+								disabled={!quest.system || targets.some(target => target.hostId === quest.system?.id) || !canAddTarget}
+								title={!canAddTarget ? 'Remove the existing target before adding a new one.' : undefined}
+							>
+								Add target system
+							</button>
+							<button
+								type="button"
+								className="ghost"
+								onClick={addManualTarget}
+								disabled={!canAddTarget}
+								title={!canAddTarget ? 'Single-host recon only.' : undefined}
+							>
+								Add manual target
+							</button>
 						</div>
 						{targets.length > MAX_RECON_TARGETS && (
 							<div className="inline-alert warning">
@@ -1636,92 +1580,73 @@ const ReconDiscoveryStep: React.FC<ReconDiscoveryStepProps> = ({ quest, errors, 
 							</div>
 						)}
 						{targets.length === 0 && (
-							<p className="wizard-help">No discovery targets selected yet.</p>
+							<p className="muted">No discovery targets selected yet.</p>
 						)}
 						<div className="recon-target-list">
 							{targets.map((target, index) => (
-								<div key={`${target.hostId || 'manual'}-${index}`} className="wizard-section" style={{ marginTop: '1rem' }}>
-									<div className="wizard-form-grid">
-										<div className="wizard-field">
-											<label className="wizard-label">Host ID</label>
-											<div className="wizard-control">
-												<input value={target.hostId} onChange={e => updateTargetField(index, 'hostId', e.target.value)} placeholder="quest-system-id or hostname" />
-											</div>
-										</div>
-										<div className="wizard-field">
-											<label className="wizard-label">Range Hint (Optional)</label>
-											<div className="wizard-control">
-												<input value={target.rangeHint ?? ''} onChange={e => updateTargetField(index, 'rangeHint', e.target.value)} placeholder="e.g. 10.0.5.0/24 lab" />
-											</div>
-										</div>
-										<div className="wizard-field">
-											<button type="button" className="quest-btn quest-btn-danger" onClick={() => removeTarget(index)}>Remove Target</button>
-										</div>
-									</div>
+								<div key={`${target.hostId || 'manual'}-${index}`} className="recon-target-card">
+									<label>
+										Host ID
+										<input value={target.hostId} onChange={e => updateTargetField(index, 'hostId', e.target.value)} placeholder="quest-system-id or hostname" />
+									</label>
+									<label>
+										Range hint (optional)
+										<input value={target.rangeHint ?? ''} onChange={e => updateTargetField(index, 'rangeHint', e.target.value)} placeholder="e.g. 10.0.5.0/24 lab" />
+									</label>
+									<button type="button" className="ghost danger" onClick={() => removeTarget(index)}>Remove</button>
 								</div>
 							))}
 						</div>
 					</section>
-
-					<section className="wizard-section">
-						<h3>Stealth Constraints</h3>
-						<p className="wizard-section-help">Optional guardrails that define where and how players may scan.</p>
-						<div className="wizard-form-grid">
-							<div className="wizard-field">
-								<label className="wizard-label">Allowed Ranges</label>
-								<div className="wizard-control">
-									<textarea
-										rows={3}
-										value={allowedRangesValue}
-										onChange={e => updateRecon({ allowedRanges: parseReconList(e.target.value) })}
-										placeholder="10.0.0.0/8&#10;192.168.1.0/24"
-									/>
-								</div>
-								<p className="wizard-help">One per line. Players can only scan these ranges.</p>
-							</div>
-							<div className="wizard-field">
-								<label className="wizard-label">Forbidden Ranges</label>
-								<div className="wizard-control">
-									<textarea
-										rows={3}
-										value={forbiddenRangesValue}
-										onChange={e => updateRecon({ forbiddenRanges: parseReconList(e.target.value) })}
-										placeholder="10.0.0.1&#10;192.168.1.1"
-									/>
-								</div>
-								<p className="wizard-help">One per line. Players cannot scan these ranges.</p>
-							</div>
-							<div className="wizard-field full-width">
-								<label className="wizard-label">
-									Max Trace During Recon: {typeof maxTraceValue === 'number' ? `${maxTraceValue}%` : 'No cap'}
+					<section className="recon-section">
+						<header>
+							<h4>Stealth Constraints</h4>
+							<p className="muted">Optional guardrails that define where and how players may scan.</p>
+						</header>
+						<div className="recon-constraints-grid">
+							<label>
+								Allowed ranges (one per line)
+								<textarea
+									rows={3}
+									value={allowedRangesValue}
+									onChange={e => updateRecon({ allowedRanges: parseReconList(e.target.value) })}
+								/>
+							</label>
+							<label>
+								Forbidden ranges (one per line)
+								<textarea
+									rows={3}
+									value={forbiddenRangesValue}
+									onChange={e => updateRecon({ forbiddenRanges: parseReconList(e.target.value) })}
+								/>
+							</label>
+							<div className="recon-trace-cap">
+								<label>
+									Max trace during recon (%): {typeof maxTraceValue === 'number' ? `${maxTraceValue}%` : 'No cap'}
 								</label>
-								<div className="wizard-control">
-									<input
-										type="range"
-										min={10}
-										max={100}
-										step={5}
-										value={typeof maxTraceValue === 'number' ? maxTraceValue : 60}
-										onChange={e => updateRecon({ maxReconTracePercent: Number(e.target.value) })}
-									/>
-									<button type="button" className="quest-btn quest-btn-secondary" onClick={() => updateRecon({ maxReconTracePercent: undefined })}>
-										Clear Cap
+								<input
+									type="range"
+									min={10}
+									max={100}
+									step={5}
+									value={typeof maxTraceValue === 'number' ? maxTraceValue : 60}
+									onChange={e => updateRecon({ maxReconTracePercent: Number(e.target.value) })}
+								/>
+								<div className="recon-trace-actions">
+									<button type="button" className="ghost" onClick={() => updateRecon({ maxReconTracePercent: undefined })}>
+										Clear cap
 									</button>
 								</div>
-								<p className="wizard-help">Limits trace accumulation during recon phase.</p>
-							</div>
-							<div className="wizard-field full-width">
-								<label className="wizard-checkbox-label">
-									<input
-										type="checkbox"
-										checked={Boolean(recon?.mustUseScan ?? true)}
-										onChange={e => updateRecon({ mustUseScan: e.target.checked })}
-									/>
-									<span>Require players to use scan before other commands</span>
-								</label>
-								<p className="wizard-help">Players must discover the target via scan first.</p>
 							</div>
 						</div>
+						<label className="checkbox">
+							<input
+								type="checkbox"
+								checked={Boolean(recon?.mustUseScan ?? true)}
+								onChange={e => updateRecon({ mustUseScan: e.target.checked })}
+							/>
+							<span>Require players to use scan before other commands</span>
+						</label>
 						{needsHintWarning && (
 							<div className="inline-alert warning">
 								Add at least one range hint so players know where stealth scans are expected.

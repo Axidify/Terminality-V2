@@ -201,7 +201,10 @@ export interface QuestBranchingConfig {
   failure?: QuestBranchOutcome
 }
 
-export interface QuestIntroEmailConfig extends MailTemplateFields {}
+export interface QuestIntroEmailConfig extends MailTemplateFields {
+  showAcceptHint?: boolean
+  acceptHintOverride?: string
+}
 
 export interface QuestStepDefinition {
   id: string
@@ -214,6 +217,7 @@ export interface QuestDefinition {
   id: string
   title: string
   shortDescription: string
+  objectiveShort?: string // short objective shown in the terminal header
   recommendedOrder?: number
   difficulty: SystemDifficulty
   questType?: QuestType

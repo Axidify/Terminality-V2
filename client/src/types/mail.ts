@@ -13,6 +13,7 @@ export interface GameMail {
   archived: boolean
   tags?: MailTag[]
   questId?: string
+  linkedQuestId?: string
   type?: 'intro' | 'completion' | 'generic'
   folder?: MailFolder
 }

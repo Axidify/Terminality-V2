@@ -67,7 +67,8 @@ export const DevGameShell: React.FC = () => {
       maxTraceSeen: summary.maxTrace,
       trapsTriggered: finalState.trapsTriggered ?? [],
       bonusCompletedIds: summary.completedBonusIds,
-      outcome: summary.outcome
+      outcome: summary.outcome,
+      reconTelemetry: summary.reconTelemetry ?? finalState.reconTelemetry ?? null
     }
 
     const template = pickCompletionEmailTemplate(quest, quest.completionEmail, ctx)
