@@ -46,6 +46,20 @@ import { getCachedDesktop, hydrateFromServer, saveDesktopState } from '../servic
 import { listSystemProfiles as fetchSystemProfiles, SystemProfilesResponse } from '../services/systemProfiles'
 import { listPublishedTerminalMail } from '../services/terminalMail'
 import { listTerminalQuests } from '../services/terminalQuests'
+import type { QuestDefinition } from '../types/quest'
+// Some legacy callers pass concrete runtime types from terminalRuntime.
+// Avoid requiring that module here to keep the TerminalApp usable from both
+// CLI and developer shells while the runtime types are refactored.
+type LooseState = any
+type LooseSummary = any
+type LooseContext = any
+
+export interface TerminalAppProps {
+  state?: LooseState
+  onStateChange?: React.Dispatch<React.SetStateAction<LooseState>>
+  onQuestCompleted?: (quest: QuestDefinition, finalState: LooseState, summary: LooseSummary) => void | Promise<void>
+  commandContext?: LooseContext
+}
 
 type Line = { role: 'system' | 'user'; text: string }
 type TerminalContext = 'local' | 'remote'
@@ -130,7 +144,7 @@ const logQuestDebugInfo = (event: QuestEvent, result: QuestEventResult) => {
   })
 }
 
-export const TerminalApp: React.FC = () => {
+export const TerminalApp: React.FC<TerminalAppProps> = ({}) => {
   const [questState, setQuestState] = useState(createQuestEngineState)
   const [mailState, setMailState] = useState(createMailEngineState)
   const [lines, setLines] = useState<Line[]>([{ role: 'system', text: 'Terminal ready. Type help.' }])

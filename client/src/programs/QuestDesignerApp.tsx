@@ -4022,7 +4022,7 @@ export const QuestDesignerApp: React.FC = () => {
         kind: 'error',
         dedupeKey: 'quest-save-error'
       })
-      return
+      return false
     }
     const wasUnsaved = !!targetDraft.__unsaved
     const isPublishing = statusOverride === 'published'

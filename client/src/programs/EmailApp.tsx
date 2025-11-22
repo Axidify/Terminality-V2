@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 import './EmailApp.css'
 import { ContextMenu } from '../os/components/ContextMenu'
 import { CopyIcon, PasteIcon, SelectAllIcon, DeleteIcon, InfoIcon, MailIcon } from '../os/components/Icons'
+import type { MailService } from '../types/mail'
 
 interface Email {
   id: number
@@ -11,6 +12,11 @@ interface Email {
   body: string
   date: string
   read: boolean
+}
+
+interface EmailAppProps {
+  onStartQuest?: (questId: string) => void | Promise<void>
+  mailService?: MailService
 }
 
 const EnvelopeIcon: React.FC = () => (
@@ -49,7 +55,7 @@ const demoEmails: Email[] = [
   },
 ]
 
-export const EmailApp: React.FC = () => {
+export const EmailApp: React.FC<EmailAppProps> = (_props) => {
   const [emails, setEmails] = useState<Email[]>(demoEmails)
   const [selected, setSelected] = useState<Email | null>(null)
   const [composing, setComposing] = useState(false)

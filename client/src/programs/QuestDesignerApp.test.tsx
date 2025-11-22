@@ -5,8 +5,12 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { QuestDefinition, QuestLifecycleStatus } from './terminalQuests/types'
 
+interface ListTerminalQuestOptions {
+  includeDrafts?: boolean
+}
+
 const questDesignerMocks = vi.hoisted(() => ({
-  listTerminalQuests: vi.fn<() => Promise<QuestDefinition[]>>(),
+  listTerminalQuests: vi.fn<(options?: ListTerminalQuestOptions) => Promise<QuestDefinition[]>>(),
   listSystemProfiles: vi.fn(),
   getCachedDesktop: vi.fn(),
   hydrateFromServer: vi.fn(),
@@ -40,7 +44,7 @@ vi.mock('../os/ToastContext', () => ({
 }))
 
 vi.mock('../services/terminalQuests', () => ({
-  listTerminalQuests: (...args: unknown[]) => questDesignerMocks.listTerminalQuests(...args),
+  listTerminalQuests: (options?: ListTerminalQuestOptions) => questDesignerMocks.listTerminalQuests(options),
   createTerminalQuest: vi.fn(),
   updateTerminalQuest: vi.fn(),
   deleteTerminalQuest: vi.fn(),
