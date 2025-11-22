@@ -1032,7 +1032,7 @@ const validateQuestDraft = (quest?: DesignerQuest, options?: { mailIds?: string[
   return errors
 }
 
-export const QuestDesignerApp: React.FC = () => {
+export const QuestDesignerApp: React.FC<{ initialWizardOpen?: boolean; wizardMode?: 'overlay' | 'inline' }> = ({ initialWizardOpen = false, wizardMode = 'overlay' }) => {
   const { isAdmin } = useUser()
   const { push: pushToast } = useToasts()
   const [quests, setQuests] = useState<DesignerQuest[]>([])
@@ -1084,7 +1084,7 @@ export const QuestDesignerApp: React.FC = () => {
   const [mailValidating, setMailValidating] = useState(false)
   const [mailValidationErrors, setMailValidationErrors] = useState<string[]>([])
   const [mailDeletingId, setMailDeletingId] = useState<string | null>(null)
-  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState<boolean>(() => Boolean(initialWizardOpen))
   const [wizardStep, setWizardStep] = useState<QuestWizardStep>(QUEST_WIZARD_STEPS[0])
   const [wizardIntroMailDraft, setWizardIntroMailDraft] = useState<WizardIntroMailDraft>(() => createWizardIntroMailDraft())
   const [wizardIntroMailErrors, setWizardIntroMailErrors] = useState<string[]>([])
@@ -5204,7 +5204,7 @@ export const QuestDesignerApp: React.FC = () => {
         )}
       </section>
     </div>
-      {wizardOpen && (
+      {wizardOpen && wizardMode === 'overlay' && (
         <div
           className="quest-modal-overlay quest-wizard-overlay"
           role="dialog"
@@ -5247,6 +5247,73 @@ export const QuestDesignerApp: React.FC = () => {
               <div className="quest-wizard-header-details">
                 <p className="muted">Guided Build • {wizardProgressLabel}</p>
                 <h2 id="quest-wizard-title">{currentWizardStepDetails.title}</h2>
+                <p className="muted">{currentWizardStepDetails.description}</p>
+              </div>
+            </header>
+            <div className="quest-modal-body quest-wizard-body" ref={wizardBodyRef}>
+              {wizardStepContent}
+            </div>
+            <div className="quest-modal-actions quest-wizard-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={wizardAtFirstStep ? handleWizardCancel : goToPreviousWizardStep}
+              >
+                {wizardAtFirstStep ? 'Cancel' : 'Back'}
+              </button>
+              {wizardStep === 'summary' && (
+                <button type="button" className="ghost danger" onClick={handleWizardCancel}>
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={wizardAtLastStep ? handleWizardFinish : handleWizardNext}
+                disabled={wizardAtLastStep && wizardFinishing}
+              >
+                {wizardAtLastStep ? (wizardFinishing ? 'Saving…' : 'Save & Finish') : 'Next'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {wizardOpen && wizardMode === 'inline' && (
+        <div className="quest-wizard-inline" role="region" aria-labelledby="quest-wizard-title-inline">
+          <div className="quest-wizard quest-wizard-inline-panel">
+            <header className="quest-modal-header quest-wizard-header">
+              <div className="quest-wizard-header-top">
+                <div className="quest-wizard-progress" aria-live="polite">
+                  {QUEST_WIZARD_STEPS.map((stepKey, idx) => {
+                    const isActive = wizardStep === stepKey
+                    return (
+                      <button
+                        key={stepKey}
+                        type="button"
+                        className={`ghost wizard-step-chip ${isActive ? 'active' : ''}`}
+                        onClick={() => jumpToWizardStep(stepKey)}
+                        aria-current={isActive ? 'step' : undefined}
+                      >
+                        <span className="wizard-step-index">{idx + 1}</span>
+                        {QUEST_WIZARD_STEP_DETAILS[stepKey].title}
+                      </button>
+                    )
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="ghost icon-btn wizard-close"
+                  onClick={handleWizardCancel}
+                  aria-label="Close wizard"
+                  title="Close"
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" className="icon-x">
+                    <path d="M18.3 5.71a1 1 0 0 0-1.41 0L12 10.59 7.11 5.7A1 1 0 0 0 5.7 7.11L10.59 12l-4.9 4.89a1 1 0 1 0 1.41 1.42L12 13.41l4.89 4.9a1 1 0 0 0 1.42-1.41L13.41 12l4.9-4.89a1 1 0 0 0 0-1.4z" fill="currentColor" />
+                  </svg>
+                </button>
+              </div>
+              <div className="quest-wizard-header-details">
+                <p className="muted">Guided Build • {wizardProgressLabel}</p>
+                <h2 id="quest-wizard-title-inline">{currentWizardStepDetails.title}</h2>
                 <p className="muted">{currentWizardStepDetails.description}</p>
               </div>
             </header>
