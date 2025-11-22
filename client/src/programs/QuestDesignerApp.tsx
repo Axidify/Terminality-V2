@@ -1085,6 +1085,8 @@ export const QuestDesignerApp: React.FC<{ initialWizardOpen?: boolean; wizardMod
   const [mailValidationErrors, setMailValidationErrors] = useState<string[]>([])
   const [mailDeletingId, setMailDeletingId] = useState<string | null>(null)
   const [wizardOpen, setWizardOpen] = useState<boolean>(() => Boolean(initialWizardOpen))
+  // When true we'll encourage using the guided wizard instead of the in-page editor
+  const WIZARD_ONLY_MODE = true
   const [wizardStep, setWizardStep] = useState<QuestWizardStep>(QUEST_WIZARD_STEPS[0])
   const [wizardIntroMailDraft, setWizardIntroMailDraft] = useState<WizardIntroMailDraft>(() => createWizardIntroMailDraft())
   const [wizardIntroMailErrors, setWizardIntroMailErrors] = useState<string[]>([])
@@ -4258,7 +4260,6 @@ export const QuestDesignerApp: React.FC<{ initialWizardOpen?: boolean; wizardMod
           </div>
         </div>
         <div className="quest-list-actions">
-          <button type="button" onClick={handleCreateQuest}>+ New Quest</button>
           <button type="button" className="ghost" onClick={openWizard}>Guided Wizard</button>
         </div>
         <input
@@ -4350,6 +4351,14 @@ export const QuestDesignerApp: React.FC<{ initialWizardOpen?: boolean; wizardMod
         </div>
       </aside>
       <section className="quest-editor">
+        {WIZARD_ONLY_MODE && (
+          <div className="quest-editor-placeholder">
+            <p>Quest creation and editing are now handled via the Guided Wizard. Use the button below to create or edit quests.</p>
+            <div style={{ marginTop: 12 }}>
+              <button type="button" onClick={openWizard}>Open Guided Wizard</button>
+            </div>
+          </div>
+        )}
         {!draft && (
           <div className="quest-placeholder">
             <p>Select a quest from the list or create a new one.</p>

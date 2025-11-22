@@ -176,8 +176,8 @@ describe('QuestDesignerApp', () => {
     render(<QuestDesignerApp />)
 
     const user = userEvent.setup()
-    const newQuestButton = await screen.findByRole('button', { name: /\+ New Quest/i })
-    await user.click(newQuestButton)
+    const wizardButton = (await screen.findAllByRole('button', { name: /Guided Wizard/i }))[0]
+    await user.click(wizardButton)
 
     const deleteButton = await screen.findByRole('button', { name: /^Delete$/ })
     await user.click(deleteButton)
